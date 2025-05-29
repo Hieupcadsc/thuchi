@@ -5,7 +5,7 @@ import React, { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/hooks/useAuth';
-import { NAV_LINKS, APP_NAME, FAMILY_MEMBERS } from '@/lib/constants';
+import { NAV_LINKS, APP_NAME } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { UserNav } from '@/components/layout/UserNav';
 import { GlobalAlertToaster } from '@/components/layout/GlobalAlertToaster';
@@ -25,9 +25,8 @@ import {
 import { LogOut, PiggyBank, Moon, Sun } from 'lucide-react'; 
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
-  const { currentUser, familyId } = useAuthStore((state) => ({ // Destructure familyId as well
+  const { currentUser } = useAuthStore((state) => ({
     currentUser: state.currentUser,
-    familyId: state.familyId,
   }));
   const logout = useAuthStore((state) => state.logout);
   const router = useRouter();
@@ -46,15 +45,14 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
 
   const handleLogout = () => {
     logout();
-    // No need to push to /login here if the effect above handles it
-    // router.push("/login"); 
   };
   
   return (
     <SidebarProvider defaultOpen>
       <GlobalAlertToaster />
-      <div className="flex min-h-screen flex-col"> {/* Changed to flex-col for footer */}
-        <div className="flex flex-1"> {/* Main content and sidebar wrapper */}
+      {/* Applied overflow-x-hidden here */}
+      <div className="flex min-h-screen flex-col overflow-x-hidden"> 
+        <div className="flex flex-1"> 
           <Sidebar className="border-r" collapsible="icon">
             <SidebarHeader className="p-4 border-b border-sidebar-border">
               <Link href="/dashboard" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
@@ -93,7 +91,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
                 </SidebarMenuButton>
             </SidebarFooter>
           </Sidebar>
-          <SidebarInset className="flex-1 flex flex-col">
+          <SidebarInset className="flex-1 flex flex-col overflow-x-hidden"> {/* Also has overflow-x-hidden */}
             <header className="sticky top-0 z-10 flex items-center justify-between h-16 px-4 border-b bg-background/80 backdrop-blur-sm sm:px-6">
               <div className="flex items-center gap-2">
                 <SidebarTrigger className="md:hidden" />
@@ -106,7 +104,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
                 <UserNav />
               </div>
             </header>
-            <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6"> {/* Added overflow-x-hidden */}
+            <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6"> {/* Also has overflow-x-hidden */}
               {children}
             </main>
           </SidebarInset>

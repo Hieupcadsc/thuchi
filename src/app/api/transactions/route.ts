@@ -24,16 +24,12 @@ const HEADER_ROW = ['ID', 'UserID', 'Description', 'Amount', 'Date', 'Type', 'Ca
  * @returns A date string in YYYY-MM-DD format.
  */
 function excelSerialDateToYYYYMMDD(serial: number): string {
-  // Excel's epoch starts on December 30, 1899 for compatibility with Lotus 1-2-3.
-  // JavaScript's epoch is January 1, 1970.
-  // The number of days from Excel epoch to JS epoch is 25569 (for PC) or 24107 (for Mac 1904 date system).
-  // Assuming standard PC Excel epoch.
-  const excelEpochMs = Date.UTC(1899, 11, 30); // Month is 0-indexed, so 11 is December
+  const excelEpochMs = Date.UTC(1899, 11, 30); 
   const millisecondsInDay = 24 * 60 * 60 * 1000;
   const dateMs = excelEpochMs + (serial * millisecondsInDay);
   const date = new Date(dateMs);
 
-  const year = date.getUTCFullYear(); // Use UTC to avoid timezone issues with serial conversion
+  const year = date.getUTCFullYear(); 
   const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
   const day = date.getUTCDate().toString().padStart(2, '0');
   return `${year}-${month}-${day}`;
@@ -130,23 +126,26 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `${sheetName}!A:${String.fromCharCode(64 + HEADER_ROW.length)}`,
-      valueRenderOption: 'UNFORMATTED_VALUE', // Get raw values (numbers for dates)
-      dateTimeRenderOption: 'SERIAL_NUMBER', // Ensure dates are serial numbers if stored as such
+      valueRenderOption: 'UNFORMATTED_VALUE', 
+      dateTimeRenderOption: 'SERIAL_NUMBER', 
     });
     console.log(`[API /transactions] Successfully fetched values from sheet "${sheetName}". Raw response:`, response.data.values ? `${response.data.values.length} rows` : 'No values');
 
     const rows = response.data.values;
-    if (rows && rows.length > 1) { // rows.length > 1 to skip header
+    if (rows && rows.length > 1) { 
       const transactions = rows
-        .slice(1) // Skip header row
+        .slice(1) 
         .map((row, index): Transaction | null => {
-          if (row.length < 5) {
-            console.warn(`[API /transactions] Skipping malformed row ${index + 2} in sheet "${sheetName}": Not enough columns. Data:`, row);
+          if (row.length < HEADER_ROW.length) { // Check against the full header length
+            console.warn(`[API /transactions] Skipping malformed row ${index + 2} in sheet "${sheetName}": Expected ${HEADER_ROW.length} columns, got ${row.length}. Data:`, row);
             return null;
           }
 
           const transactionUserId = row[1];
+          // Filter based on the family ID, transactions are family-wide but attributed to a performer
           if (userIdToFetch !== FAMILY_ACCOUNT_ID || transactionUserId !== FAMILY_ACCOUNT_ID) {
+            // This check might be too restrictive if userIdToFetch is ever different from FAMILY_ACCOUNT_ID
+            // For now, assuming we always fetch for the family account
             return null;
           }
 
@@ -154,13 +153,7 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
           if (typeof dateValue === 'number') {
             dateValue = excelSerialDateToYYYYMMDD(dateValue);
           } else if (typeof dateValue !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-             // If it's not a number and not a YYYY-MM-DD string, try to parse it or fallback
-             // For now, let's be strict or fallback to today if unparseable by client
-             // Client will use parseISO, so we must provide a valid ISO part.
-             // A more robust solution might try common date format parsing here.
              console.warn(`[API /transactions] Row ${index + 2} in sheet "${sheetName}" has an unexpected date format: ${row[4]}. Falling back.`);
-             // Fallback to something parseISO can handle or let client side handle a potentially invalid string if necessary
-             // Defaulting to today's date string if format is completely off.
              dateValue = new Date().toISOString().split('T')[0];
           }
 
@@ -174,14 +167,14 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
           const finalPaymentSource = isValidPaymentSource ? paymentSourceValue : 'bank';
 
           return {
-            id: row[0] || `row-${index + 2}-${sheetName}`,
-            userId: transactionUserId as UserType,
+            id: row[0] || `row-${index + 2}-${sheetName}`, // Fallback ID if first column is empty
+            userId: transactionUserId as UserType, // Should be FAMILY_ACCOUNT_ID
             description: row[2] || 'Không có mô tả',
             amount: parseFloat(row[3]) || 0,
-            date: dateValue as string, // Ensure it's a string for parseISO on client
+            date: dateValue as string, 
             type: row[5] as 'income' | 'expense' || 'expense',
             categoryId: row[6] || 'chi_phi_khac',
-            monthYear: monthYear, // Use the sheetName (function param) for consistency
+            monthYear: monthYear, 
             note: row[8] || undefined,
             performedBy: finalPerformedBy,
             paymentSource: finalPaymentSource,
@@ -216,16 +209,15 @@ async function addTransactionToSheet(transaction: Transaction): Promise<Transact
     await ensureSheetExistsAndHeader(SPREADSHEET_ID, sheetName);
     console.log(`[API /transactions] Ensured sheet "${sheetName}" exists. Appending transaction.`);
 
-    // Ensure date is YYYY-MM-DD and monthYear is YYYY-MM strings for writing
     const values = [[
       transaction.id,
       transaction.userId,
       transaction.description,
       transaction.amount,
-      transaction.date, // Expected to be YYYY-MM-DD string
+      transaction.date, 
       transaction.type,
       transaction.categoryId,
-      transaction.monthYear, // Expected to be YYYY-MM string
+      transaction.monthYear, 
       transaction.note || '',
       transaction.performedBy,
       transaction.paymentSource || '',
@@ -234,7 +226,7 @@ async function addTransactionToSheet(transaction: Transaction): Promise<Transact
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
       range: `${sheetName}!A:${String.fromCharCode(64 + HEADER_ROW.length)}`,
-      valueInputOption: 'USER_ENTERED', // This helps Sheets parse dates correctly
+      valueInputOption: 'USER_ENTERED', 
       insertDataOption: 'INSERT_ROWS',
       requestBody: { values },
     });
@@ -258,9 +250,6 @@ export async function GET(request: NextRequest) {
   }
   if (userId !== FAMILY_ACCOUNT_ID) {
     console.warn(`[API /transactions GET] Requested userId "${userId}" does not match FAMILY_ACCOUNT_ID "${FAMILY_ACCOUNT_ID}". This might be okay if fetching other user's data is intended, but for family budget, usually FAMILY_ACCOUNT_ID is used.`);
-    // Depending on policy, you might want to enforce FAMILY_ACCOUNT_ID or allow fetching if user has rights.
-    // For now, let's proceed with the provided userId assuming it's intentional for some reason,
-    // but note that getTransactionsFromSheet might filter this out if it enforces FAMILY_ACCOUNT_ID internally.
   }
 
   if (!SPREADSHEET_ID) {
@@ -289,7 +278,7 @@ export async function POST(request: NextRequest) {
   }
   try {
     const transaction = await request.json() as Transaction;
-    console.log(`[API /transactions POST] Received transaction data for ID: ${transaction.id}, UserID: ${transaction.userId}, PerformedBy: ${transaction.performedBy}`);
+    console.log(`[API /transactions POST] Received transaction data for ID: ${transaction.id}, UserID: ${transaction.userId}, PerformedBy: ${transaction.performedBy}, PaymentSource: ${transaction.paymentSource}`);
 
     if (!transaction || typeof transaction !== 'object') {
         console.error("[API /transactions POST] Invalid transaction data in request body: not an object.");
@@ -299,11 +288,11 @@ export async function POST(request: NextRequest) {
         console.error("[API /transactions POST] Missing required fields in transaction data. Data:", transaction);
         return NextResponse.json({ message: 'Missing required fields in transaction data (ensure id, userId, description, amount, date, type, categoryId, monthYear, performedBy, paymentSource are included)' }, { status: 400 });
     }
+    // Ensure userId from client is always FAMILY_ACCOUNT_ID for POST requests to maintain consistency
     if (transaction.userId !== FAMILY_ACCOUNT_ID) {
-      console.warn(`[API /transactions POST] Incoming transaction userId "${transaction.userId}" does not match FAMILY_ACCOUNT_ID "${FAMILY_ACCOUNT_ID}". Overwriting userId.`);
+      console.warn(`[API /transactions POST] Incoming transaction userId "${transaction.userId}" does not match FAMILY_ACCOUNT_ID "${FAMILY_ACCOUNT_ID}". Overwriting userId to ${FAMILY_ACCOUNT_ID}.`);
       transaction.userId = FAMILY_ACCOUNT_ID;
     }
-    // Ensure date is YYYY-MM-DD and monthYear is YYYY-MM
     if (!/^\d{4}-\d{2}-\d{2}$/.test(transaction.date)) {
         console.error("[API /transactions POST] Invalid date format. Expected YYYY-MM-DD. Data:", transaction.date);
         return NextResponse.json({ message: 'Invalid date format. Expected YYYY-MM-DD.' }, { status: 400 });
@@ -330,5 +319,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message, details: error.stack }, { status: statusCode });
   }
 }
-
-    

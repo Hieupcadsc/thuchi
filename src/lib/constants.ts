@@ -1,10 +1,17 @@
 
-import type { Category, FamilyMember } from '@/types'; // Added FamilyMember
-import { Utensils, ShoppingCart, Car, Home, Receipt, Film, HeartPulse, BookOpen, MoreHorizontal, TrendingUp, TrendingDown, LayoutDashboard, ArrowRightLeft, LineChart, Settings, LogOut, CircleDollarSign, Moon, Sun } from 'lucide-react'; // Added Moon, Sun
+import type { Category, FamilyMember, PaymentSource } from '@/types';
+import { Utensils, ShoppingCart, Car, Home, Receipt, Film, HeartPulse, BookOpen, MoreHorizontal, TrendingUp, TrendingDown, LayoutDashboard, ArrowRightLeft, LineChart, Settings, LogOut, CircleDollarSign, Moon, Sun, Landmark, Wallet } from 'lucide-react'; // Added Landmark, Wallet
+import type { LucideIcon } from 'lucide-react';
+
 
 export const APP_NAME = "Ngân Sách Gia Đình";
 
 export const FAMILY_MEMBERS: FamilyMember[] = ['Minh Đan', 'Minh Hiếu'];
+
+export const PAYMENT_SOURCE_OPTIONS: Array<{ id: PaymentSource, label: string, icon: LucideIcon }> = [
+  { id: 'bank', label: 'Ngân hàng', icon: Landmark },
+  { id: 'cash', label: 'Tiền mặt', icon: Wallet },
+];
 
 export const CATEGORIES: Category[] = [
   { id: 'an_uong', name: 'Ăn uống', icon: Utensils, type: 'expense' },
@@ -32,8 +39,8 @@ export const MONTH_NAMES = [
   "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
 ];
 
-export const PERFORMED_BY_OPTIONS: FamilyMember[] = [...FAMILY_MEMBERS]; // Used in TransactionForm if needed, now directly from FAMILY_MEMBERS
-export const THEME_TOGGLE_ICONS = { // Optional, if you want to manage icons centrally
+export const PERFORMED_BY_OPTIONS: FamilyMember[] = [...FAMILY_MEMBERS];
+export const THEME_TOGGLE_ICONS = { 
   light: Moon,
   dark: Sun,
 };

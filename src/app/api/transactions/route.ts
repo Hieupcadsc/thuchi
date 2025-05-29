@@ -1,8 +1,8 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
-import type { Transaction, UserType, FamilyMember } from '@/types'; 
+import type { Transaction, UserType, FamilyMember, PaymentSource } from '@/types';
 import { google } from 'googleapis';
-import { FAMILY_MEMBERS } from '@/lib/constants'; // Import FAMILY_MEMBERS
+import { FAMILY_MEMBERS, PAYMENT_SOURCE_OPTIONS } from '@/lib/constants';
 
 // --- Google Sheets Configuration ---
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
@@ -13,7 +13,7 @@ const auth = new google.auth.GoogleAuth({
 });
 const sheets = google.sheets({ version: 'v4', auth });
 
-const HEADER_ROW = ['ID', 'UserID', 'Description', 'Amount', 'Date', 'Type', 'CategoryID', 'MonthYear', 'Note', 'PerformedBy'];
+const HEADER_ROW = ['ID', 'UserID', 'Description', 'Amount', 'Date', 'Type', 'CategoryID', 'MonthYear', 'Note', 'PerformedBy', 'PaymentSource'];
 
 // --- Helper Functions ---
 async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: string) {
@@ -43,7 +43,7 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
       });
       await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: `${sheetName}!A1`, 
+        range: `${sheetName}!A1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: [HEADER_ROW],
@@ -52,9 +52,9 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
     } else {
       const headerCheck = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${sheetName}!A1:${String.fromCharCode(64 + HEADER_ROW.length)}1`, 
+        range: `${sheetName}!A1:${String.fromCharCode(64 + HEADER_ROW.length)}1`,
       });
-      if (!headerCheck.data.values || headerCheck.data.values.length === 0 || 
+      if (!headerCheck.data.values || headerCheck.data.values.length === 0 ||
           (headerCheck.data.values[0] && headerCheck.data.values[0].join(',') !== HEADER_ROW.join(','))) {
         if (headerCheck.data.values && headerCheck.data.values.length > 0) {
             await sheets.spreadsheets.values.clear({
@@ -74,7 +74,7 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
     }
   } catch (error: any) {
     console.error(`Error in ensureSheetExistsAndHeader for sheet "${sheetName}":`, error.message, error.stack);
-    throw error; 
+    throw error;
   }
 }
 
@@ -91,25 +91,28 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:${String.fromCharCode(64 + HEADER_ROW.length)}`, 
+      range: `${sheetName}!A:${String.fromCharCode(64 + HEADER_ROW.length)}`,
     });
 
     const rows = response.data.values;
-    if (rows && rows.length > 1) { 
+    if (rows && rows.length > 1) {
       return rows
-        .slice(1) 
+        .slice(1)
         .map((row): Transaction | null => {
-          if (row.length < HEADER_ROW.length - 2 ) return null; 
-          
+          if (row.length < HEADER_ROW.length - 3 ) return null; // Adjusted for potentially missing note, performedBy, paymentSource
+
           if (row[1] === userIdToFetch) { // Filter by userId (familyId)
             const performedByValue = row[9];
-            // Ensure performedBy is one of the valid FamilyMember types, otherwise default.
             const isValidFamilyMember = FAMILY_MEMBERS.includes(performedByValue as FamilyMember);
-            const finalPerformedBy = isValidFamilyMember ? performedByValue as FamilyMember : FAMILY_MEMBERS[0]; // Default to first member if invalid/empty
+            const finalPerformedBy = isValidFamilyMember ? performedByValue as FamilyMember : FAMILY_MEMBERS[0];
+
+            const paymentSourceValue = row[10] as PaymentSource | undefined;
+            // Ensure paymentSource is one of the valid PaymentSource types, otherwise default or undefined.
+            const finalPaymentSource = PAYMENT_SOURCE_OPTIONS.find(p => p.id === paymentSourceValue)?.id;
 
             return {
               id: row[0],
-              userId: row[1] as UserType, 
+              userId: row[1] as UserType,
               description: row[2],
               amount: parseFloat(row[3]),
               date: row[4],
@@ -117,7 +120,8 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
               categoryId: row[6],
               monthYear: row[7],
               note: row[8] || undefined,
-              performedBy: finalPerformedBy, 
+              performedBy: finalPerformedBy,
+              paymentSource: finalPaymentSource,
             };
           }
           return null;
@@ -129,9 +133,9 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
     console.error(`Error in getTransactionsFromSheet for sheet "${sheetName}":`, err.message, err.stack);
     if (err.message && (err.message.includes("No sheet with the name") || err.message.includes("Unable to parse range"))) {
         console.warn(`Sheet "${sheetName}" not found or range invalid, returning empty array.`);
-        return []; 
+        return [];
     }
-    throw err; 
+    throw err;
   }
 }
 
@@ -148,7 +152,7 @@ async function addTransactionToSheet(transaction: Transaction): Promise<Transact
 
     const values = [[
       transaction.id,
-      transaction.userId, 
+      transaction.userId,
       transaction.description,
       transaction.amount,
       transaction.date,
@@ -156,26 +160,27 @@ async function addTransactionToSheet(transaction: Transaction): Promise<Transact
       transaction.categoryId,
       transaction.monthYear,
       transaction.note || '',
-      transaction.performedBy, 
+      transaction.performedBy,
+      transaction.paymentSource || '', // Add paymentSource
     ]];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
       range: `${sheetName}!A:${String.fromCharCode(64 + HEADER_ROW.length)}`,
       valueInputOption: 'USER_ENTERED',
-      insertDataOption: 'INSERT_ROWS', 
+      insertDataOption: 'INSERT_ROWS',
       requestBody: { values },
     });
     return transaction;
   } catch (err: any) {
     console.error(`Error in addTransactionToSheet for sheet "${sheetName}":`, err.message, err.stack);
-    throw err; 
+    throw err;
   }
 }
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('userId') as UserType | null; 
+  const userId = searchParams.get('userId') as UserType | null;
   const monthYear = searchParams.get('monthYear');
 
   if (!userId || !monthYear) {
@@ -191,7 +196,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('[API GET /transactions] Error:', error.message, error.stack);
     const message = error.message || 'Failed to fetch data from Google Sheets.';
-    const statusCode = error.code || 500; 
+    const statusCode = error.code || 500;
     return NextResponse.json({ message, details: error.stack }, { status: statusCode });
   }
 }
@@ -206,10 +211,10 @@ export async function POST(request: NextRequest) {
     if (!transaction || typeof transaction !== 'object') {
         return NextResponse.json({ message: 'Invalid transaction data in request body' }, { status: 400 });
     }
-    if (!transaction.id || !transaction.userId || !transaction.description || transaction.amount === undefined || !transaction.date || !transaction.type || !transaction.categoryId || !transaction.monthYear || !transaction.performedBy) {
-        return NextResponse.json({ message: 'Missing required fields in transaction data (ensure performedBy is included)' }, { status: 400 });
+    if (!transaction.id || !transaction.userId || !transaction.description || transaction.amount === undefined || !transaction.date || !transaction.type || !transaction.categoryId || !transaction.monthYear || !transaction.performedBy || !transaction.paymentSource) { // Added paymentSource check
+        return NextResponse.json({ message: 'Missing required fields in transaction data (ensure performedBy and paymentSource are included)' }, { status: 400 });
     }
-    
+
     const savedTransaction = await addTransactionToSheet(transaction);
     return NextResponse.json(savedTransaction, { status: 201 });
 

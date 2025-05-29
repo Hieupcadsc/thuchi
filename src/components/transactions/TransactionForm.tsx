@@ -21,10 +21,10 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CategorySelector } from "./CategorySelector";
 import { AiCategorySuggestor } from "./AiCategorySuggestor";
 import { useAuthStore } from "@/hooks/useAuth";
-import { FAMILY_MEMBERS } from '@/lib/constants';
-import type { Transaction, FamilyMember } from "@/types";
-import { CalendarIcon, Loader2, UploadCloud, AlertTriangle, User, Camera, FileUp } from "lucide-react";
-import { Card, CardTitle, CardDescription } from "@/components/ui/card"; // Card was missing from imports previously
+import { FAMILY_MEMBERS, PAYMENT_SOURCE_OPTIONS } from '@/lib/constants';
+import type { Transaction, FamilyMember, PaymentSource } from "@/types";
+import { CalendarIcon, Loader2, UploadCloud, AlertTriangle, User, Camera, FileUp, Landmark, Wallet } from "lucide-react"; // Added Landmark, Wallet
+import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { format, parseISO, parse as parseDateFns, isValid as isValidDate } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +42,9 @@ const formSchema = z.object({
   performedBy: z.custom<FamilyMember>((val) => FAMILY_MEMBERS.includes(val as FamilyMember), {
     message: "Vui lòng chọn người thực hiện hợp lệ",
   }),
+  paymentSource: z.custom<PaymentSource>((val) => PAYMENT_SOURCE_OPTIONS.map(p => p.id).includes(val as PaymentSource), { // Added paymentSource validation
+    required_error: "Vui lòng chọn nguồn tiền",
+  }),
   note: z.string().optional(),
 });
 
@@ -54,19 +57,15 @@ interface TransactionFormProps {
   isBillMode?: boolean;
 }
 
-// Helper function to format number with Vietnamese style separators
 const formatVnCurrency = (value: number | string | undefined): string => {
   if (value === undefined || value === null || String(value).trim() === '') return '';
   const numString = String(value).replace(/[^\d]/g, '');
   if (numString === '') return '';
-
   const num = Number(numString);
-  if (isNaN(num)) return ''; 
-
+  if (isNaN(num)) return '';
   return num.toLocaleString('vi-VN');
 };
 
-// Helper function to parse formatted string back to number
 const parseVnCurrencyToNumber = (value: string): number => {
   if (value === null || value === undefined) return 0;
   return Number(String(value).replace(/[^\d]/g, '')) || 0;
@@ -86,6 +85,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
   const uploadFileInputRef = React.useRef<HTMLInputElement>(null);
 
   const defaultPerformedBy = transactionToEdit ? transactionToEdit.performedBy : (currentUser || FAMILY_MEMBERS[0]);
+  const defaultPaymentSource = transactionToEdit?.paymentSource || 'bank'; // Default to 'bank'
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(formSchema),
@@ -96,6 +96,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
       type: transactionToEdit.type,
       categoryId: transactionToEdit.categoryId,
       performedBy: transactionToEdit.performedBy,
+      paymentSource: transactionToEdit.paymentSource || 'bank', // Ensure paymentSource is set
       note: transactionToEdit.note || "",
     } : {
       description: "",
@@ -104,6 +105,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
       type: "expense",
       categoryId: "",
       performedBy: currentUser || FAMILY_MEMBERS[0],
+      paymentSource: 'bank', // Default paymentSource for new transactions
       note: "",
     },
   });
@@ -112,35 +114,24 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
   const currentDescription = form.watch("description");
   const [displayAmount, setDisplayAmount] = React.useState<string>('');
 
-
-  // Initialize displayAmount and sync with RHF value
   React.useEffect(() => {
     const initialAmount = transactionToEdit
       ? Number(transactionToEdit.amount)
       : (form.formState.defaultValues?.amount || 0);
-    
     const currentRHFValue = form.getValues('amount');
     if (currentRHFValue !== initialAmount) {
-        form.setValue('amount', initialAmount, { shouldValidate: !transactionToEdit }); // Validate only if new or values explicitly differ
+        form.setValue('amount', initialAmount, { shouldValidate: !transactionToEdit });
     }
-    // This will be handled by the watch effect below if RHF value changes
-    // For direct initialization:
     setDisplayAmount(formatVnCurrency(initialAmount));
+  }, [transactionToEdit, form.formState.defaultValues?.amount, form]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactionToEdit, form.formState.defaultValues?.amount]); // form.setValue and form.getValues should ideally not be in dep array if form instance is stable.
-
-  // Watch for changes in RHF 'amount' value (e.g., from AI processing or reset)
-  // and update the displayAmount accordingly.
   const watchedAmountFromRHF = form.watch('amount');
   React.useEffect(() => {
     const numericRHFValue = Number(watchedAmountFromRHF);
     if (parseVnCurrencyToNumber(displayAmount) !== numericRHFValue) {
       setDisplayAmount(formatVnCurrency(numericRHFValue));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchedAmountFromRHF]);
-
+  }, [watchedAmountFromRHF, displayAmount]);
 
   React.useEffect(() => {
     if (transactionToEdit) {
@@ -151,9 +142,9 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         type: transactionToEdit.type,
         categoryId: transactionToEdit.categoryId,
         performedBy: transactionToEdit.performedBy,
+        paymentSource: transactionToEdit.paymentSource || 'bank',
         note: transactionToEdit.note || "",
       });
-      // displayAmount will be updated by the watchedAmountFromRHF effect
       setBillImagePreview(null);
       setBillImageDataUri(null);
       setBillProcessingError(null);
@@ -165,6 +156,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         type: isBillMode ? "expense" : "expense",
         categoryId: "",
         performedBy: currentUser || FAMILY_MEMBERS[0],
+        paymentSource: 'bank',
         note: "",
       });
        if (!isBillMode) {
@@ -172,21 +164,18 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         setBillImageDataUri(null);
         setBillProcessingError(null);
       }
-      // displayAmount will be updated by the watchedAmountFromRHF effect
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactionToEdit, form.reset, isBillMode, currentUser]);
-
+  }, [transactionToEdit, form.reset, isBillMode, currentUser, form]);
 
   React.useEffect(() => {
     if (!transactionToEdit || (transactionToEdit && form.getValues("type") !== transactionToEdit.type)) {
         form.setValue("categoryId", "", { shouldValidate: false });
     }
     if (transactionType === "income" && !isBillMode) {
-      form.setValue("note", ""); // Clear note for income if not bill mode
+      form.setValue("note", "");
+      form.setValue("paymentSource", "bank"); // Default payment source for income
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactionType, transactionToEdit, isBillMode]); // form.setValue/getValues ideally not in dep array
+  }, [transactionType, transactionToEdit, isBillMode, form]);
 
   React.useEffect(() => {
     if (!isBillMode) {
@@ -196,10 +185,10 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
     } else {
       if (!transactionToEdit) {
         form.setValue("type", "expense", { shouldValidate: true });
+        form.setValue("paymentSource", "bank", { shouldValidate: true }); // Default for bill mode
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isBillMode, transactionToEdit]); // form.setValue ideally not in dep array
+  }, [isBillMode, transactionToEdit, form]);
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -211,6 +200,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         setBillProcessingError(null);
         if (!transactionToEdit) {
             form.setValue("type", "expense", { shouldValidate: true });
+            form.setValue("paymentSource", "bank", { shouldValidate: true });
         }
       };
       reader.readAsDataURL(file);
@@ -219,13 +209,12 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
       setBillImageDataUri(null);
     }
     if(event.target) {
-        event.target.value = ''; // Reset file input
+        event.target.value = '';
     }
   };
 
   const parseAIDate = (dateString?: string): Date | undefined => {
     if (!dateString) return undefined;
-    // console.log("[TransactionForm parseAIDate] Attempting to parse AI date string:", dateString);
     const formatsToTry = [
       'yyyy-MM-dd', 'dd/MM/yyyy', 'MM/dd/yyyy', 'yyyy/MM/dd',
       'dd-MM-yyyy', 'MM-dd-yyyy',
@@ -234,21 +223,13 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
     for (const fmt of formatsToTry) {
       try {
         const parsed = parseDateFns(dateString, fmt, new Date());
-        if (isValidDate(parsed)) {
-          // console.log(`[TransactionForm parseAIDate] Parsed "${dateString}" with format "${fmt}" to:`, parsed);
-          return parsed;
-        }
+        if (isValidDate(parsed)) return parsed;
       } catch (e) { /* ignore */ }
     }
-    try { // ISO format last attempt
+    try {
       const parsed = parseISO(dateString);
-      if (isValidDate(parsed)) {
-        // console.log(`[TransactionForm parseAIDate] Parsed "${dateString}" with ISO to:`, parsed);
-        return parsed;
-      }
+      if (isValidDate(parsed)) return parsed;
     } catch(e) { /* ignore */ }
-
-    // console.warn(`[TransactionForm parseAIDate] Could not parse date string from AI: "${dateString}"`);
     return undefined;
   };
 
@@ -261,15 +242,11 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
     setBillProcessingError(null);
     try {
       const result = await processBillImage(billImageDataUri);
-      // console.log("[TransactionForm handleProcessBill] AI Result:", result);
-
       if (result.success && result.data) {
         const { totalAmount, transactionDate, description } = result.data;
-        let dateToSet = new Date(); 
-
-        if (totalAmount !== undefined) form.setValue("amount", totalAmount, { shouldValidate: true }); // This will trigger watch to update displayAmount
+        let dateToSet = new Date();
+        if (totalAmount !== undefined) form.setValue("amount", totalAmount, { shouldValidate: true });
         if (description) form.setValue("description", description, { shouldValidate: true });
-
         const parsedDate = parseAIDate(transactionDate);
         if (parsedDate) {
           dateToSet = parsedDate;
@@ -277,8 +254,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
           toast({ title: "Lưu ý ngày tháng", description: `AI trả về ngày: "${transactionDate}". Không thể tự động điền, vui lòng kiểm tra và chọn thủ công. Mặc định là ngày hôm nay.`, variant: "default", duration: 7000 });
         }
         form.setValue("date", dateToSet, { shouldValidate: true });
-        // console.log("[TransactionForm handleProcessBill] Date being set to form after AI:", dateToSet);
-
+        form.setValue("paymentSource", "bank", { shouldValidate: true }); // Default to bank for bills
         if (Object.keys(result.data).length === 0){
             toast({ title: "AI không tìm thấy thông tin", description: "Không thể trích xuất dữ liệu từ bill. Vui lòng nhập thủ công.", variant: "default"});
         } else {
@@ -295,40 +271,27 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
     setIsProcessingBill(false);
   };
 
-
   const onSubmit = async (data: TransactionFormValues) => {
     if (!currentUser) {
       toast({ title: "Lỗi", description: "Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
-
     const formattedDate = format(data.date, "yyyy-MM-dd");
-    const finalPerformedBy = transactionToEdit ? data.performedBy : currentUser;
-
-
-    // console.log("[TransactionForm onSubmit] Data submitted to useAuthStore:", {
-    //   description: data.description,
-    //   amount: data.amount,
-    //   date: formattedDate, 
-    //   type: data.type,
-    //   categoryId: data.categoryId,
-    //   performedBy: finalPerformedBy, 
-    //   note: data.type === 'expense' ? data.note : undefined,
-    // });
 
     try {
       if (transactionToEdit) {
         const payloadForUpdate: Transaction = {
             id: transactionToEdit.id,
-            userId: transactionToEdit.userId, 
+            userId: transactionToEdit.userId,
             description: data.description,
             amount: data.amount,
             date: formattedDate,
             type: data.type,
             categoryId: data.categoryId,
-            monthYear: formattedDate.substring(0,7), 
-            performedBy: data.performedBy, 
+            monthYear: formattedDate.substring(0,7),
+            performedBy: data.performedBy,
+            paymentSource: data.paymentSource,
             note: data.type === 'expense' ? data.note : undefined,
         };
         await updateTransaction(payloadForUpdate);
@@ -336,22 +299,24 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         await addTransaction({
           description: data.description,
           amount: data.amount,
-          date: formattedDate, 
+          date: formattedDate,
           type: data.type,
           categoryId: data.categoryId,
           performedBy: currentUser, // Always current user for new transactions
+          paymentSource: data.paymentSource,
           note: data.type === 'expense' ? data.note : undefined,
         });
       }
 
-      if (!transactionToEdit) { // Only reset fully if it was a new transaction
+      if (!transactionToEdit) {
         form.reset({
             description: "",
-            amount: 0, // RHF will be 0, displayAmount will be updated by watch
+            amount: 0,
             date: new Date(),
             type: isBillMode ? "expense" : "expense",
             categoryId: "",
             performedBy: currentUser || FAMILY_MEMBERS[0],
+            paymentSource: 'bank',
             note: "",
         });
         setBillImagePreview(null);
@@ -375,7 +340,6 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
           <Card className="bg-muted/50 dark:bg-muted/30 p-4 border shadow-sm">
             <CardTitle className="text-lg mb-1">Thêm từ Bill</CardTitle>
             <CardDescription className="text-sm text-muted-foreground mb-3">Chụp ảnh hoặc tải lên hóa đơn của bạn.</CardDescription>
-
             <input
                 type="file"
                 accept="image/*"
@@ -393,7 +357,6 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
                 className="hidden"
                 id="upload-file-input"
             />
-
             <div className="flex flex-col sm:flex-row gap-3 mb-3">
                 <Button
                     type="button"
@@ -414,7 +377,6 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
                     <FileUp className="mr-2 h-4 w-4" /> Tải Tệp Lên
                 </Button>
             </div>
-
             {billImagePreview && (
               <div className="mt-3 space-y-3">
                 <p className="text-sm font-medium">Xem trước ảnh bill:</p>
@@ -442,7 +404,6 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
           </Card>
         )}
 
-
         <div className="grid grid-cols-1 gap-4 md:gap-6">
           <FormField
             control={form.control}
@@ -455,6 +416,9 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
                     onValueChange={(value) => {
                       field.onChange(value);
                       form.setValue("categoryId", "", {shouldValidate: false});
+                      if (value === 'income') { // Default payment source for income
+                        form.setValue("paymentSource", "bank", { shouldValidate: true });
+                      }
                     }}
                     value={field.value}
                     className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
@@ -481,33 +445,57 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
             render={({ field }) => (
               <FormItem className="space-y-2">
                 <FormLabel>Người thực hiện</FormLabel>
-                {transactionToEdit ? (
-                  <FormControl>
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      value={field.value}
-                      className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
-                      disabled={isSubmitting}
-                    >
-                      {FAMILY_MEMBERS.map((member) => (
-                        <FormItem key={member} className="flex items-center space-x-2 space-y-0">
-                          <FormControl><RadioGroupItem value={member} /></FormControl>
-                          <FormLabel className="font-normal">{member}</FormLabel>
-                        </FormItem>
-                      ))}
-                    </RadioGroup>
-                  </FormControl>
-                ) : (
-                  <div className="flex items-center space-x-2 p-2 rounded-md bg-muted/50 dark:bg-muted/30 min-h-[40px]">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{currentUser || 'Không xác định'}</span>
-                  </div>
+                <FormControl>
+                  <RadioGroup
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
+                    disabled={isSubmitting || !transactionToEdit} // Disabled if new, enabled if editing
+                  >
+                    {FAMILY_MEMBERS.map((member) => (
+                      <FormItem key={member} className="flex items-center space-x-2 space-y-0">
+                        <FormControl><RadioGroupItem value={member} checked={field.value === member} /></FormControl>
+                        <FormLabel className="font-normal">{member}</FormLabel>
+                      </FormItem>
+                    ))}
+                  </RadioGroup>
+                </FormControl>
+                {!transactionToEdit && (
+                    <div className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/30">
+                        Tự động chọn: {currentUser}
+                    </div>
                 )}
                 <FormMessage />
               </FormItem>
             )}
           />
 
+          <FormField
+            control={form.control}
+            name="paymentSource"
+            render={({ field }) => (
+              <FormItem className="space-y-2">
+                <FormLabel>Nguồn tiền</FormLabel>
+                <FormControl>
+                  <RadioGroup
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
+                    disabled={isSubmitting || (transactionType === "income" && !isBillMode)} // Disabled for income unless bill mode
+                  >
+                    {PAYMENT_SOURCE_OPTIONS.map((source) => (
+                      <FormItem key={source.id} className="flex items-center space-x-2 space-y-0">
+                        <FormControl><RadioGroupItem value={source.id} /></FormControl>
+                        <source.icon className="mr-1 h-4 w-4 text-muted-foreground" />
+                        <FormLabel className="font-normal">{source.label}</FormLabel>
+                      </FormItem>
+                    ))}
+                  </RadioGroup>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <FormField
             control={form.control}
@@ -567,11 +555,11 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
                     onChange={(e) => {
                       const inputValue = e.target.value;
                       const numericValue = parseVnCurrencyToNumber(inputValue);
-                      field.onChange(numericValue); 
-                      setDisplayAmount(formatVnCurrency(inputValue)); 
+                      field.onChange(numericValue);
+                      setDisplayAmount(formatVnCurrency(inputValue));
                     }}
                     onBlur={(e) => {
-                      field.onBlur(); 
+                      field.onBlur();
                       setDisplayAmount(formatVnCurrency(form.getValues('amount')));
                     }}
                     disabled={isSubmitting || isProcessingBill}
@@ -639,12 +627,12 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         )}
 
         <div className="flex flex-col sm:flex-row gap-2 pt-2">
-            <Button 
-              type="submit" 
-              className="w-full sm:flex-1" 
+            <Button
+              type="submit"
+              className="w-full sm:flex-1"
               disabled={
-                isSubmitting || 
-                isProcessingBill || 
+                isSubmitting ||
+                isProcessingBill ||
                 (isBillMode && !transactionToEdit && !billImageDataUri && !form.formState.dirtyFields.amount && !form.formState.dirtyFields.description && !form.formState.dirtyFields.date)
               }
             >
@@ -661,4 +649,3 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
     </Form>
   );
 }
-

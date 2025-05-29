@@ -2,10 +2,11 @@
 import type { LucideIcon } from 'lucide-react';
 
 // UserType will now represent a generic identifier, primarily for the family account.
-export type UserType = string; 
+export type UserType = string;
 
 // Specific user roles within the family
 export type FamilyMember = 'Minh Đan' | 'Minh Hiếu';
+export type PaymentSource = 'cash' | 'bank'; // Added PaymentSource type
 
 export interface Category {
   id: string;
@@ -25,6 +26,7 @@ export interface Transaction {
   categoryId: string;
   monthYear: string; // YYYY-MM, for sheet organization
   note?: string; // Optional note, primarily for expenses
+  paymentSource?: PaymentSource; // New: Source of the payment
 }
 
 export interface MonthlySummary {

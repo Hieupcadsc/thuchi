@@ -6,7 +6,7 @@ import Link from 'next/link'; // Added Link
 import { useAuthStore, FAMILY_ACCOUNT_ID } from '@/hooks/useAuth';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { SpendingChatbot } from '@/components/dashboard/SpendingChatbot'; 
-import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera } from 'lucide-react'; // Added Camera
+import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera, PlusCircle } from 'lucide-react'; // Added PlusCircle
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button'; // Added Button
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"

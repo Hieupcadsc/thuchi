@@ -22,7 +22,7 @@ interface AuthState {
   highValueExpenseAlerts: HighValueExpenseAlert[];
   login: (user: FamilyMember, pass: string) => boolean;
   logout: () => void;
-  addTransaction: (transactionData: Omit<Transaction, 'id' | 'userId' | 'monthYear' > & { date: string }) => Promise<Transaction | null>;
+  addTransaction: (transactionData: Omit<Transaction, 'id' | 'userId' | 'monthYear' > & { date: string, performedBy: FamilyMember }) => Promise<Transaction | null>;
   updateTransaction: (updatedTransaction: Transaction) => Promise<void>;
   deleteTransaction: (transactionId: string, monthYear: string) => Promise<void>;
   bulkDeleteTransactions: (transactionsToDelete: Array<{ id: string, monthYear: string }>) => Promise<void>;
@@ -63,7 +63,7 @@ export const useAuthStore = create<AuthState>()(
 
       addTransaction: async (transactionData) => {
         const currentFamilyId = get().familyId;
-        const loggedInUser = get().currentUser;
+        const loggedInUser = get().currentUser; // Get the currently logged-in user for performedBy
 
         if (!currentFamilyId || !loggedInUser) {
           toast({ title: "Lỗi", description: "Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.", variant: "destructive" });
@@ -75,7 +75,7 @@ export const useAuthStore = create<AuthState>()(
         const newTransaction: Transaction = {
           id: crypto.randomUUID(),
           userId: currentFamilyId, // Use the shared family ID
-          performedBy: transactionData.performedBy || loggedInUser, // Who actually performed it
+          performedBy: loggedInUser, // Who actually performed it
           description: transactionData.description,
           amount: transactionData.amount,
           date: transactionData.date,
@@ -98,8 +98,16 @@ export const useAuthStore = create<AuthState>()(
           });
 
           if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Không thể thêm giao dịch lên server.');
+            let errorData: any = {};
+            let responseBodyText = '';
+            try {
+                responseBodyText = await response.text();
+                errorData = JSON.parse(responseBodyText);
+            } catch (e) {
+                console.warn("[useAuthStore addTransaction] API error response was not valid JSON. Raw text:", responseBodyText);
+            }
+            console.error("[useAuthStore addTransaction] Error response from API:", errorData, `Raw Body: "${responseBodyText}"`);
+            throw new Error(errorData.message || responseBodyText || 'Không thể thêm giao dịch lên server.');
           }
 
           const savedTransaction = await response.json();
@@ -110,7 +118,10 @@ export const useAuthStore = create<AuthState>()(
           }));
           toast({ title: "Thành công!", description: "Đã thêm giao dịch mới." });
 
-          if (newTransaction.type === 'expense' && newTransaction.amount > HIGH_EXPENSE_THRESHOLD && newTransaction.categoryId !== RUT_TIEN_MAT_CATEGORY_ID) {
+          if (newTransaction.type === 'expense' &&
+              newTransaction.amount > HIGH_EXPENSE_THRESHOLD &&
+              newTransaction.categoryId !== RUT_TIEN_MAT_CATEGORY_ID
+             ) {
             const alert: HighValueExpenseAlert = {
               id: newTransaction.id,
               performedBy: newTransaction.performedBy,
@@ -224,37 +235,34 @@ export const useAuthStore = create<AuthState>()(
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 9003}`;
         const apiUrl = `${appUrl}/api/transactions?userId=${encodeURIComponent(familyIdToFetch)}&monthYear=${encodeURIComponent(monthYear)}`;
         
+        console.log(`[useAuthStore fetchTransactionsByMonth] Attempting to fetch from: ${apiUrl}`); 
+
         try {
           const response = await fetch(apiUrl, { cache: 'no-store' });
           if (!response.ok) {
             let errorData: any = {};
             let responseBodyText = '';
             try {
-              responseBodyText = await response.text(); // Get text first
+              responseBodyText = await response.text(); 
               try {
-                errorData = JSON.parse(responseBodyText); // Try to parse text
+                errorData = JSON.parse(responseBodyText); 
               } catch (e) {
-                // Parsing failed, errorData remains {}, responseBodyText has the content
-                console.warn("[useAuthStore] API error response was not valid JSON. Raw text:", responseBodyText);
+                console.warn("[useAuthStore fetchTransactionsByMonth] API error response was not valid JSON. Raw text:", responseBodyText);
               }
             } catch (textErr) {
-              console.error("[useAuthStore] Failed to read API error response text:", textErr);
+              console.error("[useAuthStore fetchTransactionsByMonth] Failed to read API error response text:", textErr);
             }
       
-            const messageFromServer = errorData?.message;
-      
-            // Log more detailed info
             console.error(
-              `[useAuthStore] Error response from API (status: ${response.status}, statusText: ${response.statusText}) when fetching transactions. Parsed JSON:`,
+              `[useAuthStore fetchTransactionsByMonth] Error response from API (status: ${response.status}, statusText: ${response.statusText}) when fetching transactions. Parsed JSON:`,
               errorData,
               responseBodyText ? `Raw Body: "${responseBodyText}"` : "Raw body could not be read."
             );
             
             let finalErrorMessage = 'Không thể tải giao dịch từ server.';
-            if (messageFromServer) {
-              finalErrorMessage = messageFromServer;
+            if (errorData?.message) {
+              finalErrorMessage = errorData.message;
             } else if (responseBodyText && responseBodyText.trim() !== '' && responseBodyText.trim() !== '{}') {
-              // Use a snippet of the raw body if it's not empty and not just "{}"
               finalErrorMessage = `Lỗi server: ${responseBodyText.substring(0, 150)}${responseBodyText.length > 150 ? '...' : ''}`;
             } else if (response.statusText) {
               finalErrorMessage = `Lỗi server: ${response.status} ${response.statusText}`;
@@ -286,6 +294,11 @@ export const useAuthStore = create<AuthState>()(
           });
         } catch (error: any) {
           console.error(`[useAuthStore fetchTransactionsByMonth] CATCH_ALL Error for ${monthYear}:`, error.message, error.stack);
+          // toast({ // Avoid toasting here if the calling component will also toast
+          //   title: "Lỗi Tải Dữ Liệu",
+          //   description: error.message || `Không thể tải dữ liệu cho tháng ${monthYear}.`,
+          //   variant: "destructive",
+          // });
           throw error; // Re-throw to be caught by the calling component
         }
       },
@@ -329,7 +342,7 @@ export const useAuthStore = create<AuthState>()(
           date: currentDate,
           type: 'expense' as 'expense',
           categoryId: RUT_TIEN_MAT_CATEGORY_ID,
-          performedBy: loggedInUser,
+          performedBy: loggedInUser, // Add performedBy here
           paymentSource: 'bank' as PaymentSource,
           note: note || undefined,
         };
@@ -340,7 +353,7 @@ export const useAuthStore = create<AuthState>()(
           date: currentDate,
           type: 'income' as 'income',
           categoryId: NAP_TIEN_MAT_CATEGORY_ID,
-          performedBy: loggedInUser,
+          performedBy: loggedInUser, // Add performedBy here
           paymentSource: 'cash' as PaymentSource,
           note: note || undefined,
         };
@@ -355,6 +368,7 @@ export const useAuthStore = create<AuthState>()(
         const incomeResult = await get().addTransaction(incomeTransactionData);
         if (!incomeResult) {
           toast({ title: "Lỗi Rút Tiền", description: "Đã tạo giao dịch chi, nhưng không thể tạo giao dịch thu tiền mặt. Vui lòng kiểm tra lại.", variant: "destructive" });
+          // Consider if you need to attempt to delete expenseResult here
           setIsSubmitting(false);
           return false;
         }
@@ -371,6 +385,7 @@ export const useAuthStore = create<AuthState>()(
         currentUser: state.currentUser,
         familyId: state.familyId,
         highValueExpenseAlerts: state.highValueExpenseAlerts,
+        // Do not persist transactions here, as they are fetched from the API
       }),
     }
   )
@@ -379,3 +394,5 @@ export const useAuthStore = create<AuthState>()(
 // Helper state for forms outside Zustand, if needed for submission states
 let isSubmitting = false; 
 const setIsSubmitting = (val: boolean) => { isSubmitting = val; };
+
+export { FAMILY_ACCOUNT_ID }; // Ensure FAMILY_ACCOUNT_ID is exported if needed elsewhere from this module, though it's better from constants.ts

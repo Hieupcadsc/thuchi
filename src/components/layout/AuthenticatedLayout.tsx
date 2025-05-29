@@ -23,18 +23,18 @@ import {
 import { LogOut, PiggyBank } from 'lucide-react';
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
-  const familyId = useAuthStore((state) => state.familyId);
+  const currentUser = useAuthStore((state) => state.currentUser); // Check for currentUser
   const logout = useAuthStore((state) => state.logout);
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!familyId) {
+    if (!currentUser) {
       router.replace('/login');
     }
-  }, [familyId, router]);
+  }, [currentUser, router]);
 
-  if (!familyId) {
+  if (!currentUser) {
     return <div className="flex items-center justify-center min-h-screen"><p>Đang chuyển hướng đến trang đăng nhập...</p></div>;
   }
 

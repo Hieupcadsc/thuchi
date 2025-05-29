@@ -3,18 +3,20 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { Transaction, UserType } from '@/types';
-import { toast } from './use-toast';
-import React from 'react'; // Import React for useEffect in useInitializeTransactions
+import type { Transaction, UserType, FamilyMember } from '@/types';
+import { toast } from './use-toast'; // Use the standalone toast function
+import React from 'react'; 
 
 export const FAMILY_ACCOUNT_ID: UserType = "GIA_DINH"; // Unique identifier for the family account
+export const FAMILY_MEMBERS: FamilyMember[] = ['Vợ', 'Chồng'];
 
 interface AuthState {
-  familyId: UserType | null; // Stores the family account identifier, or null if not logged in
+  currentUser: FamilyMember | null; // Who is currently logged in
+  familyId: UserType | null; // This will always be FAMILY_ACCOUNT_ID when logged in
   transactions: Transaction[];
-  login: () => void; // No longer takes userType
+  login: (user: FamilyMember) => void;
   logout: () => void;
-  addTransaction: (transaction: Omit<Transaction, 'id' | 'userId' | 'monthYear'>) => Promise<void>;
+  addTransaction: (transaction: Omit<Transaction, 'id' | 'userId' | 'monthYear' | 'performedBy'>) => Promise<void>;
   fetchTransactionsByMonth: (familyId: UserType, monthYear: string) => Promise<void>;
   getTransactionsForFamilyByMonth: (familyId: UserType, monthYear: string) => Transaction[];
 }
@@ -22,14 +24,17 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
+      currentUser: null,
       familyId: null,
       transactions: [],
-      login: () => set({ familyId: FAMILY_ACCOUNT_ID, transactions: [] }), // Set to the family account ID
-      logout: () => set({ familyId: null, transactions: [] }),
+      login: (user) => set({ currentUser: user, familyId: FAMILY_ACCOUNT_ID, transactions: [] }),
+      logout: () => set({ currentUser: null, familyId: null, transactions: [] }),
 
       addTransaction: async (transactionData) => {
         const currentFamilyId = get().familyId;
-        if (!currentFamilyId) {
+        const loggedInUser = get().currentUser;
+
+        if (!currentFamilyId || !loggedInUser) {
           toast({ title: "Lỗi", description: "Bạn cần đăng nhập để thêm giao dịch.", variant: "destructive" });
           return;
         }
@@ -39,10 +44,12 @@ export const useAuthStore = create<AuthState>()(
         const newTransaction: Transaction = {
           ...transactionData,
           id: crypto.randomUUID(),
-          userId: currentFamilyId, // Use the family account ID
+          userId: currentFamilyId, // Use the family account ID for data pooling
+          performedBy: loggedInUser, // Attribute to the logged-in user
           monthYear: monthYear,
         };
 
+        // Optimistic update
         set((state) => ({ transactions: [...state.transactions, newTransaction] }));
 
         try {
@@ -61,11 +68,17 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: any) {
           console.error("Failed to add transaction via API:", error);
           toast({ title: "Lỗi Server", description: error.message, variant: "destructive" });
+          // Revert optimistic update on error
           set((state) => ({ transactions: state.transactions.filter(t => t.id !== newTransaction.id) }));
         }
       },
       
       fetchTransactionsByMonth: async (familyIdToFetch, monthYear) => {
+        // This function always fetches for the FAMILY_ACCOUNT_ID
+        if (familyIdToFetch !== FAMILY_ACCOUNT_ID) {
+            console.warn("fetchTransactionsByMonth called with incorrect familyId. Defaulting to FAMILY_ACCOUNT_ID");
+            familyIdToFetch = FAMILY_ACCOUNT_ID;
+        }
         try {
           const response = await fetch(`/api/transactions?userId=${encodeURIComponent(familyIdToFetch)}&monthYear=${encodeURIComponent(monthYear)}`);
           if (!response.ok) {
@@ -76,13 +89,14 @@ export const useAuthStore = create<AuthState>()(
           
           set((state) => ({
             transactions: [
-              ...state.transactions.filter(t => !(t.userId === familyIdToFetch && t.monthYear === monthYear)),
-              ...fetchedTransactions
+              ...state.transactions.filter(t => !(t.userId === familyIdToFetch && t.monthYear === monthYear)), // Remove old ones for this month & family
+              ...fetchedTransactions // Add new ones
             ]
           }));
         } catch (error: any) {
-          console.error("Failed to fetch transactions via API:", error);
+          console.error("Failed to fetch transactions via API:", error.message, error.stack);
           toast({ title: "Lỗi Server", description: error.message, variant: "destructive" });
+           // Clear potentially outdated/failed data for this specific month and family
            set((state) => ({
             transactions: state.transactions.filter(t => !(t.userId === familyIdToFetch && t.monthYear === monthYear))
           }));
@@ -90,24 +104,31 @@ export const useAuthStore = create<AuthState>()(
       },
 
       getTransactionsForFamilyByMonth: (familyIdToFilter, monthYear) => {
+         // This function always filters for the FAMILY_ACCOUNT_ID
+        if (familyIdToFilter !== FAMILY_ACCOUNT_ID) {
+            console.warn("getTransactionsForFamilyByMonth called with incorrect familyId. Defaulting to FAMILY_ACCOUNT_ID");
+            familyIdToFilter = FAMILY_ACCOUNT_ID;
+        }
         return get().transactions.filter(t => t.userId === familyIdToFilter && t.monthYear === monthYear);
       },
     }),
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ familyId: state.familyId }), // Only persist familyId
+      partialize: (state) => ({ currentUser: state.currentUser, familyId: state.familyId }), // Persist who is logged in and the familyId
     }
   )
 );
 
+// This hook can be used in components to initialize transaction data for the current family and a specific month.
 export function useInitializeTransactions(monthYear: string) {
   const { familyId, fetchTransactionsByMonth, transactions } = useAuthStore();
 
   React.useEffect(() => {
-    if (familyId && monthYear) {
-      const existing = transactions.some(t => t.userId === familyId && t.monthYear === monthYear);
-      if (!existing) {
+    if (familyId && monthYear) { // familyId here will be FAMILY_ACCOUNT_ID
+      const existingForMonth = transactions.some(t => t.userId === familyId && t.monthYear === monthYear);
+      // Fetch if no transactions for this family and month exist in the store, or if you want to refresh
+      if (!existingForMonth) { 
          fetchTransactionsByMonth(familyId, monthYear);
       }
     }

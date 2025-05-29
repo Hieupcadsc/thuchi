@@ -7,16 +7,16 @@ import { LoginForm } from '@/components/auth/LoginForm';
 import { useAuthStore } from '@/hooks/useAuth';
 
 export default function LoginPage() {
-  const familyId = useAuthStore((state) => state.familyId);
+  const currentUser = useAuthStore((state) => state.currentUser);
   const router = useRouter();
 
   useEffect(() => {
-    if (familyId) {
+    if (currentUser) { // Check for currentUser instead of familyId
       router.push('/dashboard');
     }
-  }, [familyId, router]);
+  }, [currentUser, router]);
 
-  if (familyId) {
+  if (currentUser) {
     return <div className="flex items-center justify-center min-h-screen"><p>Đang chuyển hướng...</p></div>;
   }
 

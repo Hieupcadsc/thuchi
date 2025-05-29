@@ -28,7 +28,7 @@ const chartColors = [
 ];
 
 export default function ReportsPage() {
-  const { familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth } = useAuthStore();
+  const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth } = useAuthStore();
   const [monthlyComparisonData, setMonthlyComparisonData] = useState<MonthlyChartData[]>([]);
   const [categoryBreakdownData, setCategoryBreakdownData] = useState<CategoryChartData[]>([]);
   const [selectedMonthForCategory, setSelectedMonthForCategory] = useState<string>('');
@@ -54,7 +54,7 @@ export default function ReportsPage() {
   }, [monthOptions, selectedMonthForCategory]);
 
   useEffect(() => {
-    if (familyId) {
+    if (currentUser && familyId) { // Check currentUser for login status, familyId will be FAMILY_ACCOUNT_ID
       const loadReportData = async () => {
         setIsLoading(true);
         const monthsToFetch = new Set<string>();
@@ -70,23 +70,24 @@ export default function ReportsPage() {
 
         if (monthsToFetch.size > 0) {
             await Promise.all(
-              Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m))
+              Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m)) // familyId is FAMILY_ACCOUNT_ID
             );
         }
         setIsLoading(false);
       };
       loadReportData();
     }
-  }, [familyId, selectedMonthForCategory, fetchTransactionsByMonth]);
+  }, [currentUser, familyId, selectedMonthForCategory, fetchTransactionsByMonth]);
 
   useEffect(() => {
-    if (familyId && transactions.length > 0) {
+    if (currentUser && familyId && transactions.length > 0) { // Check currentUser
       const comparisonData: MonthlyChartData[] = [];
       const currentDate = new Date();
       for (let i = 5; i >= 0; i--) {
         const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
         const monthYearKey = format(date, 'yyyy-MM');
-        const monthTransactions = getTransactionsForFamilyByMonth(familyId, monthYearKey);
+        // familyId will be FAMILY_ACCOUNT_ID
+        const monthTransactions = getTransactionsForFamilyByMonth(familyId, monthYearKey); 
         
         const income = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
         const expense = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
@@ -116,13 +117,13 @@ export default function ReportsPage() {
         })).sort((a,b) => b.value - a.value); 
         setCategoryBreakdownData(categoryData);
       }
-    } else if (familyId && !isLoading) {
+    } else if (currentUser && familyId && !isLoading) { // Check currentUser
         setMonthlyComparisonData([]);
         setCategoryBreakdownData([]);
     }
-  }, [familyId, transactions, selectedMonthForCategory, getTransactionsForFamilyByMonth, isLoading]);
+  }, [currentUser, familyId, transactions, selectedMonthForCategory, getTransactionsForFamilyByMonth, isLoading]);
 
-  if (!familyId) {
+  if (!currentUser) { // Check currentUser for login status
     return (
       <div className="text-center p-8">
         <AlertTriangle className="mx-auto h-12 w-12 text-destructive" />
@@ -143,7 +144,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Báo Cáo Thu Chi</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Báo Cáo Thu Chi (Gia Đình)</h1>
         <p className="text-muted-foreground">Phân tích trực quan tình hình tài chính của gia đình.</p>
       </div>
 

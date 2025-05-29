@@ -13,7 +13,7 @@ import { format, subMonths } from 'date-fns';
 import { MONTH_NAMES } from '@/lib/constants';
 
 export default function TransactionsPage() {
-  const { familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth } = useAuthStore();
+  const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth } = useAuthStore();
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [currentMonthYear, setCurrentMonthYear] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
@@ -38,33 +38,34 @@ export default function TransactionsPage() {
   }, [monthOptions, currentMonthYear]);
 
   useEffect(() => {
-    if (familyId && currentMonthYear) {
+    if (currentUser && familyId && currentMonthYear) { // Check currentUser, familyId will be FAMILY_ACCOUNT_ID
       const loadTransactions = async () => {
         setIsLoading(true);
-        await fetchTransactionsByMonth(familyId, currentMonthYear);
+        await fetchTransactionsByMonth(familyId, currentMonthYear); // familyId is FAMILY_ACCOUNT_ID
         setIsLoading(false);
       };
       loadTransactions();
     }
-  }, [familyId, currentMonthYear, fetchTransactionsByMonth]);
+  }, [currentUser, familyId, currentMonthYear, fetchTransactionsByMonth]);
 
   const displayTransactions = useMemo(() => {
-    if (familyId && currentMonthYear) {
-      return getTransactionsForFamilyByMonth(familyId, currentMonthYear);
+    if (currentUser && familyId && currentMonthYear) { // Check currentUser
+      // familyId will be FAMILY_ACCOUNT_ID
+      return getTransactionsForFamilyByMonth(familyId, currentMonthYear); 
     }
     return [];
-  }, [familyId, currentMonthYear, transactions, getTransactionsForFamilyByMonth]);
+  }, [currentUser, familyId, currentMonthYear, transactions, getTransactionsForFamilyByMonth]);
 
   const handleFormSuccess = async () => {
     setIsFormVisible(false);
-    if (familyId && currentMonthYear) {
+    if (currentUser && familyId && currentMonthYear) { // Check currentUser
       setIsLoading(true);
-      await fetchTransactionsByMonth(familyId, currentMonthYear);
+      await fetchTransactionsByMonth(familyId, currentMonthYear); // familyId is FAMILY_ACCOUNT_ID
       setIsLoading(false);
     }
   };
 
-  if (!familyId) {
+  if (!currentUser) { // Check currentUser
     return (
       <div className="text-center p-8">
         <AlertTriangle className="mx-auto h-12 w-12 text-destructive" />
@@ -77,7 +78,7 @@ export default function TransactionsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Quản Lý Giao Dịch Gia Đình</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Quản Lý Giao Dịch (Người dùng: {currentUser})</h1>
           <p className="text-muted-foreground">Thêm mới và xem lại các khoản thu chi của gia đình.</p>
         </div>
         <Button onClick={() => setIsFormVisible(!isFormVisible)} size="lg">
@@ -102,8 +103,8 @@ export default function TransactionsPage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
             <div>
-              <CardTitle>Lịch Sử Giao Dịch</CardTitle>
-              <CardDescription>Danh sách các giao dịch đã được ghi lại.</CardDescription>
+              <CardTitle>Lịch Sử Giao Dịch Gia Đình</CardTitle>
+              <CardDescription>Danh sách các giao dịch đã được ghi lại của cả gia đình.</CardDescription>
             </div>
             <div className="w-full sm:w-auto min-w-[200px]">
               <Select value={currentMonthYear} onValueChange={setCurrentMonthYear} disabled={isLoading}>

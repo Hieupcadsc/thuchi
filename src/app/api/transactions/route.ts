@@ -1,18 +1,20 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
-import type { Transaction, UserType } from '@/types';
+import type { Transaction, UserType, FamilyMember } from '@/types'; // Added FamilyMember
 import { google } from 'googleapis';
 
 // --- Google Sheets Configuration ---
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
 
 // --- Authentication ---
+// The GCLOUD_PROJECT and GOOGLE_APPLICATION_CREDENTIALS environment variables are used by default
 const auth = new google.auth.GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 const sheets = google.sheets({ version: 'v4', auth });
 
-const HEADER_ROW = ['ID', 'UserID', 'Description', 'Amount', 'Date', 'Type', 'CategoryID', 'MonthYear', 'Note'];
+// Ensure PerformedBy is the last column for backward compatibility if sheets were created before
+const HEADER_ROW = ['ID', 'UserID', 'Description', 'Amount', 'Date', 'Type', 'CategoryID', 'MonthYear', 'Note', 'PerformedBy'];
 
 // --- Helper Functions ---
 async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: string) {
@@ -26,6 +28,7 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
     );
 
     if (!sheetExists) {
+      // Create new sheet
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId,
         requestBody: {
@@ -40,27 +43,31 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
           ],
         },
       });
+      // Add header to new sheet
       await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: `${sheetName}!A1`,
+        range: `${sheetName}!A1`, // Start at A1
         valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: [HEADER_ROW],
         },
       });
     } else {
+      // Check and update header if necessary
       const headerCheck = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${sheetName}!A1:I1`,
+        range: `${sheetName}!A1:${String.fromCharCode(64 + HEADER_ROW.length)}1`, // Dynamically get range for header
       });
       if (!headerCheck.data.values || headerCheck.data.values.length === 0 || 
           (headerCheck.data.values[0] && headerCheck.data.values[0].join(',') !== HEADER_ROW.join(','))) {
+        // Clear existing header if it's incorrect or missing
         if (headerCheck.data.values && headerCheck.data.values.length > 0) {
             await sheets.spreadsheets.values.clear({
                 spreadsheetId,
-                range: `${sheetName}!A1:I1`,
+                range: `${sheetName}!A1:${String.fromCharCode(64 + HEADER_ROW.length)}1`,
             });
         }
+        // Update/Set header
         await sheets.spreadsheets.values.update({
           spreadsheetId,
           range: `${sheetName}!A1`,
@@ -73,7 +80,7 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
     }
   } catch (error: any) {
     console.error(`Error in ensureSheetExistsAndHeader for sheet "${sheetName}":`, error.message, error.stack);
-    throw error; // Re-throw to be caught by handler
+    throw error; 
   }
 }
 
@@ -90,20 +97,22 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:I`,
+      range: `${sheetName}!A:${String.fromCharCode(64 + HEADER_ROW.length)}`, // Read all defined header columns
     });
 
     const rows = response.data.values;
-    if (rows && rows.length > 1) {
+    if (rows && rows.length > 1) { // Ensure there's more than just the header
       return rows
-        .slice(1)
+        .slice(1) // Skip header row
         .map((row): Transaction | null => {
-          if (row.length < HEADER_ROW.length -1 && row.length < 8) return null;
+          // Ensure row has enough data for core fields, PerformedBy might be missing in old data
+          if (row.length < HEADER_ROW.length - 2 ) return null; // Allow note and performedBy to be potentially missing
+          
           // Filter by userId (column B, index 1) - this userId is now the familyId
           if (row[1] === userIdToFetch) {
             return {
               id: row[0],
-              userId: row[1] as UserType,
+              userId: row[1] as UserType, // This is the familyId
               description: row[2],
               amount: parseFloat(row[3]),
               date: row[4],
@@ -111,6 +120,7 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
               categoryId: row[6],
               monthYear: row[7],
               note: row[8] || undefined,
+              performedBy: row[9] as FamilyMember || 'Chồng', // Default to 'Chồng' or handle as undefined if necessary
             };
           }
           return null;
@@ -149,18 +159,20 @@ async function addTransactionToSheet(transaction: Transaction): Promise<Transact
       transaction.categoryId,
       transaction.monthYear,
       transaction.note || '',
+      transaction.performedBy, // Save who performed the transaction
     ]];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:I`,
+      range: `${sheetName}!A:${String.fromCharCode(64 + HEADER_ROW.length)}`,
       valueInputOption: 'USER_ENTERED',
+      insertDataOption: 'INSERT_ROWS', // Ensures it appends to the end
       requestBody: { values },
     });
     return transaction;
   } catch (err: any) {
     console.error(`Error in addTransactionToSheet for sheet "${sheetName}":`, err.message, err.stack);
-    throw err; // Re-throw to be caught by handler
+    throw err; 
   }
 }
 
@@ -182,8 +194,8 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('[API GET /transactions] Error:', error.message, error.stack);
     const message = error.message || 'Failed to fetch data from Google Sheets.';
-    const statusCode = error.code || 500; // Use specific error code if available
-    return NextResponse.json({ message }, { status: statusCode });
+    const statusCode = error.code || 500; 
+    return NextResponse.json({ message, details: error.stack }, { status: statusCode });
   }
 }
 
@@ -197,8 +209,9 @@ export async function POST(request: NextRequest) {
     if (!transaction || typeof transaction !== 'object') {
         return NextResponse.json({ message: 'Invalid transaction data in request body' }, { status: 400 });
     }
-    if (!transaction.id || !transaction.userId || !transaction.description || transaction.amount === undefined || !transaction.date || !transaction.type || !transaction.categoryId || !transaction.monthYear) {
-        return NextResponse.json({ message: 'Missing required fields in transaction data' }, { status: 400 });
+    // Added performedBy check
+    if (!transaction.id || !transaction.userId || !transaction.description || transaction.amount === undefined || !transaction.date || !transaction.type || !transaction.categoryId || !transaction.monthYear || !transaction.performedBy) {
+        return NextResponse.json({ message: 'Missing required fields in transaction data (ensure performedBy is included)' }, { status: 400 });
     }
     
     const savedTransaction = await addTransactionToSheet(transaction);
@@ -211,6 +224,6 @@ export async function POST(request: NextRequest) {
     }
     const message = error.message || 'Failed to add transaction to Google Sheets.';
     const statusCode = error.code || 500;
-    return NextResponse.json({ message }, { status: statusCode });
+    return NextResponse.json({ message, details: error.stack }, { status: statusCode });
   }
 }

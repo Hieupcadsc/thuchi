@@ -12,11 +12,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/hooks/useAuth";
-import { LogOut, Users } from "lucide-react"; // Changed icon
+import { LogOut, User } from "lucide-react"; 
 import { useRouter } from "next/navigation";
 
 export function UserNav() {
-  const { familyId, logout } = useAuthStore();
+  const { currentUser, familyId, logout } = useAuthStore();
   const router = useRouter();
 
   const handleLogout = () => {
@@ -24,7 +24,7 @@ export function UserNav() {
     router.push("/login");
   };
 
-  if (!familyId) return null;
+  if (!currentUser || !familyId) return null;
 
   return (
     <DropdownMenu>
@@ -32,7 +32,7 @@ export function UserNav() {
         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
           <Avatar className="h-10 w-10">
             <AvatarFallback className="bg-primary text-primary-foreground text-lg">
-              <Users className="h-5 w-5"/> {/* Generic Family Icon */}
+              <User className="h-5 w-5"/> 
             </AvatarFallback>
           </Avatar>
         </Button>
@@ -40,9 +40,9 @@ export function UserNav() {
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">Tài Khoản Gia Đình</p>
+            <p className="text-sm font-medium leading-none">Tài khoản: {currentUser}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              {familyId} {/* Display the family identifier */}
+              ID Gia Đình: {familyId}
             </p>
           </div>
         </DropdownMenuLabel>

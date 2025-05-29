@@ -19,7 +19,7 @@ const initialSummary: MonthlySummary = {
 };
 
 export default function DashboardPage() {
-  const { familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth } = useAuthStore();
+  const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth } = useAuthStore();
   const [summary, setSummary] = useState<MonthlySummary>(initialSummary);
   const [monthlyChartData, setMonthlyChartData] = useState<any[]>([]);
   const [currentMonthYear, setCurrentMonthYear] = useState<string>('');
@@ -31,7 +31,7 @@ export default function DashboardPage() {
   }, []);
   
   useEffect(() => {
-    if (familyId && currentMonthYear) {
+    if (currentUser && familyId && currentMonthYear) { // Check currentUser for login status
       const loadDashboardData = async () => {
         setIsLoading(true);
         const monthsToFetch = new Set<string>();
@@ -43,6 +43,7 @@ export default function DashboardPage() {
           monthsToFetch.add(format(date, 'yyyy-MM'));
         }
 
+        // familyId will be FAMILY_ACCOUNT_ID
         await Promise.all(
           Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m))
         );
@@ -50,10 +51,11 @@ export default function DashboardPage() {
       };
       loadDashboardData();
     }
-  }, [familyId, currentMonthYear, fetchTransactionsByMonth]);
+  }, [currentUser, familyId, currentMonthYear, fetchTransactionsByMonth]);
 
   useEffect(() => {
-    if (familyId && transactions.length > 0) {
+    if (currentUser && familyId && transactions.length > 0) { // Check currentUser
+      // familyId will be FAMILY_ACCOUNT_ID, so getTransactionsForFamilyByMonth gets all family transactions
       const currentMonthTransactions = getTransactionsForFamilyByMonth(familyId, currentMonthYear);
       let totalIncome = 0;
       let totalExpense = 0;
@@ -80,13 +82,13 @@ export default function DashboardPage() {
         });
       }
       setMonthlyChartData(chartData);
-    } else if (familyId && !isLoading) {
+    } else if (currentUser && familyId && !isLoading) { // Check currentUser
       setSummary(initialSummary);
       setMonthlyChartData([]);
     }
-  }, [familyId, transactions, currentMonthYear, getTransactionsForFamilyByMonth, isLoading]);
+  }, [currentUser, familyId, transactions, currentMonthYear, getTransactionsForFamilyByMonth, isLoading]);
 
-  if (!familyId) {
+  if (!currentUser) { // Check currentUser for login status
     return <div className="text-center p-8"><AlertTriangle className="mx-auto h-12 w-12 text-destructive" /><p className="mt-4 text-lg">Vui lòng đăng nhập để xem dashboard.</p></div>;
   }
 
@@ -97,7 +99,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Chào mừng Gia Đình!</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Chào mừng Gia Đình! (Người dùng: {currentUser})</h1>
       
       {isLoading && transactions.length === 0 ? (
         <div className="flex justify-center items-center py-8">
@@ -107,15 +109,15 @@ export default function DashboardPage() {
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <SummaryCard title="Tổng Thu" value={summary.totalIncome} icon={TrendingUp} colorClass="text-green-500" />
-            <SummaryCard title="Tổng Chi" value={summary.totalExpense} icon={TrendingDown} colorClass="text-red-500" />
-            <SummaryCard title="Số Dư" value={summary.balance} icon={Banknote} colorClass={summary.balance >= 0 ? "text-blue-500" : "text-orange-500"} />
+            <SummaryCard title="Tổng Thu (Gia Đình)" value={summary.totalIncome} icon={TrendingUp} colorClass="text-green-500" />
+            <SummaryCard title="Tổng Chi (Gia Đình)" value={summary.totalExpense} icon={TrendingDown} colorClass="text-red-500" />
+            <SummaryCard title="Số Dư (Gia Đình)" value={summary.balance} icon={Banknote} colorClass={summary.balance >= 0 ? "text-blue-500" : "text-orange-500"} />
           </div>
 
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle>Tổng Quan Thu Chi 6 Tháng Gần Nhất</CardTitle>
-              <CardDescription>Biểu đồ cột so sánh tổng thu và tổng chi qua các tháng.</CardDescription>
+              <CardTitle>Tổng Quan Thu Chi Gia Đình 6 Tháng Gần Nhất</CardTitle>
+              <CardDescription>Biểu đồ cột so sánh tổng thu và tổng chi qua các tháng của cả gia đình.</CardDescription>
             </CardHeader>
             <CardContent>
               {monthlyChartData.length > 0 ? (

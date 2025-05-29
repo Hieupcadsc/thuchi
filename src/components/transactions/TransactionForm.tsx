@@ -24,7 +24,7 @@ import { useAuthStore } from "@/hooks/useAuth";
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from 'date-fns';
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast"; // Standalone toast
 import React from "react";
 
 const formSchema = z.object({
@@ -43,8 +43,8 @@ interface TransactionFormProps {
 }
 
 export function TransactionForm({ onSuccess }: TransactionFormProps) {
-  const { familyId, addTransaction } = useAuthStore(); 
-  const { toast } = useToast();
+  const { addTransaction, currentUser } = useAuthStore(); 
+  const { toast } = useToast(); // Using the hook here is fine as this is a component
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<TransactionFormValues>({
@@ -64,19 +64,20 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
   React.useEffect(() => {
     form.resetField("categoryId");
     if (transactionType === "income") {
-      form.setValue("note", "");
+      form.setValue("note", ""); // Clear note for income
     }
   }, [transactionType, form]);
 
   const onSubmit = async (data: TransactionFormValues) => {
-    if (!familyId) { // Check for familyId instead of user
-      toast({ title: "Lỗi", description: "Không tìm thấy tài khoản gia đình.", variant: "destructive" });
+    if (!currentUser) { 
+      toast({ title: "Lỗi", description: "Không tìm thấy thông tin người dùng hiện tại.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
 
     const formattedDate = format(data.date, "yyyy-MM-dd");
 
+    // performedBy will be taken from currentUser in useAuthStore.addTransaction
     const transactionPayload = {
       description: data.description,
       amount: data.amount,
@@ -99,6 +100,7 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
       if (onSuccess) onSuccess();
     } catch (error) {
       console.error("Error submitting transaction form:", error);
+      // Toast for error is handled within addTransaction
     } finally {
       setIsSubmitting(false);
     }

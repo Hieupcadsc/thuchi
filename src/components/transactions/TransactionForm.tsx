@@ -23,8 +23,8 @@ import { AiCategorySuggestor } from "./AiCategorySuggestor";
 import { useAuthStore } from "@/hooks/useAuth";
 import { FAMILY_MEMBERS } from '@/lib/constants'; 
 import type { Transaction, FamilyMember } from "@/types";
-import { CalendarIcon, Loader2, UploadCloud, AlertTriangle, User } from "lucide-react";
-import { Card, CardTitle } from "@/components/ui/card"; 
+import { CalendarIcon, Loader2, UploadCloud, AlertTriangle, User, Camera, FileUp } from "lucide-react";
+import { Card, CardTitle, CardDescription } from "@/components/ui/card"; 
 import { cn } from "@/lib/utils";
 import { format, parseISO, parse as parseDateFns, isValid as isValidDate } from 'date-fns';
 import { useToast } from "@/hooks/use-toast"; 
@@ -62,6 +62,10 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
   const [billImageDataUri, setBillImageDataUri] = React.useState<string | null>(null);
   const [isProcessingBill, setIsProcessingBill] = React.useState(false);
   const [billProcessingError, setBillProcessingError] = React.useState<string | null>(null);
+
+  // Refs for hidden file inputs
+  const takePhotoInputRef = React.useRef<HTMLInputElement>(null);
+  const uploadFileInputRef = React.useRef<HTMLInputElement>(null);
 
 
   const form = useForm<TransactionFormValues>({
@@ -161,6 +165,10 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
       setBillImagePreview(null);
       setBillImageDataUri(null);
     }
+    // Reset file input value to allow selecting the same file again if needed
+    if(event.target) {
+        event.target.value = '';
+    }
   };
 
   const parseAIDate = (dateString?: string): Date | undefined => {
@@ -241,7 +249,6 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
       type: data.type,
       categoryId: data.categoryId,
       monthYear: monthYear,
-      performedBy: transactionToEdit ? data.performedBy : currentUser, 
       note: data.type === 'expense' ? data.note : undefined,
     };
     
@@ -251,7 +258,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
             ...transactionBasePayload,
             id: transactionToEdit.id,
             userId: familyId, 
-            performedBy: data.performedBy, 
+            performedBy: data.performedBy, // Use form value for editing
         };
         await updateTransaction(payloadForUpdate);
         toast({ title: "Thành công!", description: "Đã cập nhật giao dịch." });
@@ -260,7 +267,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
             ...transactionBasePayload,
             id: crypto.randomUUID(), 
             userId: familyId, 
-            performedBy: currentUser, 
+            performedBy: currentUser, // Current user performs new transactions
         };
         await addTransaction(payloadForAdd);
         toast({ title: "Thành công!", description: "Đã thêm giao dịch mới." });
@@ -281,7 +288,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         setBillProcessingError(null);
       }
       if (onSuccess) onSuccess();
-    } catch (error: any) {
+    } catch (error: any)      {
       console.error("Error submitting transaction form:", error);
        toast({ title: "Lỗi", description: error.message || "Có lỗi xảy ra khi lưu giao dịch.", variant: "destructive" });
     } finally {
@@ -295,28 +302,49 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         
         {isBillMode && !transactionToEdit && (
           <Card className="bg-muted/50 dark:bg-muted/30 p-4 border shadow-sm">
-            <CardTitle className="text-lg mb-3">Tải Lên Ảnh Bill</CardTitle>
-            <FormField
-              control={form.control} 
-              name="description" // This field is just a placeholder for FormField, not directly used for file
-              render={() => (
-                <FormItem>
-                  <FormLabel htmlFor="bill-image-upload" className="sr-only">Tải ảnh bill</FormLabel>
-                  <FormControl>
-                    <Input 
-                      id="bill-image-upload"
-                      type="file" 
-                      accept="image/*" 
-                      capture="environment" // Added capture attribute
-                      onChange={handleImageChange}
-                      className="mb-2 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                      disabled={isSubmitting || isProcessingBill}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+            <CardTitle className="text-lg mb-1">Thêm từ Bill</CardTitle>
+            <CardDescription className="text-sm text-muted-foreground mb-3">Chụp ảnh hoặc tải lên hóa đơn của bạn.</CardDescription>
+            
+            {/* Hidden file inputs */}
+            <input 
+                type="file" 
+                accept="image/*" 
+                capture="environment" 
+                ref={takePhotoInputRef} 
+                onChange={handleImageChange} 
+                className="hidden" 
+                id="take-photo-input"
             />
+            <input 
+                type="file" 
+                accept="image/*" 
+                ref={uploadFileInputRef} 
+                onChange={handleImageChange} 
+                className="hidden" 
+                id="upload-file-input"
+            />
+
+            <div className="flex flex-col sm:flex-row gap-3 mb-3">
+                <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => takePhotoInputRef.current?.click()} 
+                    className="w-full sm:flex-1"
+                    disabled={isSubmitting || isProcessingBill}
+                >
+                    <Camera className="mr-2 h-4 w-4" /> Chụp Ảnh
+                </Button>
+                <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => uploadFileInputRef.current?.click()} 
+                    className="w-full sm:flex-1"
+                    disabled={isSubmitting || isProcessingBill}
+                >
+                    <FileUp className="mr-2 h-4 w-4" /> Tải Tệp Lên
+                </Button>
+            </div>
+            
             {billImagePreview && (
               <div className="mt-3 space-y-3">
                 <p className="text-sm font-medium">Xem trước ảnh bill:</p>
@@ -338,7 +366,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
               <p className="text-sm text-destructive mt-2 flex items-center"><AlertTriangle className="h-4 w-4 mr-1"/> {billProcessingError}</p>
             )}
              <p className="text-xs text-muted-foreground mt-3">
-              AI sẽ cố gắng trích xuất thông tin từ ảnh bill. Vui lòng kiểm tra và chỉnh sửa lại trước khi lưu.
+              AI sẽ cố gắng trích xuất thông tin từ ảnh. Vui lòng kiểm tra và chỉnh sửa lại trước khi lưu.
             </p>
             <hr className="my-4" />
           </Card>
@@ -377,38 +405,38 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
             )}
           />
           
-          {transactionToEdit ? (
-             <FormField
-              control={form.control}
-              name="performedBy"
-              render={({ field }) => (
-                <FormItem className="space-y-2">
-                  <FormLabel>Người thực hiện</FormLabel>
-                   <FormControl>
-                      <RadioGroup
-                        onValueChange={field.onChange}
-                        value={field.value}
-                        className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
-                        disabled={isSubmitting}
-                      >
-                        {FAMILY_MEMBERS.map((member) => (
-                          <FormItem key={member} className="flex items-center space-x-2 space-y-0">
-                            <FormControl><RadioGroupItem value={member} /></FormControl>
-                            <FormLabel className="font-normal">{member}</FormLabel>
-                          </FormItem>
-                        ))}
-                      </RadioGroup>
-                    </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          ) : (
-             <div className="text-sm">
-                <span className="font-medium">Người thực hiện: </span>
-                <span className="text-muted-foreground">{currentUser}</span>
-             </div>
-          )}
+         <FormField
+            control={form.control}
+            name="performedBy"
+            render={({ field }) => (
+              <FormItem className="space-y-2">
+                <FormLabel>Người thực hiện</FormLabel>
+                {transactionToEdit ? (
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
+                      disabled={isSubmitting}
+                    >
+                      {FAMILY_MEMBERS.map((member) => (
+                        <FormItem key={member} className="flex items-center space-x-2 space-y-0">
+                          <FormControl><RadioGroupItem value={member} /></FormControl>
+                          <FormLabel className="font-normal">{member}</FormLabel>
+                        </FormItem>
+                      ))}
+                    </RadioGroup>
+                  </FormControl>
+                ) : (
+                  <div className="text-sm flex items-center pt-2">
+                     <User className="h-4 w-4 mr-2 text-muted-foreground"/>
+                     <span className="text-muted-foreground">{currentUser}</span>
+                  </div>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
 
           <FormField
@@ -538,3 +566,4 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
     </Form>
   );
 }
+

@@ -19,8 +19,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1, // Optional: Prevents users from zooming in too much
-  userScalable: false, // Optional: Prevents users from zooming at all
+  maximumScale: 5, // Allow zooming up to 5x, or a value you prefer
+  userScalable: true, // Allow user to scale (zoom)
 };
 
 export default function RootLayout({

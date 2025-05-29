@@ -7,23 +7,21 @@ import { TransactionList } from '@/components/transactions/TransactionList';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAuthStore, useInitializeTransactions } from '@/hooks/useAuth'; // Import useInitializeTransactions
+import { useAuthStore, FAMILY_ACCOUNT_ID } from '@/hooks/useAuth';
 import { PlusCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { format, subMonths } from 'date-fns';
-import type { Transaction } from '@/types';
 import { MONTH_NAMES } from '@/lib/constants';
 
-
 export default function TransactionsPage() {
-  const { user, transactions, getTransactionsByUserAndMonth, fetchTransactionsByMonth } = useAuthStore();
+  const { familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth } = useAuthStore();
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [currentMonthYear, setCurrentMonthYear] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(false); // For loading state
+  const [isLoading, setIsLoading] = useState(false);
 
   const monthOptions = useMemo(() => {
     const options = [];
     const today = new Date();
-    for (let i = 0; i < 12; i++) { // Show current month and previous 11 months
+    for (let i = 0; i < 12; i++) {
       const date = subMonths(today, i);
       options.push({
         value: format(date, 'yyyy-MM'),
@@ -39,38 +37,34 @@ export default function TransactionsPage() {
     }
   }, [monthOptions, currentMonthYear]);
 
-  // Effect to fetch transactions when user or currentMonthYear changes
   useEffect(() => {
-    if (user && currentMonthYear) {
+    if (familyId && currentMonthYear) {
       const loadTransactions = async () => {
         setIsLoading(true);
-        await fetchTransactionsByMonth(user, currentMonthYear);
+        await fetchTransactionsByMonth(familyId, currentMonthYear);
         setIsLoading(false);
       };
       loadTransactions();
     }
-  }, [user, currentMonthYear, fetchTransactionsByMonth]);
+  }, [familyId, currentMonthYear, fetchTransactionsByMonth]);
 
-  // Derived state for display, depends on the global transactions cache
   const displayTransactions = useMemo(() => {
-    if (user && currentMonthYear) {
-      return getTransactionsByUserAndMonth(user, currentMonthYear);
+    if (familyId && currentMonthYear) {
+      return getTransactionsForFamilyByMonth(familyId, currentMonthYear);
     }
     return [];
-  }, [user, currentMonthYear, transactions, getTransactionsByUserAndMonth]);
-
+  }, [familyId, currentMonthYear, transactions, getTransactionsForFamilyByMonth]);
 
   const handleFormSuccess = async () => {
     setIsFormVisible(false);
-    // Re-fetch transactions for the current month to reflect the new addition
-    if (user && currentMonthYear) {
+    if (familyId && currentMonthYear) {
       setIsLoading(true);
-      await fetchTransactionsByMonth(user, currentMonthYear);
+      await fetchTransactionsByMonth(familyId, currentMonthYear);
       setIsLoading(false);
     }
   };
 
-  if (!user) {
+  if (!familyId) {
     return (
       <div className="text-center p-8">
         <AlertTriangle className="mx-auto h-12 w-12 text-destructive" />
@@ -83,8 +77,8 @@ export default function TransactionsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Quản Lý Giao Dịch</h1>
-          <p className="text-muted-foreground">Thêm mới và xem lại các khoản thu chi của bạn.</p>
+          <h1 className="text-3xl font-bold tracking-tight">Quản Lý Giao Dịch Gia Đình</h1>
+          <p className="text-muted-foreground">Thêm mới và xem lại các khoản thu chi của gia đình.</p>
         </div>
         <Button onClick={() => setIsFormVisible(!isFormVisible)} size="lg">
           <PlusCircle className="mr-2 h-5 w-5" />
@@ -96,7 +90,7 @@ export default function TransactionsPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle>Thêm Giao Dịch Mới</CardTitle>
-            <CardDescription>Điền thông tin chi tiết cho khoản thu hoặc chi của bạn.</CardDescription>
+            <CardDescription>Điền thông tin chi tiết cho khoản thu hoặc chi của gia đình.</CardDescription>
           </CardHeader>
           <CardContent>
             <TransactionForm onSuccess={handleFormSuccess} />

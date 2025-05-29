@@ -1,6 +1,8 @@
+
 import type { LucideIcon } from 'lucide-react';
 
-export type UserType = 'Vợ' | 'Chồng';
+// UserType will now represent a generic identifier, primarily for the family account.
+export type UserType = string; 
 
 export interface Category {
   id: string;
@@ -11,7 +13,7 @@ export interface Category {
 
 export interface Transaction {
   id: string;
-  userId: UserType;
+  userId: UserType; // Will store the family account identifier
   description: string;
   amount: number;
   date: string; // YYYY-MM-DD

@@ -16,7 +16,7 @@ import { CATEGORIES } from "@/lib/constants";
 import type { Transaction } from "@/types";
 import { format, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { AlertTriangle, User } from "lucide-react";
+import { AlertTriangle, Home } from "lucide-react"; // Changed User to Home or generic icon
 
 
 interface TransactionListProps {
@@ -49,7 +49,7 @@ export function TransactionList({ transactions }: TransactionListProps) {
               <TableHead className="text-right">Số tiền</TableHead>
               <TableHead>Ngày</TableHead>
               <TableHead>Loại</TableHead>
-              <TableHead>Người tạo</TableHead>
+              <TableHead>Tài khoản</TableHead> {/* Changed from "Người tạo" */}
               <TableHead>Ghi chú</TableHead>
             </TableRow>
           </TableHeader>
@@ -92,8 +92,8 @@ export function TransactionList({ transactions }: TransactionListProps) {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center">
-                        <User className="h-4 w-4 mr-1 text-muted-foreground"/>
-                        {transaction.userId}
+                        <Home className="h-4 w-4 mr-1 text-muted-foreground"/> {/* Generic family icon */}
+                        Gia Đình {/* Display "Gia Đình" or transaction.userId which is familyId */}
                     </div>
                   </TableCell>
                   <TableCell className="max-w-[150px] truncate">

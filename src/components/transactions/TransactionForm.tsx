@@ -21,11 +21,10 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CategorySelector } from "./CategorySelector";
 import { AiCategorySuggestor } from "./AiCategorySuggestor";
 import { useAuthStore } from "@/hooks/useAuth";
-import { CalendarIcon, Info, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
-import type { Transaction } from "@/types";
 import React from "react";
 
 const formSchema = z.object({
@@ -44,8 +43,8 @@ interface TransactionFormProps {
 }
 
 export function TransactionForm({ onSuccess }: TransactionFormProps) {
-  const { user, addTransaction } = useAuthStore(); 
-  const { toast } = useToast(); // Direct import from use-toast
+  const { familyId, addTransaction } = useAuthStore(); 
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<TransactionFormValues>({
@@ -65,14 +64,13 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
   React.useEffect(() => {
     form.resetField("categoryId");
     if (transactionType === "income") {
-      form.setValue("note", ""); // Clear note if type changes to income
+      form.setValue("note", "");
     }
   }, [transactionType, form]);
 
-
   const onSubmit = async (data: TransactionFormValues) => {
-    if (!user) {
-      toast({ title: "Lỗi", description: "Không tìm thấy người dùng.", variant: "destructive" });
+    if (!familyId) { // Check for familyId instead of user
+      toast({ title: "Lỗi", description: "Không tìm thấy tài khoản gia đình.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
@@ -85,12 +83,11 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
       date: formattedDate, 
       type: data.type,
       categoryId: data.categoryId,
-      note: data.type === 'expense' ? data.note : undefined, // Only include note for expenses
+      note: data.type === 'expense' ? data.note : undefined,
     };
 
     try {
       await addTransaction(transactionPayload); 
-      // Success toast is now handled within useAuthStore after API success
       form.reset({
         description: "",
         amount: 0,
@@ -101,7 +98,6 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
       });
       if (onSuccess) onSuccess();
     } catch (error) {
-      // Error toast is handled within useAuthStore or if not, can be added here
       console.error("Error submitting transaction form:", error);
     } finally {
       setIsSubmitting(false);

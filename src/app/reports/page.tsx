@@ -4,11 +4,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MonthlyComparisonChart } from '@/components/reports/MonthlyComparisonChart';
 import { CategoryBreakdownChart } from '@/components/reports/CategoryBreakdownChart';
-import { useAuthStore } from '@/hooks/useAuth';
+import { useAuthStore, FAMILY_ACCOUNT_ID } from '@/hooks/useAuth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CATEGORIES, MONTH_NAMES } from '@/lib/constants';
 import { format, subMonths } from 'date-fns';
-import type { Transaction } from '@/types';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 
 interface MonthlyChartData {
@@ -29,7 +28,7 @@ const chartColors = [
 ];
 
 export default function ReportsPage() {
-  const { user, transactions, getTransactionsByUserAndMonth, fetchTransactionsByMonth } = useAuthStore();
+  const { familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth } = useAuthStore();
   const [monthlyComparisonData, setMonthlyComparisonData] = useState<MonthlyChartData[]>([]);
   const [categoryBreakdownData, setCategoryBreakdownData] = useState<CategoryChartData[]>([]);
   const [selectedMonthForCategory, setSelectedMonthForCategory] = useState<string>('');
@@ -54,45 +53,40 @@ export default function ReportsPage() {
     }
   }, [monthOptions, selectedMonthForCategory]);
 
-  // Fetch transactions for all relevant months for the charts
   useEffect(() => {
-    if (user) {
+    if (familyId) {
       const loadReportData = async () => {
         setIsLoading(true);
         const monthsToFetch = new Set<string>();
         
-        // For MonthlyComparisonChart (last 6 months)
         const currentDate = new Date();
         for (let i = 5; i >= 0; i--) {
           const date = subMonths(currentDate, i);
           monthsToFetch.add(format(date, 'yyyy-MM'));
         }
-        // For CategoryBreakdownChart (selected month)
         if (selectedMonthForCategory) {
           monthsToFetch.add(selectedMonthForCategory);
         }
 
         if (monthsToFetch.size > 0) {
             await Promise.all(
-              Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(user, m))
+              Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m))
             );
         }
         setIsLoading(false);
       };
       loadReportData();
     }
-  }, [user, selectedMonthForCategory, fetchTransactionsByMonth]);
+  }, [familyId, selectedMonthForCategory, fetchTransactionsByMonth]);
 
-  // Calculate chart data once transactions (global cache) are updated
   useEffect(() => {
-    if (user && transactions.length > 0) {
-      // Prepare data for MonthlyComparisonChart (last 6 months)
+    if (familyId && transactions.length > 0) {
       const comparisonData: MonthlyChartData[] = [];
       const currentDate = new Date();
       for (let i = 5; i >= 0; i--) {
         const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
         const monthYearKey = format(date, 'yyyy-MM');
-        const monthTransactions = getTransactionsByUserAndMonth(user, monthYearKey);
+        const monthTransactions = getTransactionsForFamilyByMonth(familyId, monthYearKey);
         
         const income = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
         const expense = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
@@ -105,9 +99,8 @@ export default function ReportsPage() {
       }
       setMonthlyComparisonData(comparisonData);
 
-      // Prepare data for CategoryBreakdownChart (for selected month)
       if (selectedMonthForCategory) {
-        const transactionsForSelectedMonth = getTransactionsByUserAndMonth(user, selectedMonthForCategory);
+        const transactionsForSelectedMonth = getTransactionsForFamilyByMonth(familyId, selectedMonthForCategory);
         const expenseTransactions = transactionsForSelectedMonth.filter(t => t.type === 'expense');
         
         const breakdown: { [key: string]: number } = {};
@@ -123,14 +116,13 @@ export default function ReportsPage() {
         })).sort((a,b) => b.value - a.value); 
         setCategoryBreakdownData(categoryData);
       }
-    } else if (user && !isLoading) { // If user exists, not loading, but no transactions
+    } else if (familyId && !isLoading) {
         setMonthlyComparisonData([]);
         setCategoryBreakdownData([]);
     }
-  }, [user, transactions, selectedMonthForCategory, getTransactionsByUserAndMonth, isLoading]);
+  }, [familyId, transactions, selectedMonthForCategory, getTransactionsForFamilyByMonth, isLoading]);
 
-
-  if (!user) {
+  if (!familyId) {
     return (
       <div className="text-center p-8">
         <AlertTriangle className="mx-auto h-12 w-12 text-destructive" />
@@ -152,7 +144,7 @@ export default function ReportsPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Báo Cáo Thu Chi</h1>
-        <p className="text-muted-foreground">Phân tích trực quan tình hình tài chính của bạn.</p>
+        <p className="text-muted-foreground">Phân tích trực quan tình hình tài chính của gia đình.</p>
       </div>
 
       <MonthlyComparisonChart data={monthlyComparisonData} />

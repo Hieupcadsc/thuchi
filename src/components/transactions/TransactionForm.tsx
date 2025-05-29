@@ -1,4 +1,3 @@
-
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -43,10 +42,11 @@ type TransactionFormValues = z.infer<typeof formSchema>;
 interface TransactionFormProps {
   onSuccess?: () => void;
   transactionToEdit?: Transaction | null;
+  onCancel?: () => void; // Added for closing form
 }
 
-export function TransactionForm({ onSuccess, transactionToEdit }: TransactionFormProps) {
-  const { addTransaction, updateTransaction, currentUser } = useAuthStore(); 
+export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: TransactionFormProps) {
+  const { addTransaction, updateTransaction, currentUser, familyId } = useAuthStore(); 
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -56,8 +56,8 @@ export function TransactionForm({ onSuccess, transactionToEdit }: TransactionFor
     resolver: zodResolver(formSchema),
     defaultValues: transactionToEdit ? {
       ...transactionToEdit,
-      date: parseISO(transactionToEdit.date), // Convert date string back to Date object
-      amount: Number(transactionToEdit.amount), // Ensure amount is number
+      date: parseISO(transactionToEdit.date), 
+      amount: Number(transactionToEdit.amount), 
       performedBy: transactionToEdit.performedBy,
     } : {
       description: "",
@@ -66,14 +66,14 @@ export function TransactionForm({ onSuccess, transactionToEdit }: TransactionFor
       type: "expense",
       categoryId: "",
       note: "",
-      performedBy: currentUser || undefined,
+      performedBy: currentUser || undefined, // Set based on logged-in user for new transactions
     },
   });
 
   const transactionType = form.watch("type");
+  const currentDescription = form.watch("description"); // For AI suggestor
 
   React.useEffect(() => {
-    // Reset form if transactionToEdit changes (e.g., from editing to adding new)
     if (transactionToEdit) {
       form.reset({
         ...transactionToEdit,
@@ -96,18 +96,20 @@ export function TransactionForm({ onSuccess, transactionToEdit }: TransactionFor
 
 
   React.useEffect(() => {
-    if (!transactionToEdit) { // Only reset categoryId for new transactions on type change
-        form.resetField("categoryId");
+    // Only reset category if it's a new transaction or type changed while editing
+    if (!transactionToEdit || (transactionToEdit && form.getValues("type") !== transactionToEdit.type)) {
+        form.setValue("categoryId", "", { shouldValidate: true });
     }
     if (transactionType === "income") {
       form.setValue("note", ""); 
     }
-  }, [transactionType, form, transactionToEdit]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactionType, form]); // Removed transactionToEdit from deps to avoid loop on edit
 
 
   const onSubmit = async (data: TransactionFormValues) => {
-    if (!currentUser) { 
-      toast({ title: "Lỗi", description: "Không tìm thấy thông tin người dùng hiện tại.", variant: "destructive" });
+    if (!currentUser || !familyId) { 
+      toast({ title: "Lỗi", description: "Không tìm thấy thông tin người dùng.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
@@ -115,21 +117,37 @@ export function TransactionForm({ onSuccess, transactionToEdit }: TransactionFor
     const formattedDate = format(data.date, "yyyy-MM-dd");
     const monthYear = formattedDate.substring(0,7);
 
-    const transactionPayload = {
-      ...data, // includes performedBy from form
+    const transactionPayload: Omit<Transaction, 'id' | 'userId'> & { id?: string; userId?: string } = {
+      ...data,
       date: formattedDate,
       monthYear: monthYear,
       note: data.type === 'expense' ? data.note : undefined,
+      performedBy: data.performedBy, // Ensure performedBy from form is used
     };
-
+    
     try {
       if (transactionToEdit) {
-        await updateTransaction({ ...transactionPayload, id: transactionToEdit.id, userId: transactionToEdit.userId });
+        const payloadForUpdate: Transaction = {
+            ...transactionPayload,
+            id: transactionToEdit.id,
+            userId: transactionToEdit.userId, // Keep original userId (FAMILY_ACCOUNT_ID)
+            performedBy: data.performedBy, // Allow changing performedBy on edit
+        };
+        await updateTransaction(payloadForUpdate);
+        toast({ title: "Thành công!", description: "Đã cập nhật giao dịch." });
       } else {
-        await addTransaction(transactionPayload);
+        // For new transactions, userId should be familyId, performedBy is from form
+        const payloadForAdd: Transaction = {
+            ...transactionPayload,
+            id: crypto.randomUUID(), // Generate new ID for new transaction
+            userId: familyId, // Always use FAMILY_ACCOUNT_ID for new transactions
+            performedBy: data.performedBy, // This comes from the form selector
+        };
+        await addTransaction(payloadForAdd);
+        toast({ title: "Thành công!", description: "Đã thêm giao dịch mới." });
       }
       
-      if (!transactionToEdit) { // Only reset fully if it was an add operation
+      if (!transactionToEdit) { 
         form.reset({
             description: "",
             amount: 0,
@@ -141,8 +159,9 @@ export function TransactionForm({ onSuccess, transactionToEdit }: TransactionFor
         });
       }
       if (onSuccess) onSuccess();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error submitting transaction form:", error);
+       toast({ title: "Lỗi", description: error.message || "Có lỗi xảy ra khi lưu giao dịch.", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -159,8 +178,11 @@ export function TransactionForm({ onSuccess, transactionToEdit }: TransactionFor
               <FormLabel>Loại giao dịch</FormLabel>
               <FormControl>
                 <RadioGroup
-                  onValueChange={field.onChange}
-                  value={field.value} // Controlled component
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    form.setValue("categoryId", "", {shouldValidate: true}); // Reset category on type change
+                  }}
+                  value={field.value} 
                   className="flex space-x-4"
                   disabled={isSubmitting}
                 >
@@ -179,7 +201,7 @@ export function TransactionForm({ onSuccess, transactionToEdit }: TransactionFor
           )}
         />
         
-        {/* Performed By Field */}
+        {/* Performed By Field - Always visible */}
         <FormField
           control={form.control}
           name="performedBy"
@@ -189,7 +211,7 @@ export function TransactionForm({ onSuccess, transactionToEdit }: TransactionFor
               <FormControl>
                 <RadioGroup
                   onValueChange={field.onChange}
-                  value={field.value} // Controlled component
+                  value={field.value}
                   className="flex space-x-4"
                   disabled={isSubmitting}
                 >
@@ -225,6 +247,8 @@ export function TransactionForm({ onSuccess, transactionToEdit }: TransactionFor
            <AiCategorySuggestor
              onCategorySelect={(categoryId) => form.setValue('categoryId', categoryId, { shouldValidate: true })}
              transactionType={transactionType}
+             // Pass current description for AI suggestions
+             currentDescription={currentDescription} 
            />
         )}
         
@@ -285,7 +309,7 @@ export function TransactionForm({ onSuccess, transactionToEdit }: TransactionFor
                       mode="single"
                       selected={field.value}
                       onSelect={field.onChange}
-                      disabled={(date) => date > new Date() || date < new Date("1900-01-01") || isSubmitting}
+                      disabled={(date) => date > new Date() || date < new Date("2000-01-01") || isSubmitting}
                       initialFocus
                     />
                   </PopoverContent>
@@ -317,10 +341,17 @@ export function TransactionForm({ onSuccess, transactionToEdit }: TransactionFor
           />
         )}
         
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang xử lý...</> 
-                       : transactionToEdit ? "Cập Nhật Giao Dịch" : "Thêm Giao Dịch"}
-        </Button>
+        <div className="flex gap-2">
+            <Button type="submit" className="flex-1" disabled={isSubmitting}>
+            {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang xử lý...</> 
+                        : transactionToEdit ? "Cập Nhật Giao Dịch" : "Thêm Giao Dịch"}
+            </Button>
+            {(transactionToEdit || onCancel) && ( // Show cancel if editing or if onCancel prop is provided
+                 <Button type="button" variant="outline" className="flex-1" onClick={onCancel || (() => form.reset())} disabled={isSubmitting}>
+                    Hủy
+                </Button>
+            )}
+        </div>
       </form>
     </Form>
   );

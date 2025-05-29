@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -14,9 +13,13 @@ import { useAuthStore, FAMILY_MEMBERS, FAMILY_ACCOUNT_ID } from '@/hooks/useAuth
 import type { Transaction, FamilyMember } from '@/types';
 import { CATEGORIES, MONTH_NAMES } from '@/lib/constants';
 import { PlusCircle, AlertTriangle, Loader2, Search, Filter, CalendarIcon, XCircle } from 'lucide-react';
-import { format, subMonths, isValid, parseISO } from 'date-fns';
+import { format, subMonths, isValid, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
+
+const ALL_CATEGORIES_VALUE = "all_categories";
+const ALL_MEMBERS_VALUE = "all_members";
 
 export default function TransactionsPage() {
   const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth, addTransaction, updateTransaction, deleteTransaction } = useAuthStore();
@@ -30,8 +33,8 @@ export default function TransactionsPage() {
 
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterCategory, setFilterCategory] = useState<string>(''); // categoryId
-  const [filterPerformedBy, setFilterPerformedBy] = useState<FamilyMember | ''>('');
+  const [filterCategory, setFilterCategory] = useState<string>(ALL_CATEGORIES_VALUE); // categoryId
+  const [filterPerformedBy, setFilterPerformedBy] = useState<string>(ALL_MEMBERS_VALUE);
   const [filterStartDate, setFilterStartDate] = useState<Date | undefined>(undefined);
   const [filterEndDate, setFilterEndDate] = useState<Date | undefined>(undefined);
   const [isDateFilterActive, setIsDateFilterActive] = useState(false);
@@ -51,10 +54,10 @@ export default function TransactionsPage() {
   }, []);
 
   useEffect(() => {
-    if (monthOptions.length > 0 && !currentMonthYear) {
+    if (monthOptions.length > 0 && !currentMonthYear && !isDateFilterActive) {
       setCurrentMonthYear(monthOptions[0].value);
     }
-  }, [monthOptions, currentMonthYear]);
+  }, [monthOptions, currentMonthYear, isDateFilterActive]);
 
   useEffect(() => {
     if (currentUser && familyId && currentMonthYear && !isDateFilterActive) { 
@@ -72,14 +75,24 @@ export default function TransactionsPage() {
     if (currentUser && familyId && isDateFilterActive && filterStartDate && filterEndDate) {
         const loadAllTimeTransactions = async () => {
             setIsLoading(true);
-            // This is a simplified approach; ideally, you'd fetch a broader range or all data
-            // For now, let's assume recent 12 months cover most cases for filtering
+            // Fetch transactions for all months between filterStartDate and filterEndDate
             const monthsToFetch = new Set<string>();
+            let currentDate = new Date(filterStartDate);
+            const lastDate = new Date(filterEndDate);
+
+            while (currentDate <= lastDate) {
+              monthsToFetch.add(format(currentDate, 'yyyy-MM'));
+              currentDate = startOfMonth(subMonths(currentDate, -1)); // Move to the start of the next month
+            }
+            // Also ensure a broader range like last 12 months is fetched if not already covered
             const today = new Date();
-             for (let i = 0; i < 12; i++) { 
+            for (let i = 0; i < 12; i++) {
                 monthsToFetch.add(format(subMonths(today, i), 'yyyy-MM'));
             }
-            await Promise.all(Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m)));
+
+            if (monthsToFetch.size > 0) {
+              await Promise.all(Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m)));
+            }
             setIsLoading(false);
         };
         loadAllTimeTransactions();
@@ -94,14 +107,22 @@ export default function TransactionsPage() {
       setIsLoading(true);
       await fetchTransactionsByMonth(familyId, currentMonthYear);
       setIsLoading(false);
-    } else if (currentUser && familyId && isDateFilterActive) {
+    } else if (currentUser && familyId && isDateFilterActive && filterStartDate && filterEndDate) {
         // Refetch all potentially relevant data if date filter was active
          const monthsToFetch = new Set<string>();
+            let currentDate = new Date(filterStartDate);
+            const lastDate = new Date(filterEndDate);
+            while (currentDate <= lastDate) {
+              monthsToFetch.add(format(currentDate, 'yyyy-MM'));
+              currentDate = startOfMonth(subMonths(currentDate, -1));
+            }
             const today = new Date();
-             for (let i = 0; i < 12; i++) { 
+            for (let i = 0; i < 12; i++) { 
                 monthsToFetch.add(format(subMonths(today, i), 'yyyy-MM'));
             }
-            await Promise.all(Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m)));
+            if (monthsToFetch.size > 0) {
+             await Promise.all(Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m)));
+            }
     }
   };
 
@@ -113,27 +134,33 @@ export default function TransactionsPage() {
   const displayTransactions = useMemo(() => {
     if (!currentUser || !familyId) return [];
     
-    let filtered = transactions;
+    let sourceTransactions = transactions; // Start with all loaded transactions
 
+    // 1. Date Range Filter (if active)
     if (isDateFilterActive && filterStartDate && filterEndDate) {
-        // Filter by date range across all loaded transactions
-        filtered = transactions.filter(t => {
+        sourceTransactions = sourceTransactions.filter(t => {
             const transactionDate = parseISO(t.date);
-            return isValid(transactionDate) && transactionDate >= filterStartDate && transactionDate <= filterEndDate;
+            // Ensure comparison is inclusive of start and end dates by normalizing time or comparing date parts
+            const startDateNormalized = new Date(filterStartDate.getFullYear(), filterStartDate.getMonth(), filterStartDate.getDate());
+            const endDateNormalized = new Date(filterEndDate.getFullYear(), filterEndDate.getMonth(), filterEndDate.getDate(), 23, 59, 59, 999);
+            return isValid(transactionDate) && transactionDate >= startDateNormalized && transactionDate <= endDateNormalized;
         });
-    } else if (currentMonthYear) {
-        // Filter by selected month if date range is not active
-        filtered = getTransactionsForFamilyByMonth(familyId, currentMonthYear);
+    } else if (currentMonthYear && !isDateFilterActive) {
+        // 2. Month Filter (if date range is not active)
+        sourceTransactions = getTransactionsForFamilyByMonth(familyId, currentMonthYear);
     }
+    // If no date filter and no month selected, it implies all transactions (though UI drives this)
 
+    let filtered = sourceTransactions;
 
+    // 3. Other Filters applied to the result of date/month filtering
     if (searchTerm) {
       filtered = filtered.filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase()));
     }
-    if (filterCategory) {
+    if (filterCategory && filterCategory !== ALL_CATEGORIES_VALUE) {
       filtered = filtered.filter(t => t.categoryId === filterCategory);
     }
-    if (filterPerformedBy) {
+    if (filterPerformedBy && filterPerformedBy !== ALL_MEMBERS_VALUE) {
       filtered = filtered.filter(t => t.performedBy === filterPerformedBy);
     }
     
@@ -143,22 +170,44 @@ export default function TransactionsPage() {
 
   const resetFilters = () => {
     setSearchTerm('');
-    setFilterCategory('');
-    setFilterPerformedBy('');
+    setFilterCategory(ALL_CATEGORIES_VALUE);
+    setFilterPerformedBy(ALL_MEMBERS_VALUE);
     setFilterStartDate(undefined);
     setFilterEndDate(undefined);
     setIsDateFilterActive(false);
-    // Optionally, reset currentMonthYear to default if date filter was primary view
+    // Reset currentMonthYear to default if date filter was primary view
     if (monthOptions.length > 0) {
         setCurrentMonthYear(monthOptions[0].value);
     }
   };
   
   const handleApplyDateFilter = () => {
-    if (filterStartDate && filterEndDate && filterEndDate >= filterStartDate) {
+    if (filterStartDate && filterEndDate) {
+        if (filterEndDate < filterStartDate) {
+             toast({ title: "Lỗi", description: "Ngày kết thúc không thể trước ngày bắt đầu.", variant: "destructive"});
+             return;
+        }
         setIsDateFilterActive(true);
+         // Fetch data for the custom range
+        if (currentUser && familyId) {
+            const loadRangeData = async () => {
+                setIsLoading(true);
+                const monthsToFetch = new Set<string>();
+                let currentDate = new Date(filterStartDate);
+                const lastDate = new Date(filterEndDate);
+                while (currentDate <= lastDate) {
+                    monthsToFetch.add(format(currentDate, 'yyyy-MM'));
+                    currentDate = startOfMonth(subMonths(currentDate, -1)); // Move to start of next month
+                }
+                if (monthsToFetch.size > 0) {
+                    await Promise.all(Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m)));
+                }
+                setIsLoading(false);
+            };
+            loadRangeData();
+        }
     } else {
-        toast({ title: "Lỗi", description: "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.", variant: "destructive"});
+        toast({ title: "Thiếu thông tin", description: "Vui lòng chọn cả ngày bắt đầu và ngày kết thúc.", variant: "destructive"});
     }
   };
 
@@ -181,7 +230,7 @@ export default function TransactionsPage() {
         </div>
         <Button onClick={() => { setEditingTransaction(null); setIsFormVisible(!isFormVisible); }} size="lg">
           <PlusCircle className="mr-2 h-5 w-5" />
-          {isFormVisible && !editingTransaction ? 'Đóng Form' : 'Thêm Giao Dịch Mới'}
+          {isFormVisible && !editingTransaction ? 'Đóng Form' : editingTransaction ? 'Đóng Form Sửa' : 'Thêm Giao Dịch Mới'}
         </Button>
       </div>
 
@@ -195,6 +244,7 @@ export default function TransactionsPage() {
             <TransactionForm 
                 onSuccess={handleFormSuccess} 
                 transactionToEdit={editingTransaction}
+                onCancel={() => { setIsFormVisible(false); setEditingTransaction(null); }}
             />
           </CardContent>
         </Card>
@@ -212,30 +262,36 @@ export default function TransactionsPage() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="h-10"
-                    prefix={<Search className="h-4 w-4 text-muted-foreground"/>}
                 />
                 <Select value={filterCategory} onValueChange={setFilterCategory}>
                     <SelectTrigger className="h-10"><SelectValue placeholder="Lọc theo danh mục..." /></SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">Tất cả danh mục</SelectItem>
+                        <SelectItem value={ALL_CATEGORIES_VALUE}>Tất cả danh mục</SelectItem>
                         {CATEGORIES.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
                     </SelectContent>
                 </Select>
-                <Select value={filterPerformedBy} onValueChange={(value) => setFilterPerformedBy(value as FamilyMember | '')}>
+                <Select value={filterPerformedBy} onValueChange={(value) => setFilterPerformedBy(value as string)}>
                     <SelectTrigger className="h-10"><SelectValue placeholder="Lọc theo người thực hiện..." /></SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">Tất cả thành viên</SelectItem>
+                        <SelectItem value={ALL_MEMBERS_VALUE}>Tất cả thành viên</SelectItem>
                         {FAMILY_MEMBERS.map(member => <SelectItem key={member} value={member}>{member}</SelectItem>)}
                     </SelectContent>
                 </Select>
-                 <Select value={isDateFilterActive ? "custom" : currentMonthYear} onValueChange={(value) => {
-                    if (value === "custom") {
-                        setIsDateFilterActive(true);
-                    } else {
-                        setIsDateFilterActive(false);
-                        setCurrentMonthYear(value);
-                    }
-                 }}>
+                 <Select 
+                    value={isDateFilterActive ? "custom" : (currentMonthYear || monthOptions[0]?.value || '')} 
+                    onValueChange={(value) => {
+                        if (value === "custom") {
+                            setIsDateFilterActive(true);
+                            // Optionally clear month selection or set to a specific state
+                            // setCurrentMonthYear(''); 
+                        } else {
+                            setIsDateFilterActive(false);
+                            setCurrentMonthYear(value);
+                            setFilterStartDate(undefined);
+                            setFilterEndDate(undefined);
+                        }
+                    }}
+                 >
                     <SelectTrigger className="h-10"><SelectValue placeholder="Lọc theo tháng/khoảng tùy chỉnh" /></SelectTrigger>
                     <SelectContent>
                         {monthOptions.map(option => (
@@ -248,7 +304,7 @@ export default function TransactionsPage() {
                 </Select>
             </div>
             {isDateFilterActive && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end pt-4">
                     <div className="flex flex-col space-y-1">
                         <span className="text-sm font-medium">Từ ngày</span>
                         <Popover>
@@ -273,15 +329,18 @@ export default function TransactionsPage() {
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">
-                                <Calendar mode="single" selected={filterEndDate} onSelect={setFilterEndDate} disabled={(date) => filterStartDate && date < filterStartDate} initialFocus />
+                                <Calendar mode="single" selected={filterEndDate} onSelect={setFilterEndDate} disabled={(date) => filterStartDate ? date < filterStartDate : false} initialFocus />
                             </PopoverContent>
                         </Popover>
                     </div>
-                    <Button onClick={handleApplyDateFilter} className="h-10" disabled={!filterStartDate || !filterEndDate}>Áp dụng khoảng ngày</Button>
+                    <Button onClick={handleApplyDateFilter} className="h-10" disabled={!filterStartDate || !filterEndDate || isLoading}>
+                        {isLoading && isDateFilterActive ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Áp dụng khoảng ngày
+                    </Button>
                 </div>
             )}
-            {(searchTerm || filterCategory || filterPerformedBy || isDateFilterActive) && (
-                <Button variant="ghost" onClick={resetFilters} className="text-sm text-muted-foreground hover:text-destructive">
+            {(searchTerm || (filterCategory !== ALL_CATEGORIES_VALUE) || (filterPerformedBy !== ALL_MEMBERS_VALUE) || isDateFilterActive) && (
+                <Button variant="ghost" onClick={resetFilters} className="text-sm text-muted-foreground hover:text-destructive mt-4">
                     <XCircle className="mr-2 h-4 w-4"/> Xóa tất cả bộ lọc
                 </Button>
             )}
@@ -296,15 +355,24 @@ export default function TransactionsPage() {
               <CardTitle>Lịch Sử Giao Dịch Gia Đình</CardTitle>
               <CardDescription>
                 {isDateFilterActive && filterStartDate && filterEndDate ? 
-                `Giao dịch từ ${format(filterStartDate, "dd/MM/yyyy")} đến ${format(filterEndDate, "dd/MM/yyyy")}` :
-                `Danh sách giao dịch tháng ${monthOptions.find(m => m.value === currentMonthYear)?.label || 'hiện tại'}`
+                `Giao dịch từ ${format(filterStartDate, "dd/MM/yyyy", {locale: vi})} đến ${format(filterEndDate, "dd/MM/yyyy", {locale: vi})}` :
+                `Danh sách giao dịch tháng ${monthOptions.find(m => m.value === currentMonthYear)?.label || (currentMonthYear ? `tháng ${currentMonthYear}` : 'chưa chọn')}`
                 }
               </CardDescription>
             </div>
              { /* Month selector hidden if date filter is active to avoid confusion */}
             {!isDateFilterActive && (
                 <div className="w-full sm:w-auto min-w-[200px]">
-                <Select value={currentMonthYear} onValueChange={setCurrentMonthYear} disabled={isLoading}>
+                <Select 
+                    value={currentMonthYear || monthOptions[0]?.value || ''} 
+                    onValueChange={(value) => {
+                        setCurrentMonthYear(value);
+                        setIsDateFilterActive(false); // Ensure date filter is off
+                        setFilterStartDate(undefined);
+                        setFilterEndDate(undefined);
+                    }} 
+                    disabled={isLoading}
+                >
                     <SelectTrigger>
                     <SelectValue placeholder="Chọn tháng" />
                     </SelectTrigger>
@@ -321,7 +389,7 @@ export default function TransactionsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isLoading && displayTransactions.length === 0 ? ( // Show loader if loading AND no transactions to display yet
             <div className="flex justify-center items-center h-[200px]">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2">Đang tải giao dịch...</p>
@@ -330,18 +398,39 @@ export default function TransactionsPage() {
             <TransactionList 
                 transactions={displayTransactions}
                 onEdit={handleEdit}
-                onDelete={async (transactionId, monthYear) => {
-                    await deleteTransaction(transactionId, monthYear);
-                    // Refetch after delete
-                     if (currentUser && familyId && currentMonthYear && !isDateFilterActive) {
+                onDelete={async (transactionId, monthYearToDelete) => { // Renamed monthYear to monthYearToDelete
+                    if (!currentUser || !familyId) return;
+                    const originalTransactions = [...transactions];
+                    // Optimistic update
+                    setEditingTransaction(null); // Close form if editing this item
+                    setIsFormVisible(false);
+                    
+                    await deleteTransaction(transactionId, monthYearToDelete); // Use monthYearToDelete
+                    
+                    // Refetch data based on current filter/view
+                    if (!isDateFilterActive && currentMonthYear) {
                         await fetchTransactionsByMonth(familyId, currentMonthYear);
-                    } else if (currentUser && familyId && isDateFilterActive) {
+                    } else if (isDateFilterActive && filterStartDate && filterEndDate) {
                         const monthsToFetch = new Set<string>();
+                        let currentDateIterator = new Date(filterStartDate); // Renamed currentDate to currentDateIterator
+                        const lastDate = new Date(filterEndDate);
+                        while (currentDateIterator <= lastDate) {
+                            monthsToFetch.add(format(currentDateIterator, 'yyyy-MM'));
+                            currentDateIterator = startOfMonth(subMonths(currentDateIterator, -1)); // Move to start of next month
+                        }
+                        // also ensure a broader range like last 12 months is fetched if not already covered
                         const today = new Date();
                         for (let i = 0; i < 12; i++) { 
                             monthsToFetch.add(format(subMonths(today, i), 'yyyy-MM'));
                         }
-                        await Promise.all(Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m)));
+                        if (monthsToFetch.size > 0) {
+                          await Promise.all(Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m)));
+                        }
+                    } else {
+                        // Fallback: refetch current month if no specific filter
+                        if (monthOptions.length > 0 && !isDateFilterActive) {
+                            await fetchTransactionsByMonth(familyId, currentMonthYear || monthOptions[0].value);
+                        }
                     }
                 }}
             />

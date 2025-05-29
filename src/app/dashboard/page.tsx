@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore, FAMILY_ACCOUNT_ID } from '@/hooks/useAuth';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
-import { FinancialInsights } from '@/components/dashboard/FinancialInsights'; // Added
+import { SpendingChatbot } from '@/components/dashboard/SpendingChatbot'; // Added
 import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
@@ -32,11 +32,11 @@ export default function DashboardPage() {
   }, []);
   
   useEffect(() => {
-    if (currentUser && familyId && currentMonthYear) { // Check currentUser for login status
+    if (currentUser && familyId && currentMonthYear) { 
       const loadDashboardData = async () => {
         setIsLoading(true);
         const monthsToFetch = new Set<string>();
-        monthsToFetch.add(currentMonthYear);
+        monthsToFetch.add(currentMonthYear); // Current month for summary and chatbot context
         
         const currentDate = new Date();
         // Fetch data for the last 6 months for the chart
@@ -45,11 +45,6 @@ export default function DashboardPage() {
           monthsToFetch.add(format(date, 'yyyy-MM'));
         }
         
-        // Also fetch data for the month before the current one for AI analysis context, if not already included
-        monthsToFetch.add(format(subMonths(currentDate,1),'yyyy-MM'));
-
-
-        // familyId will be FAMILY_ACCOUNT_ID
         await Promise.all(
           Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m))
         );
@@ -60,8 +55,7 @@ export default function DashboardPage() {
   }, [currentUser, familyId, currentMonthYear, fetchTransactionsByMonth]);
 
   useEffect(() => {
-    if (currentUser && familyId && transactions.length > 0) { // Check currentUser
-      // familyId will be FAMILY_ACCOUNT_ID, so getTransactionsForFamilyByMonth gets all family transactions
+    if (currentUser && familyId && transactions.length > 0) { 
       const currentMonthTransactions = getTransactionsForFamilyByMonth(familyId, currentMonthYear);
       let totalIncome = 0;
       let totalExpense = 0;
@@ -88,13 +82,13 @@ export default function DashboardPage() {
         });
       }
       setMonthlyChartData(chartData);
-    } else if (currentUser && familyId && !isLoading) { // Check currentUser
+    } else if (currentUser && familyId && !isLoading) { 
       setSummary(initialSummary);
       setMonthlyChartData([]);
     }
   }, [currentUser, familyId, transactions, currentMonthYear, getTransactionsForFamilyByMonth, isLoading]);
 
-  if (!currentUser) { // Check currentUser for login status
+  if (!currentUser) { 
     return <div className="text-center p-8"><AlertTriangle className="mx-auto h-12 w-12 text-destructive" /><p className="mt-4 text-lg">Vui lòng đăng nhập để xem dashboard.</p></div>;
   }
 
@@ -157,8 +151,8 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
           
-          {/* AI Financial Insights Section */}
-          <FinancialInsights />
+          {/* Chatbot Section */}
+          <SpendingChatbot />
         </>
       )}
     </div>

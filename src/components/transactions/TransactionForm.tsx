@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,15 +35,20 @@ const formSchema = z.object({
   type: z.enum(["income", "expense"], { required_error: "Vui lòng chọn loại giao dịch" }),
   categoryId: z.string().min(1, "Vui lòng chọn danh mục"),
   note: z.string().optional(),
-  performedBy: z.enum(FAMILY_MEMBERS, { required_error: "Vui lòng chọn người thực hiện" }),
+  // performedBy is now determined by currentUser, so not needed in the form directly for submission
+  // but we might need it for displaying in edit mode if that logic changes.
+  // For now, it's not part of the Zod schema as it's derived.
 });
+
+// If performedBy needs to be editable, add it back to Zod schema and form fields.
+// performedBy: z.enum(FAMILY_MEMBERS, { required_error: "Vui lòng chọn người thực hiện" }),
 
 type TransactionFormValues = z.infer<typeof formSchema>;
 
 interface TransactionFormProps {
   onSuccess?: () => void;
   transactionToEdit?: Transaction | null;
-  onCancel?: () => void; // Added for closing form
+  onCancel?: () => void; 
 }
 
 export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: TransactionFormProps) {
@@ -50,15 +56,13 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-  const defaultPerformedBy = transactionToEdit ? transactionToEdit.performedBy : currentUser || undefined;
-
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: transactionToEdit ? {
       ...transactionToEdit,
       date: parseISO(transactionToEdit.date), 
       amount: Number(transactionToEdit.amount), 
-      performedBy: transactionToEdit.performedBy,
+      // performedBy is not part of form data directly if derived
     } : {
       description: "",
       amount: 0,
@@ -66,12 +70,11 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
       type: "expense",
       categoryId: "",
       note: "",
-      performedBy: currentUser || undefined, // Set based on logged-in user for new transactions
     },
   });
 
   const transactionType = form.watch("type");
-  const currentDescription = form.watch("description"); // For AI suggestor
+  const currentDescription = form.watch("description"); 
 
   React.useEffect(() => {
     if (transactionToEdit) {
@@ -79,7 +82,6 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
         ...transactionToEdit,
         date: parseISO(transactionToEdit.date),
         amount: Number(transactionToEdit.amount),
-        performedBy: transactionToEdit.performedBy,
       });
     } else {
       form.reset({
@@ -89,22 +91,19 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
         type: "expense",
         categoryId: "",
         note: "",
-        performedBy: currentUser || undefined,
       });
     }
-  }, [transactionToEdit, form, currentUser]);
+  }, [transactionToEdit, form]);
 
 
   React.useEffect(() => {
-    // Only reset category if it's a new transaction or type changed while editing
     if (!transactionToEdit || (transactionToEdit && form.getValues("type") !== transactionToEdit.type)) {
         form.setValue("categoryId", "", { shouldValidate: true });
     }
     if (transactionType === "income") {
       form.setValue("note", ""); 
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactionType, form]); // Removed transactionToEdit from deps to avoid loop on edit
+  }, [transactionType, form, transactionToEdit]);
 
 
   const onSubmit = async (data: TransactionFormValues) => {
@@ -117,31 +116,31 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
     const formattedDate = format(data.date, "yyyy-MM-dd");
     const monthYear = formattedDate.substring(0,7);
 
-    const transactionPayload: Omit<Transaction, 'id' | 'userId'> & { id?: string; userId?: string } = {
+    const transactionBasePayload = {
       ...data,
       date: formattedDate,
       monthYear: monthYear,
       note: data.type === 'expense' ? data.note : undefined,
-      performedBy: data.performedBy, // Ensure performedBy from form is used
     };
     
     try {
       if (transactionToEdit) {
         const payloadForUpdate: Transaction = {
-            ...transactionPayload,
+            ...transactionBasePayload,
             id: transactionToEdit.id,
-            userId: transactionToEdit.userId, // Keep original userId (FAMILY_ACCOUNT_ID)
-            performedBy: data.performedBy, // Allow changing performedBy on edit
+            userId: transactionToEdit.userId, // Should be FAMILY_ACCOUNT_ID
+            performedBy: transactionToEdit.performedBy, // Retain original performer on edit, unless you allow changing it.
+                                                       // If currentUser should overwrite, use currentUser here.
+                                                       // For now, assume performer doesn't change on edit.
         };
         await updateTransaction(payloadForUpdate);
         toast({ title: "Thành công!", description: "Đã cập nhật giao dịch." });
       } else {
-        // For new transactions, userId should be familyId, performedBy is from form
         const payloadForAdd: Transaction = {
-            ...transactionPayload,
-            id: crypto.randomUUID(), // Generate new ID for new transaction
-            userId: familyId, // Always use FAMILY_ACCOUNT_ID for new transactions
-            performedBy: data.performedBy, // This comes from the form selector
+            ...transactionBasePayload,
+            id: crypto.randomUUID(), 
+            userId: familyId, 
+            performedBy: currentUser, // Current logged-in user performs the transaction
         };
         await addTransaction(payloadForAdd);
         toast({ title: "Thành công!", description: "Đã thêm giao dịch mới." });
@@ -155,7 +154,6 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
             type: "expense",
             categoryId: "",
             note: "",
-            performedBy: currentUser || undefined,
         });
       }
       if (onSuccess) onSuccess();
@@ -180,7 +178,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
                 <RadioGroup
                   onValueChange={(value) => {
                     field.onChange(value);
-                    form.setValue("categoryId", "", {shouldValidate: true}); // Reset category on type change
+                    form.setValue("categoryId", "", {shouldValidate: true}); 
                   }}
                   value={field.value} 
                   className="flex space-x-4"
@@ -201,32 +199,10 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
           )}
         />
         
-        {/* Performed By Field - Always visible */}
-        <FormField
-          control={form.control}
-          name="performedBy"
-          render={({ field }) => (
-            <FormItem className="space-y-3">
-              <FormLabel>Người thực hiện</FormLabel>
-              <FormControl>
-                <RadioGroup
-                  onValueChange={field.onChange}
-                  value={field.value}
-                  className="flex space-x-4"
-                  disabled={isSubmitting}
-                >
-                  {FAMILY_MEMBERS.map(member => (
-                    <FormItem key={member} className="flex items-center space-x-2 space-y-0">
-                      <FormControl><RadioGroupItem value={member} /></FormControl>
-                      <FormLabel className="font-normal">{member}</FormLabel>
-                    </FormItem>
-                  ))}
-                </RadioGroup>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {/* Display who is performing transaction if adding new or editing */}
+        <div className="text-sm text-muted-foreground">
+            Người thực hiện: <span className="font-medium text-foreground">{transactionToEdit ? transactionToEdit.performedBy : currentUser}</span>
+        </div>
 
 
         <FormField
@@ -247,7 +223,6 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
            <AiCategorySuggestor
              onCategorySelect={(categoryId) => form.setValue('categoryId', categoryId, { shouldValidate: true })}
              transactionType={transactionType}
-             // Pass current description for AI suggestions
              currentDescription={currentDescription} 
            />
         )}
@@ -341,13 +316,13 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
           />
         )}
         
-        <div className="flex gap-2">
+        <div className="flex gap-2 pt-2">
             <Button type="submit" className="flex-1" disabled={isSubmitting}>
             {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang xử lý...</> 
                         : transactionToEdit ? "Cập Nhật Giao Dịch" : "Thêm Giao Dịch"}
             </Button>
-            {(transactionToEdit || onCancel) && ( // Show cancel if editing or if onCancel prop is provided
-                 <Button type="button" variant="outline" className="flex-1" onClick={onCancel || (() => form.reset())} disabled={isSubmitting}>
+            {onCancel && ( 
+                 <Button type="button" variant="outline" className="flex-1" onClick={onCancel} disabled={isSubmitting}>
                     Hủy
                 </Button>
             )}

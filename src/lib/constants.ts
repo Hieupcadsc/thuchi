@@ -30,7 +30,7 @@ export const MONTH_NAMES = [
   "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
 ];
 
-export const PERFORMED_BY_OPTIONS: FamilyMember[] = ['Vợ', 'Chồng']; // Used in TransactionForm
+export const PERFORMED_BY_OPTIONS: FamilyMember[] = ['Minh Đan', 'Minh Hiếu']; // Used in TransactionForm
 export const THEME_TOGGLE_ICONS = { // Optional, if you want to manage icons centrally
   light: Moon,
   dark: Sun,

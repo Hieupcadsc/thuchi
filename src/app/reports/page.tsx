@@ -37,19 +37,26 @@ const initialMemberSummary: MonthlySummary = {
   balance: 0,
 };
 
+// Helper to create initial state for member summaries and breakdowns
+const createInitialMemberData = <T,>(initialValue: T): Record<FamilyMember, T> => {
+  return FAMILY_MEMBERS.reduce((acc, member) => {
+    acc[member] = JSON.parse(JSON.stringify(initialValue)); // Deep copy for objects/arrays
+    return acc;
+  }, {} as Record<FamilyMember, T>);
+};
+
+
 export default function ReportsPage() {
   const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth } = useAuthStore();
   const [monthlyComparisonData, setMonthlyComparisonData] = useState<MonthlyChartData[]>([]);
   const [categoryBreakdownDataFamily, setCategoryBreakdownDataFamily] = useState<CategoryChartData[]>([]);
   
-  const [memberSummary, setMemberSummary] = useState<Record<FamilyMember, MonthlySummary>>({
-    'Vợ': initialMemberSummary,
-    'Chồng': initialMemberSummary,
-  });
-  const [memberCategoryBreakdown, setMemberCategoryBreakdown] = useState<Record<FamilyMember, CategoryChartData[]>>({
-    'Vợ': [],
-    'Chồng': [],
-  });
+  const [memberSummary, setMemberSummary] = useState<Record<FamilyMember, MonthlySummary>>(
+    createInitialMemberData(initialMemberSummary)
+  );
+  const [memberCategoryBreakdown, setMemberCategoryBreakdown] = useState<Record<FamilyMember, CategoryChartData[]>>(
+     createInitialMemberData<CategoryChartData[]>([])
+  );
 
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
@@ -80,15 +87,15 @@ export default function ReportsPage() {
         const monthsToFetch = new Set<string>();
         
         const currentDate = new Date();
-        for (let i = 5; i >= 0; i--) { // For 6-month comparison chart
+        for (let i = 5; i >= 0; i--) { 
           const date = subMonths(currentDate, i);
           monthsToFetch.add(format(date, 'yyyy-MM'));
         }
-        if (selectedMonth) { // For selected month's breakdown
+        if (selectedMonth) { 
           monthsToFetch.add(selectedMonth);
         }
 
-        if (monthsToFetch.size > 0) {
+        if (monthsToFetch.size > 0 && familyId) { // Ensure familyId is present
             await Promise.all(
               Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m))
             );
@@ -101,12 +108,12 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if (currentUser && familyId && transactions.length > 0) {
-      // --- Monthly Comparison Data (Family) ---
       const comparisonData: MonthlyChartData[] = [];
       const currentDate = new Date();
       for (let i = 5; i >= 0; i--) {
         const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
         const monthYearKey = format(date, 'yyyy-MM');
+        // familyId is FAMILY_ACCOUNT_ID, so getTransactionsForFamilyByMonth gets all family transactions
         const monthTransactions = getTransactionsForFamilyByMonth(familyId, monthYearKey); 
         
         const income = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
@@ -120,11 +127,9 @@ export default function ReportsPage() {
       }
       setMonthlyComparisonData(comparisonData);
 
-      // --- Data for Selected Month (Family & Individual Members) ---
       if (selectedMonth) {
         const transactionsForSelectedMonth = getTransactionsForFamilyByMonth(familyId, selectedMonth);
 
-        // Family Breakdown
         const familyExpenseTransactions = transactionsForSelectedMonth.filter(t => t.type === 'expense');
         const familyBreakdown: { [key: string]: number } = {};
         familyExpenseTransactions.forEach(t => {
@@ -136,9 +141,8 @@ export default function ReportsPage() {
         })).sort((a,b) => b.value - a.value); 
         setCategoryBreakdownDataFamily(familyCategoryData);
 
-        // Member specific summaries and breakdowns
-        const newMemberSummary: Record<FamilyMember, MonthlySummary> = {'Vợ': {...initialMemberSummary}, 'Chồng': {...initialMemberSummary}};
-        const newMemberCategoryBreakdown: Record<FamilyMember, CategoryChartData[]> = {'Vợ': [], 'Chồng': []};
+        const newMemberSummary = createInitialMemberData(initialMemberSummary);
+        const newMemberCategoryBreakdown = createInitialMemberData<CategoryChartData[]>([]);
 
         FAMILY_MEMBERS.forEach(member => {
           const memberTransactions = transactionsForSelectedMonth.filter(t => t.performedBy === member);
@@ -165,8 +169,8 @@ export default function ReportsPage() {
     } else if (currentUser && familyId && !isLoading) {
         setMonthlyComparisonData([]);
         setCategoryBreakdownDataFamily([]);
-        setMemberSummary({'Vợ': initialMemberSummary, 'Chồng': initialMemberSummary});
-        setMemberCategoryBreakdown({'Vợ': [], 'Chồng': []});
+        setMemberSummary(createInitialMemberData(initialMemberSummary));
+        setMemberCategoryBreakdown(createInitialMemberData<CategoryChartData[]>([]));
     }
   }, [currentUser, familyId, transactions, selectedMonth, getTransactionsForFamilyByMonth, isLoading]);
 
@@ -239,11 +243,11 @@ export default function ReportsPage() {
                 <div key={member} className="space-y-4">
                     <h3 className="text-xl font-semibold">Thống Kê Của {member} - {monthOptions.find(m=>m.value === selectedMonth)?.label}</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <SummaryCard title={`Tổng Thu (${member})`} value={memberSummary[member].totalIncome} icon={TrendingUp} colorClass="text-green-500" />
-                        <SummaryCard title={`Tổng Chi (${member})`} value={memberSummary[member].totalExpense} icon={TrendingDown} colorClass="text-red-500" />
-                        <SummaryCard title={`Số Dư (${member})`} value={memberSummary[member].balance} icon={Banknote} colorClass={memberSummary[member].balance >= 0 ? "text-blue-500" : "text-orange-500"} />
+                        <SummaryCard title={`Tổng Thu (${member})`} value={memberSummary[member]?.totalIncome || 0} icon={TrendingUp} colorClass="text-green-500" />
+                        <SummaryCard title={`Tổng Chi (${member})`} value={memberSummary[member]?.totalExpense || 0} icon={TrendingDown} colorClass="text-red-500" />
+                        <SummaryCard title={`Số Dư (${member})`} value={memberSummary[member]?.balance || 0} icon={Banknote} colorClass={(memberSummary[member]?.balance || 0) >= 0 ? "text-blue-500" : "text-orange-500"} />
                     </div>
-                    <CategoryBreakdownChart data={memberCategoryBreakdown[member]} />
+                    <CategoryBreakdownChart data={memberCategoryBreakdown[member] || []} />
                 </div>
             ))}
             </div>

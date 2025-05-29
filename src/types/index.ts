@@ -5,7 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 export type UserType = string; 
 
 // Specific user roles within the family
-export type FamilyMember = 'Vợ' | 'Chồng';
+export type FamilyMember = 'Minh Đan' | 'Minh Hiếu';
 
 export interface Category {
   id: string;

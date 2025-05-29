@@ -4,17 +4,20 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Transaction, UserType, FamilyMember, HighValueExpenseAlert, PaymentSource } from '@/types';
-import { toast } from './use-toast';
-import { FAMILY_MEMBERS, APP_NAME, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID } from '@/lib/constants';
+import { toast as DONT_USE_THIS_useToast_IMPORT_toast_INSTEAD } from './use-toast'; // Renamed to avoid confusion
+import { FAMILY_MEMBERS, APP_NAME, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, FAMILY_ACCOUNT_ID } from '@/lib/constants';
 import { format } from 'date-fns';
 
-export const FAMILY_ACCOUNT_ID: UserType = "GIA_DINH";
+// Use the standalone toast function
+const { toast } = DONT_USE_THIS_useToast_IMPORT_toast_INSTEAD;
+
+
 const HIGH_EXPENSE_THRESHOLD = 1000000;
 const SHARED_PASSWORD = "123456";
 
 interface AuthState {
   currentUser: FamilyMember | null;
-  familyId: UserType | null;
+  familyId: UserType | null; // Will always be FAMILY_ACCOUNT_ID when logged in
   transactions: Transaction[];
   highValueExpenseAlerts: HighValueExpenseAlert[];
   login: (user: FamilyMember, pass: string) => boolean;
@@ -40,7 +43,7 @@ export const useAuthStore = create<AuthState>()(
         if (pass === SHARED_PASSWORD && FAMILY_MEMBERS.includes(user as FamilyMember)) {
           set({
             currentUser: user,
-            familyId: FAMILY_ACCOUNT_ID,
+            familyId: FAMILY_ACCOUNT_ID, // Always set familyId to the shared ID
           });
           return true;
         }
@@ -54,6 +57,8 @@ export const useAuthStore = create<AuthState>()(
       logout: () => set({
         currentUser: null,
         familyId: null,
+        // transactions: [], // Optionally clear transactions on logout
+        // highValueExpenseAlerts: [], // Optionally clear alerts
       }),
 
       addTransaction: async (transactionData) => {
@@ -69,8 +74,8 @@ export const useAuthStore = create<AuthState>()(
 
         const newTransaction: Transaction = {
           id: crypto.randomUUID(),
-          userId: currentFamilyId,
-          performedBy: transactionData.performedBy || loggedInUser,
+          userId: currentFamilyId, // Use the shared family ID
+          performedBy: transactionData.performedBy || loggedInUser, // Who actually performed it
           description: transactionData.description,
           amount: transactionData.amount,
           date: transactionData.date,
@@ -82,6 +87,7 @@ export const useAuthStore = create<AuthState>()(
         };
 
         const originalTransactions = get().transactions;
+        // Optimistic update
         set((state) => ({ transactions: [...state.transactions, newTransaction].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
 
         try {
@@ -97,6 +103,7 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const savedTransaction = await response.json();
+          // Replace optimistic transaction with server-confirmed one (though IDs should match)
           set((state) => ({
             transactions: state.transactions.map(t => t.id === newTransaction.id ? savedTransaction : t)
                                        .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -128,13 +135,14 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: any) {
           console.error("Failed to add transaction via API:", error);
           toast({ title: "Lỗi Server", description: error.message, variant: "destructive" });
-          set({ transactions: originalTransactions });
+          set({ transactions: originalTransactions }); // Rollback optimistic update
           return null;
         }
       },
 
       updateTransaction: async (updatedTransaction) => {
         const originalTransactions = get().transactions;
+        // Optimistic update
         set(state => ({
             transactions: state.transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t)
                                             .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -153,12 +161,13 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: any) {
             console.error("Failed to update transaction:", error);
             toast({ title: "Lỗi cập nhật", description: error.message, variant: "destructive" });
-            set({ transactions: originalTransactions });
+            set({ transactions: originalTransactions }); // Rollback
         }
       },
 
       deleteTransaction: async (transactionId, monthYear) => {
         const originalTransactions = get().transactions;
+        // Optimistic update
         set(state => ({
             transactions: state.transactions.filter(t => t.id !== transactionId)
         }));
@@ -174,7 +183,7 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: any) {
             console.error("Failed to delete transaction:", error);
             toast({ title: "Lỗi xóa", description: error.message, variant: "destructive" });
-            set({ transactions: originalTransactions });
+            set({ transactions: originalTransactions }); // Rollback
         }
       },
 
@@ -183,6 +192,7 @@ export const useAuthStore = create<AuthState>()(
         const originalTransactions = get().transactions;
         const idsToDelete = new Set(transactionsToDelete.map(t => t.id));
 
+        // Optimistic update
         set(state => ({
             transactions: state.transactions.filter(t => !idsToDelete.has(t.id))
         }));
@@ -203,7 +213,7 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: any) {
             console.error("Failed to bulk delete transactions:", error);
             toast({ title: "Lỗi Xóa Hàng Loạt", description: error.message, variant: "destructive" });
-            set({ transactions: originalTransactions });
+            set({ transactions: originalTransactions }); // Rollback
         }
       },
 
@@ -211,12 +221,46 @@ export const useAuthStore = create<AuthState>()(
         if (familyIdToFetch !== FAMILY_ACCOUNT_ID) {
             familyIdToFetch = FAMILY_ACCOUNT_ID;
         }
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 9003}`;
+        const apiUrl = `${appUrl}/api/transactions?userId=${encodeURIComponent(familyIdToFetch)}&monthYear=${encodeURIComponent(monthYear)}`;
+        
         try {
-          const response = await fetch(`/api/transactions?userId=${encodeURIComponent(familyIdToFetch)}&monthYear=${encodeURIComponent(monthYear)}`);
+          const response = await fetch(apiUrl, { cache: 'no-store' });
           if (!response.ok) {
-            const errorData = await response.json();
-            console.error("Error response from API when fetching transactions:", errorData);
-            throw new Error(errorData.message || 'Không thể tải giao dịch từ server.');
+            let errorData: any = {};
+            let responseBodyText = '';
+            try {
+              responseBodyText = await response.text(); // Get text first
+              try {
+                errorData = JSON.parse(responseBodyText); // Try to parse text
+              } catch (e) {
+                // Parsing failed, errorData remains {}, responseBodyText has the content
+                console.warn("[useAuthStore] API error response was not valid JSON. Raw text:", responseBodyText);
+              }
+            } catch (textErr) {
+              console.error("[useAuthStore] Failed to read API error response text:", textErr);
+            }
+      
+            const messageFromServer = errorData?.message;
+      
+            // Log more detailed info
+            console.error(
+              `[useAuthStore] Error response from API (status: ${response.status}, statusText: ${response.statusText}) when fetching transactions. Parsed JSON:`,
+              errorData,
+              responseBodyText ? `Raw Body: "${responseBodyText}"` : "Raw body could not be read."
+            );
+            
+            let finalErrorMessage = 'Không thể tải giao dịch từ server.';
+            if (messageFromServer) {
+              finalErrorMessage = messageFromServer;
+            } else if (responseBodyText && responseBodyText.trim() !== '' && responseBodyText.trim() !== '{}') {
+              // Use a snippet of the raw body if it's not empty and not just "{}"
+              finalErrorMessage = `Lỗi server: ${responseBodyText.substring(0, 150)}${responseBodyText.length > 150 ? '...' : ''}`;
+            } else if (response.statusText) {
+              finalErrorMessage = `Lỗi server: ${response.status} ${response.statusText}`;
+            }
+            
+            throw new Error(finalErrorMessage);
           }
           const fetchedTransactions: Transaction[] = await response.json();
 
@@ -238,12 +282,11 @@ export const useAuthStore = create<AuthState>()(
 
             const finalTransactions = [...allOtherTransactions, ...updatedTransactionsForMonth]
                                       .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            // console.log(`[useAuthStore fetchTransactionsByMonth] for ${monthYear} (familyId: ${familyIdToFetch}): Fetched ${fetchedTransactions.length}, New: ${newTransactionsFromServer.length}, Total in state: ${finalTransactions.length}`);
             return { transactions: finalTransactions };
           });
         } catch (error: any) {
-          // toast({ title: "Lỗi tải giao dịch", description: error.message, variant: "destructive" });
-          console.error(`[useAuthStore fetchTransactionsByMonth] Error for ${monthYear}:`, error.message);
+          console.error(`[useAuthStore fetchTransactionsByMonth] CATCH_ALL Error for ${monthYear}:`, error.message, error.stack);
+          throw error; // Re-throw to be caught by the calling component
         }
       },
 
@@ -253,8 +296,7 @@ export const useAuthStore = create<AuthState>()(
         }
         const allTransactions = get().transactions;
         const filtered = allTransactions.filter(t => t.userId === familyIdToFilter && t.monthYear === monthYear);
-        // console.log(`[useAuthStore] getTransactionsForFamilyByMonth for ${monthYear} (familyId: ${familyIdToFilter}): Found ${filtered.length} of ${allTransactions.length} total. Filters: S:${searchTerm}, C:${filterCategory}, P:${filterPerformedBy}, SD:${filterStartDate}, ED:${filterEndDate}, DFR:${isDateFilterActive}`);
-        // console.log(allTransactions.filter(t => t.monthYear === monthYear));
+        // console.log(`[useAuthStore] getTransactionsForFamilyByMonth for ${monthYear} (familyId: ${familyIdToFilter}): Found ${filtered.length} of ${allTransactions.length} total transactions in state.`);
         return filtered.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       },
 
@@ -303,7 +345,7 @@ export const useAuthStore = create<AuthState>()(
           note: note || undefined,
         };
         
-        setIsSubmitting(true); // Helper for UI, might need to move this logic if not in a form context
+        setIsSubmitting(true); 
         const expenseResult = await get().addTransaction(expenseTransactionData);
         if (!expenseResult) {
           toast({ title: "Lỗi Rút Tiền", description: "Không thể tạo giao dịch chi từ ngân hàng.", variant: "destructive" });
@@ -312,9 +354,7 @@ export const useAuthStore = create<AuthState>()(
         }
         const incomeResult = await get().addTransaction(incomeTransactionData);
         if (!incomeResult) {
-          // Attempt to revert the expense transaction if income fails (complex, for now just toast)
           toast({ title: "Lỗi Rút Tiền", description: "Đã tạo giao dịch chi, nhưng không thể tạo giao dịch thu tiền mặt. Vui lòng kiểm tra lại.", variant: "destructive" });
-           // TODO: Consider logic to delete expenseResult if incomeResult fails
           setIsSubmitting(false);
           return false;
         }

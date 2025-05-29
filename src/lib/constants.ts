@@ -7,6 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 export const APP_NAME = "Ngân Sách Gia Đình";
 
 export const FAMILY_MEMBERS: FamilyMember[] = ['Minh Đan', 'Minh Hiếu'];
+export const FAMILY_ACCOUNT_ID: UserType = "GIA_DINH"; // Added and exported
 
 export const PAYMENT_SOURCE_OPTIONS: Array<{ id: PaymentSource, label: string, icon: LucideIcon }> = [
   { id: 'bank', label: 'Ngân hàng', icon: Landmark },

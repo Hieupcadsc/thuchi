@@ -21,16 +21,16 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CategorySelector } from "./CategorySelector";
 import { AiCategorySuggestor } from "./AiCategorySuggestor";
 import { useAuthStore } from "@/hooks/useAuth";
-import { FAMILY_MEMBERS } from '@/lib/constants'; 
+import { FAMILY_MEMBERS } from '@/lib/constants';
 import type { Transaction, FamilyMember } from "@/types";
 import { CalendarIcon, Loader2, UploadCloud, AlertTriangle, User, Camera, FileUp } from "lucide-react";
-import { Card, CardTitle, CardDescription } from "@/components/ui/card"; 
+import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { format, parseISO, parse as parseDateFns, isValid as isValidDate } from 'date-fns';
-import { useToast } from "@/hooks/use-toast"; 
+import { useToast } from "@/hooks/use-toast";
 import React from "react";
-import Image from 'next/image'; 
-import { processBillImage } from '@/app/transactions/billActions'; 
+import Image from 'next/image';
+import { processBillImage } from '@/app/transactions/billActions';
 
 
 const formSchema = z.object({
@@ -50,12 +50,12 @@ type TransactionFormValues = z.infer<typeof formSchema>;
 interface TransactionFormProps {
   onSuccess?: () => void;
   transactionToEdit?: Transaction | null;
-  onCancel?: () => void; 
-  isBillMode?: boolean; 
+  onCancel?: () => void;
+  isBillMode?: boolean;
 }
 
 export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBillMode = false }: TransactionFormProps) {
-  const { addTransaction, updateTransaction, currentUser, familyId } = useAuthStore(); 
+  const { addTransaction, updateTransaction, currentUser } = useAuthStore();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [billImagePreview, setBillImagePreview] = React.useState<string | null>(null);
@@ -63,17 +63,17 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
   const [isProcessingBill, setIsProcessingBill] = React.useState(false);
   const [billProcessingError, setBillProcessingError] = React.useState<string | null>(null);
 
-  // Refs for hidden file inputs
   const takePhotoInputRef = React.useRef<HTMLInputElement>(null);
   const uploadFileInputRef = React.useRef<HTMLInputElement>(null);
 
+  const defaultPerformedBy = transactionToEdit ? transactionToEdit.performedBy : (currentUser || FAMILY_MEMBERS[0]);
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: transactionToEdit ? {
       description: transactionToEdit.description,
-      amount: Number(transactionToEdit.amount), 
-      date: parseISO(transactionToEdit.date), 
+      amount: Number(transactionToEdit.amount),
+      date: parseISO(transactionToEdit.date),
       type: transactionToEdit.type,
       categoryId: transactionToEdit.categoryId,
       performedBy: transactionToEdit.performedBy,
@@ -84,13 +84,13 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
       date: new Date(),
       type: "expense",
       categoryId: "",
-      performedBy: currentUser || FAMILY_MEMBERS[0], 
+      performedBy: currentUser || FAMILY_MEMBERS[0],
       note: "",
     },
   });
 
   const transactionType = form.watch("type");
-  const currentDescription = form.watch("description"); 
+  const currentDescription = form.watch("description");
 
   React.useEffect(() => {
     if (transactionToEdit) {
@@ -103,7 +103,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         performedBy: transactionToEdit.performedBy,
         note: transactionToEdit.note || "",
       });
-      setBillImagePreview(null); 
+      setBillImagePreview(null);
       setBillImageDataUri(null);
       setBillProcessingError(null);
     } else {
@@ -111,31 +111,31 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         description: "",
         amount: 0,
         date: new Date(),
-        type: isBillMode ? "expense" : "expense", 
+        type: isBillMode ? "expense" : "expense",
         categoryId: "",
         performedBy: currentUser || FAMILY_MEMBERS[0],
         note: "",
       });
-       if (!isBillMode) { 
+       if (!isBillMode) {
         setBillImagePreview(null);
         setBillImageDataUri(null);
         setBillProcessingError(null);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactionToEdit, form, isBillMode, currentUser]); 
+  }, [transactionToEdit, form, isBillMode, currentUser]);
 
 
   React.useEffect(() => {
     if (!transactionToEdit || (transactionToEdit && form.getValues("type") !== transactionToEdit.type)) {
-        form.setValue("categoryId", "", { shouldValidate: false }); 
+        form.setValue("categoryId", "", { shouldValidate: false });
     }
-    if (transactionType === "income" && !isBillMode) { 
-      form.setValue("note", ""); 
+    if (transactionType === "income" && !isBillMode) {
+      form.setValue("note", "");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactionType, form, transactionToEdit, isBillMode]);
-  
+
   React.useEffect(() => {
     if (!isBillMode) {
       setBillImagePreview(null);
@@ -156,7 +156,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         setBillImagePreview(reader.result as string);
         setBillImageDataUri(reader.result as string);
         setBillProcessingError(null);
-        if (!transactionToEdit) { 
+        if (!transactionToEdit) {
             form.setValue("type", "expense", { shouldValidate: true });
         }
       };
@@ -165,7 +165,6 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
       setBillImagePreview(null);
       setBillImageDataUri(null);
     }
-    // Reset file input value to allow selecting the same file again if needed
     if(event.target) {
         event.target.value = '';
     }
@@ -173,23 +172,30 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
 
   const parseAIDate = (dateString?: string): Date | undefined => {
     if (!dateString) return undefined;
+    console.log("[TransactionForm parseAIDate] Attempting to parse AI date string:", dateString);
     const formatsToTry = [
       'yyyy-MM-dd', 'dd/MM/yyyy', 'MM/dd/yyyy', 'yyyy/MM/dd',
       'dd-MM-yyyy', 'MM-dd-yyyy',
-      'd/M/yyyy', 'M/d/yyyy',
+      'd/M/yyyy', 'M/d/yyyy', 'dd.MM.yyyy', 'MM.dd.yyyy',
     ];
     for (const fmt of formatsToTry) {
       try {
         const parsed = parseDateFns(dateString, fmt, new Date());
-        if (isValidDate(parsed)) return parsed;
-      } catch (e) { /* ignore parse error, try next format */ }
+        if (isValidDate(parsed)) {
+          console.log(`[TransactionForm parseAIDate] Parsed "${dateString}" with format "${fmt}" to:`, parsed);
+          return parsed;
+        }
+      } catch (e) { /* ignore */ }
     }
-    try {
+    try { // ISO format last attempt
       const parsed = parseISO(dateString);
-      if (isValidDate(parsed)) return parsed;
+      if (isValidDate(parsed)) {
+        console.log(`[TransactionForm parseAIDate] Parsed "${dateString}" with ISO to:`, parsed);
+        return parsed;
+      }
     } catch(e) { /* ignore */ }
-    
-    console.warn(`[TransactionForm] Could not parse date string from AI: "${dateString}"`);
+
+    console.warn(`[TransactionForm parseAIDate] Could not parse date string from AI: "${dateString}"`);
     return undefined;
   };
 
@@ -201,20 +207,29 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
     setIsProcessingBill(true);
     setBillProcessingError(null);
     try {
-      const result = await processBillImage(billImageDataUri); 
+      const result = await processBillImage(billImageDataUri);
+      console.log("[TransactionForm handleProcessBill] AI Result:", result);
 
       if (result.success && result.data) {
         const { totalAmount, transactionDate, description } = result.data;
+        let dateToSet = new Date(); // Default to today if AI fails or no date
+
         if (totalAmount !== undefined) form.setValue("amount", totalAmount, { shouldValidate: true });
         if (description) form.setValue("description", description, { shouldValidate: true });
-        
+
         const parsedDate = parseAIDate(transactionDate);
         if (parsedDate) {
+          dateToSet = parsedDate;
           form.setValue("date", parsedDate, { shouldValidate: true });
         } else if (transactionDate) {
-          toast({ title: "Lưu ý ngày tháng", description: `AI trả về ngày: "${transactionDate}". Không thể tự động điền, vui lòng chọn thủ công.`, variant: "default", duration: 7000 });
+          toast({ title: "Lưu ý ngày tháng", description: `AI trả về ngày: "${transactionDate}". Không thể tự động điền, vui lòng kiểm tra và chọn thủ công. Mặc định là ngày hôm nay.`, variant: "default", duration: 7000 });
+           form.setValue("date", dateToSet, { shouldValidate: true }); // Set to today if parsing failed but AI gave a string
+        } else {
+           form.setValue("date", dateToSet, { shouldValidate: true }); // Set to today if AI gave no date
         }
-        
+         console.log("[TransactionForm handleProcessBill] Date being set to form after AI:", dateToSet);
+
+
         if (Object.keys(result.data).length === 0){
             toast({ title: "AI không tìm thấy thông tin", description: "Không thể trích xuất dữ liệu từ bill. Vui lòng nhập thủ công.", variant: "default"});
         } else {
@@ -233,47 +248,55 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
 
 
   const onSubmit = async (data: TransactionFormValues) => {
-    if (!currentUser || !familyId) { 
+    if (!currentUser) {
       toast({ title: "Lỗi", description: "Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
 
     const formattedDate = format(data.date, "yyyy-MM-dd");
-    const monthYear = formattedDate.substring(0,7);
+    // const monthYear = formattedDate.substring(0,7); // This is now calculated in useAuthStore
 
-    const transactionBasePayload = {
+    console.log("[TransactionForm onSubmit] Data submitted to useAuthStore:", {
       description: data.description,
       amount: data.amount,
-      date: formattedDate,
+      date: formattedDate, // Send YYYY-MM-DD string
       type: data.type,
       categoryId: data.categoryId,
-      monthYear: monthYear,
+      performedBy: data.performedBy, // This is crucial
       note: data.type === 'expense' ? data.note : undefined,
-    };
-    
+    });
+
     try {
       if (transactionToEdit) {
+        // For update, we need the full transaction object format expected by updateTransaction
         const payloadForUpdate: Transaction = {
-            ...transactionBasePayload,
             id: transactionToEdit.id,
-            userId: familyId, 
-            performedBy: data.performedBy, // Use form value for editing
+            userId: transactionToEdit.userId, // Keep original userId (FAMILY_ACCOUNT_ID)
+            description: data.description,
+            amount: data.amount,
+            date: formattedDate,
+            type: data.type,
+            categoryId: data.categoryId,
+            monthYear: formattedDate.substring(0,7), // Recalculate in case date changed
+            performedBy: data.performedBy, // Allow changing performedBy on edit
+            note: data.type === 'expense' ? data.note : undefined,
         };
         await updateTransaction(payloadForUpdate);
-        toast({ title: "Thành công!", description: "Đã cập nhật giao dịch." });
       } else {
-        const payloadForAdd: Transaction = {
-            ...transactionBasePayload,
-            id: crypto.randomUUID(), 
-            userId: familyId, 
-            performedBy: currentUser, // Current user performs new transactions
-        };
-        await addTransaction(payloadForAdd);
-        toast({ title: "Thành công!", description: "Đã thêm giao dịch mới." });
+        // For add, pass data to addTransaction, which constructs the full Transaction object
+        await addTransaction({
+          description: data.description,
+          amount: data.amount,
+          date: formattedDate, // Pass formatted date string
+          type: data.type,
+          categoryId: data.categoryId,
+          performedBy: data.performedBy, // Pass the selected performer
+          note: data.type === 'expense' ? data.note : undefined,
+        });
       }
-      
-      if (!transactionToEdit) { 
+
+      if (!transactionToEdit) {
         form.reset({
             description: "",
             amount: 0,
@@ -283,7 +306,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
             performedBy: currentUser || FAMILY_MEMBERS[0],
             note: "",
         });
-        setBillImagePreview(null); 
+        setBillImagePreview(null);
         setBillImageDataUri(null);
         setBillProcessingError(null);
       }
@@ -299,61 +322,60 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 md:space-y-6 p-1">
-        
+
         {isBillMode && !transactionToEdit && (
           <Card className="bg-muted/50 dark:bg-muted/30 p-4 border shadow-sm">
             <CardTitle className="text-lg mb-1">Thêm từ Bill</CardTitle>
             <CardDescription className="text-sm text-muted-foreground mb-3">Chụp ảnh hoặc tải lên hóa đơn của bạn.</CardDescription>
-            
-            {/* Hidden file inputs */}
-            <input 
-                type="file" 
-                accept="image/*" 
-                capture="environment" 
-                ref={takePhotoInputRef} 
-                onChange={handleImageChange} 
-                className="hidden" 
+
+            <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                ref={takePhotoInputRef}
+                onChange={handleImageChange}
+                className="hidden"
                 id="take-photo-input"
             />
-            <input 
-                type="file" 
-                accept="image/*" 
-                ref={uploadFileInputRef} 
-                onChange={handleImageChange} 
-                className="hidden" 
+            <input
+                type="file"
+                accept="image/*"
+                ref={uploadFileInputRef}
+                onChange={handleImageChange}
+                className="hidden"
                 id="upload-file-input"
             />
 
             <div className="flex flex-col sm:flex-row gap-3 mb-3">
-                <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => takePhotoInputRef.current?.click()} 
+                <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => takePhotoInputRef.current?.click()}
                     className="w-full sm:flex-1"
                     disabled={isSubmitting || isProcessingBill}
                 >
                     <Camera className="mr-2 h-4 w-4" /> Chụp Ảnh
                 </Button>
-                <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => uploadFileInputRef.current?.click()} 
+                <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => uploadFileInputRef.current?.click()}
                     className="w-full sm:flex-1"
                     disabled={isSubmitting || isProcessingBill}
                 >
                     <FileUp className="mr-2 h-4 w-4" /> Tải Tệp Lên
                 </Button>
             </div>
-            
+
             {billImagePreview && (
               <div className="mt-3 space-y-3">
                 <p className="text-sm font-medium">Xem trước ảnh bill:</p>
                 <div className="relative w-full max-w-xs h-auto border rounded-md overflow-hidden aspect-[3/4] mx-auto bg-gray-100 dark:bg-gray-800">
                   <Image src={billImagePreview} alt="Xem trước Bill" layout="fill" objectFit="contain" />
                 </div>
-                <Button 
-                  type="button" 
-                  onClick={handleProcessBill} 
+                <Button
+                  type="button"
+                  onClick={handleProcessBill}
                   disabled={isProcessingBill || isSubmitting || !billImageDataUri}
                   className="w-full mt-2"
                 >
@@ -384,9 +406,9 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
                   <RadioGroup
                     onValueChange={(value) => {
                       field.onChange(value);
-                      form.setValue("categoryId", "", {shouldValidate: false}); 
+                      form.setValue("categoryId", "", {shouldValidate: false});
                     }}
-                    value={field.value} 
+                    value={field.value}
                     className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
                     disabled={isSubmitting || (isBillMode && !transactionToEdit)}
                   >
@@ -404,20 +426,21 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
               </FormItem>
             )}
           />
-          
+
          <FormField
             control={form.control}
             name="performedBy"
             render={({ field }) => (
               <FormItem className="space-y-2">
                 <FormLabel>Người thực hiện</FormLabel>
-                {transactionToEdit ? (
-                  <FormControl>
+                 <FormControl>
                     <RadioGroup
                       onValueChange={field.onChange}
                       value={field.value}
                       className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
-                      disabled={isSubmitting}
+                      // Disable if not editing and currentUser is set (auto-selects currentUser)
+                      // Enable if editing, or if currentUser is somehow null (fallback to selection)
+                      disabled={isSubmitting || (!transactionToEdit && !!currentUser)}
                     >
                       {FAMILY_MEMBERS.map((member) => (
                         <FormItem key={member} className="flex items-center space-x-2 space-y-0">
@@ -427,12 +450,6 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
                       ))}
                     </RadioGroup>
                   </FormControl>
-                ) : (
-                  <div className="text-sm flex items-center pt-2">
-                     <User className="h-4 w-4 mr-2 text-muted-foreground"/>
-                     <span className="text-muted-foreground">{currentUser}</span>
-                  </div>
-                )}
                 <FormMessage />
               </FormItem>
             )}
@@ -453,15 +470,15 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
             )}
           />
         </div>
-        
+
         {transactionType === 'expense' && (
            <AiCategorySuggestor
              onCategorySelect={(categoryId) => form.setValue('categoryId', categoryId, { shouldValidate: true })}
              transactionType={transactionType}
-             currentDescription={currentDescription} 
+             currentDescription={currentDescription}
            />
         )}
-        
+
         <FormField
           control={form.control}
           name="categoryId"
@@ -487,7 +504,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
               <FormItem>
                 <FormLabel>Số tiền</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="0" {...field} disabled={isSubmitting || isProcessingBill} 
+                  <Input type="number" placeholder="0" {...field} disabled={isSubmitting || isProcessingBill}
                   onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
                 </FormControl>
                 <FormMessage />
@@ -550,13 +567,13 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
             )}
           />
         )}
-        
+
         <div className="flex flex-col sm:flex-row gap-2 pt-2">
-            <Button type="submit" className="w-full sm:flex-1" disabled={isSubmitting || isProcessingBill || (isBillMode && !transactionToEdit && !billImageDataUri && !form.formState.dirtyFields.amount && !form.formState.dirtyFields.description) }>
-            {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang lưu...</> 
+            <Button type="submit" className="w-full sm:flex-1" disabled={isSubmitting || isProcessingBill || (isBillMode && !transactionToEdit && !billImageDataUri && !form.formState.isDirty) }>
+            {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang lưu...</>
                         : transactionToEdit ? "Cập Nhật Giao Dịch" : "Thêm Giao Dịch"}
             </Button>
-            {onCancel && ( 
+            {onCancel && (
                  <Button type="button" variant="outline" className="w-full sm:flex-1" onClick={onCancel} disabled={isSubmitting || isProcessingBill}>
                     Hủy
                 </Button>

@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // Added React import
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input'; 
+import { Input } from '@/components/ui/input';
 import { Loader2, Wand2 } from 'lucide-react';
 import { suggestExpenseCategories } from '@/ai/flows/suggest-expense-categories';
 import { CATEGORIES } from '@/lib/constants';
@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 interface AiCategorySuggestorProps {
   onCategorySelect: (categoryId: string) => void;
   transactionType: 'income' | 'expense';
-  currentDescription: string; 
+  currentDescription: string;
 }
 
 export function AiCategorySuggestor({ onCategorySelect, transactionType, currentDescription }: AiCategorySuggestorProps) {
@@ -33,15 +33,15 @@ export function AiCategorySuggestor({ onCategorySelect, transactionType, current
     setIsLoading(true);
     setSuggestions([]);
     try {
-      const result = await suggestExpenseCategories({ 
+      const result = await suggestExpenseCategories({
         expenseDescription: currentDescription,
         availableExpenseCategoryNames: availableExpenseCategoryNames
       });
-      
+
       const suggestedCategoryNames = result.suggestedCategories.map(s => s.toLowerCase().trim());
-      
-      const matchedCategories = CATEGORIES.filter(category => 
-        category.type === 'expense' && 
+
+      const matchedCategories = CATEGORIES.filter(category =>
+        category.type === 'expense' &&
         suggestedCategoryNames.some(suggestedName => {
             const categoryNameLower = category.name.toLowerCase().trim();
             // Check for exact match or if one contains the other (helps with pluralization/variations)
@@ -50,7 +50,7 @@ export function AiCategorySuggestor({ onCategorySelect, transactionType, current
       ).slice(0, 3); // Limit to 3 suggestions
 
       setSuggestions(matchedCategories);
-      if(matchedCategories.length === 0 && currentDescription.trim()) { 
+      if(matchedCategories.length === 0 && currentDescription.trim()) {
         toast({ title: "Không tìm thấy gợi ý AI", description: "Không có danh mục phù hợp nào từ gợi ý của AI cho mô tả này.", variant: "default" });
       }
     } catch (error) {
@@ -64,17 +64,17 @@ export function AiCategorySuggestor({ onCategorySelect, transactionType, current
     if (transactionType === 'expense' && currentDescription.trim()) {
       const debounceTimeout = setTimeout(() => {
         handleSuggest();
-      }, 700); 
+      }, 700);
       return () => clearTimeout(debounceTimeout);
     } else {
-      setSuggestions([]); 
+      setSuggestions([]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDescription, transactionType, availableExpenseCategoryNames]);
 
 
   if (transactionType === 'income') {
-    return null; 
+    return null;
   }
 
   return (

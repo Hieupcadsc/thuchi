@@ -14,7 +14,7 @@ const auth = new google.auth.GoogleAuth({
 });
 const sheets = google.sheets({ version: 'v4', auth });
 
-const HEADER_ROW = ['ID', 'UserID', 'Description', 'Amount', 'Date', 'Type', 'CategoryID', 'MonthYear'];
+const HEADER_ROW = ['ID', 'UserID', 'Description', 'Amount', 'Date', 'Type', 'CategoryID', 'MonthYear', 'Note'];
 
 // --- Helper Functions ---
 
@@ -63,7 +63,7 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
       // Check if header exists, if not, add it (e.g., if sheet was created manually or empty)
       const headerCheck = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${sheetName}!A1:H1`,
+        range: `${sheetName}!A1:I1`, // Adjusted to include Note column
       });
       if (!headerCheck.data.values || headerCheck.data.values.length === 0 || 
           (headerCheck.data.values[0] && headerCheck.data.values[0].join(',') !== HEADER_ROW.join(','))) {
@@ -71,7 +71,7 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
         if (headerCheck.data.values && headerCheck.data.values.length > 0) {
             await sheets.spreadsheets.values.clear({
                 spreadsheetId,
-                range: `${sheetName}!A1:H1`,
+                range: `${sheetName}!A1:I1`, // Adjusted
             });
         }
         await sheets.spreadsheets.values.update({ // Use update to be sure it's in the first row
@@ -104,7 +104,7 @@ async function getTransactionsFromSheet(userId: UserType, monthYear: string): Pr
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:H`, // Read all data from columns A to H
+      range: `${sheetName}!A:I`, // Read all data from columns A to I
     });
 
     const rows = response.data.values;
@@ -112,7 +112,7 @@ async function getTransactionsFromSheet(userId: UserType, monthYear: string): Pr
       return rows
         .slice(1) // Skip header row
         .map((row): Transaction | null => {
-          if (row.length < 8) return null; // Ensure enough columns
+          if (row.length < HEADER_ROW.length -1 && row.length < 8) return null; // Allow rows without note for backward compatibility
           // Filter by userId (column B, index 1)
           if (row[1] === userId) {
             return {
@@ -124,6 +124,7 @@ async function getTransactionsFromSheet(userId: UserType, monthYear: string): Pr
               type: row[5] as 'income' | 'expense',
               categoryId: row[6],
               monthYear: row[7],
+              note: row[8] || undefined, // Note is in column I (index 8)
             };
           }
           return null;
@@ -133,13 +134,10 @@ async function getTransactionsFromSheet(userId: UserType, monthYear: string): Pr
     return [];
   } catch (err: any) {
     console.error(`Error in getTransactionsFromSheet for sheet "${sheetName}":`, err.message, err.stack);
-    // If sheet doesn't exist, it might throw an error that ensureSheetExistsAndHeader didn't catch or handle
-    // For example, if ensureSheetExistsAndHeader fails itself.
     if (err.message && (err.message.includes("No sheet with the name") || err.message.includes("Unable to parse range"))) {
         console.warn(`Sheet "${sheetName}" not found or range invalid, returning empty array.`);
-        return []; // Treat as no data if sheet specifically not found after attempt to create
+        return []; 
     }
-    // Re-throw the original error to provide more specific details downstream
     throw err;
   }
 }
@@ -164,18 +162,18 @@ async function addTransactionToSheet(transaction: Transaction): Promise<Transact
       transaction.type,
       transaction.categoryId,
       transaction.monthYear,
+      transaction.note || '', // Add note, default to empty string if undefined
     ]];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:H`, // Append to the end of the specified sheet
+      range: `${sheetName}!A:I`, // Append to the end of the specified sheet, including Note column
       valueInputOption: 'USER_ENTERED',
       requestBody: { values },
     });
     return transaction;
   } catch (err: any) {
     console.error(`Error in addTransactionToSheet for sheet "${sheetName}":`, err.message, err.stack);
-    // Re-throw the original error
     throw err;
   }
 }
@@ -199,15 +197,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(transactions);
   } catch (error: any) {
     console.error('[API GET /transactions] Caught error:', error.message, error.stack);
-    const message = error.message || 'Failed to fetch transactions';
-    // Check for common Google API error structures
-    if (error.errors && Array.isArray(error.errors) && error.errors.length > 0) {
-        //   message = error.errors[0].message || message; // Prefer more specific Google error
-        // For security, we might not want to expose raw Google API error messages directly to client.
-        // Logging it on server is good, but client gets a generic one unless we explicitly craft it.
-        // For now, we'll use the error.message from the re-thrown error.
-    }
-    return NextResponse.json({ message }, { status: error.code || 500 });
+    const message = error.message || 'Failed to fetch transactions from Google Sheets.';
+    return NextResponse.json({ message }, { status: (error as any).code || 500 });
   }
 }
 
@@ -222,6 +213,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ message: 'Invalid transaction data in request body' }, { status: 400 });
     }
     // Basic validation (can be enhanced with Zod)
+    // Note is optional, so not checking for it here explicitly as required
     if (!transaction.id || !transaction.userId || !transaction.description || transaction.amount === undefined || !transaction.date || !transaction.type || !transaction.categoryId || !transaction.monthYear) {
         return NextResponse.json({ message: 'Missing required fields in transaction data' }, { status: 400 });
     }
@@ -234,7 +226,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof SyntaxError) { // JSON parsing error
         return NextResponse.json({ message: 'Invalid JSON in request body' }, { status: 400 });
     }
-    const message = error.message || 'Failed to add transaction';
-    return NextResponse.json({ message }, { status: error.code || 500 });
+    const message = error.message || 'Failed to add transaction to Google Sheets.';
+    return NextResponse.json({ message }, { status: (error as any).code || 500 });
   }
 }

@@ -14,6 +14,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -33,6 +34,7 @@ const formSchema = z.object({
   date: z.date({ required_error: "Ngày không được để trống" }),
   type: z.enum(["income", "expense"], { required_error: "Vui lòng chọn loại giao dịch" }),
   categoryId: z.string().min(1, "Vui lòng chọn danh mục"),
+  note: z.string().optional(),
 });
 
 type TransactionFormValues = z.infer<typeof formSchema>;
@@ -42,8 +44,8 @@ interface TransactionFormProps {
 }
 
 export function TransactionForm({ onSuccess }: TransactionFormProps) {
-  const { user, addTransaction } = useAuthStore(); // addTransaction is now async
-  const { toast } = useToast();
+  const { user, addTransaction } = useAuthStore(); 
+  const { toast } = useToast(); // Direct import from use-toast
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<TransactionFormValues>({
@@ -54,20 +56,22 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
       date: new Date(),
       type: "expense",
       categoryId: "",
+      note: "",
     },
   });
 
   const transactionType = form.watch("type");
-  // const transactionDescription = form.watch("description"); // Not used for AiCategorySuggestor directly in this version
 
   React.useEffect(() => {
     form.resetField("categoryId");
+    if (transactionType === "income") {
+      form.setValue("note", ""); // Clear note if type changes to income
+    }
   }, [transactionType, form]);
 
 
   const onSubmit = async (data: TransactionFormValues) => {
     if (!user) {
-      // This check is also in useAuthStore, but good to have client-side too
       toast({ title: "Lỗi", description: "Không tìm thấy người dùng.", variant: "destructive" });
       return;
     }
@@ -75,28 +79,29 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
 
     const formattedDate = format(data.date, "yyyy-MM-dd");
 
-    // Data structure matches Omit<Transaction, 'id' | 'userId' | 'monthYear'> for the store
     const transactionPayload = {
       description: data.description,
       amount: data.amount,
       date: formattedDate, 
       type: data.type,
       categoryId: data.categoryId,
+      note: data.type === 'expense' ? data.note : undefined, // Only include note for expenses
     };
 
     try {
-      await addTransaction(transactionPayload); // Call the async store action
-      // Toast for success is now handled within useAuthStore after API success
+      await addTransaction(transactionPayload); 
+      // Success toast is now handled within useAuthStore after API success
       form.reset({
         description: "",
         amount: 0,
         date: new Date(),
         type: "expense",
         categoryId: "",
+        note: "",
       });
       if (onSuccess) onSuccess();
     } catch (error) {
-      // Error toast is handled within useAuthStore
+      // Error toast is handled within useAuthStore or if not, can be added here
       console.error("Error submitting transaction form:", error);
     } finally {
       setIsSubmitting(false);
@@ -156,7 +161,6 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
            <AiCategorySuggestor
              onCategorySelect={(categoryId) => form.setValue('categoryId', categoryId, { shouldValidate: true })}
              transactionType={transactionType}
-            //  descriptionForSuggestion={transactionDescription} // Pass description if AiCategorySuggestor needs it directly
            />
         )}
         
@@ -235,6 +239,27 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
             )}
           />
         </div>
+
+        {transactionType === 'expense' && (
+          <FormField
+            control={form.control}
+            name="note"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Ghi chú (tuỳ chọn)</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Thêm ghi chú cho khoản chi này..."
+                    className="resize-none"
+                    {...field}
+                    disabled={isSubmitting}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
         
         <Button type="submit" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? (

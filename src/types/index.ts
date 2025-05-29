@@ -18,6 +18,7 @@ export interface Transaction {
   type: 'income' | 'expense';
   categoryId: string;
   monthYear: string; // YYYY-MM, for sheet organization
+  note?: string; // Optional note, primarily for expenses
 }
 
 export interface MonthlySummary {

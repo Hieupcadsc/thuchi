@@ -21,7 +21,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CategorySelector } from "./CategorySelector";
 import { AiCategorySuggestor } from "./AiCategorySuggestor";
 import { useAuthStore } from "@/hooks/useAuth";
-import { FAMILY_MEMBERS } from '@/lib/constants'; // Import FAMILY_MEMBERS from constants
+import { FAMILY_MEMBERS } from '@/lib/constants'; 
 import type { Transaction, FamilyMember } from "@/types";
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -35,8 +35,10 @@ const formSchema = z.object({
   date: z.date({ required_error: "Ngày không được để trống" }),
   type: z.enum(["income", "expense"], { required_error: "Vui lòng chọn loại giao dịch" }),
   categoryId: z.string().min(1, "Vui lòng chọn danh mục"),
+  performedBy: z.enum(FAMILY_MEMBERS as [string, ...string[]], { // Ensures performedBy is one of the FamilyMembers
+    required_error: "Vui lòng chọn người thực hiện"
+  }),
   note: z.string().optional(),
-  // performedBy is NOT part of the form schema as it's derived from currentUser or transactionToEdit
 });
 
 type TransactionFormValues = z.infer<typeof formSchema>;
@@ -60,6 +62,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
       date: parseISO(transactionToEdit.date), 
       type: transactionToEdit.type,
       categoryId: transactionToEdit.categoryId,
+      performedBy: transactionToEdit.performedBy,
       note: transactionToEdit.note || "",
     } : {
       description: "",
@@ -67,6 +70,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
       date: new Date(),
       type: "expense",
       categoryId: "",
+      performedBy: currentUser || undefined, // Default to current user if adding new
       note: "",
     },
   });
@@ -82,6 +86,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
         date: parseISO(transactionToEdit.date),
         type: transactionToEdit.type,
         categoryId: transactionToEdit.categoryId,
+        performedBy: transactionToEdit.performedBy,
         note: transactionToEdit.note || "",
       });
     } else {
@@ -91,18 +96,17 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
         date: new Date(),
         type: "expense",
         categoryId: "",
+        performedBy: currentUser || undefined,
         note: "",
       });
     }
-  }, [transactionToEdit, form]);
+  }, [transactionToEdit, form, currentUser]);
 
 
   React.useEffect(() => {
-    // Reset category if transaction type changes and it's not an edit or type differs from edited one
     if (!transactionToEdit || (transactionToEdit && form.getValues("type") !== transactionToEdit.type)) {
         form.setValue("categoryId", "", { shouldValidate: true });
     }
-    // Clear note if type is income (only expenses have notes in this setup)
     if (transactionType === "income") {
       form.setValue("note", ""); 
     }
@@ -120,10 +124,14 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
     const monthYear = formattedDate.substring(0,7);
 
     const transactionBasePayload = {
-      ...data,
+      description: data.description,
+      amount: data.amount,
       date: formattedDate,
+      type: data.type,
+      categoryId: data.categoryId,
       monthYear: monthYear,
-      note: data.type === 'expense' ? data.note : undefined, // Note only for expenses
+      performedBy: data.performedBy, 
+      note: data.type === 'expense' ? data.note : undefined,
     };
     
     try {
@@ -131,8 +139,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
         const payloadForUpdate: Transaction = {
             ...transactionBasePayload,
             id: transactionToEdit.id,
-            userId: familyId, // Always use familyId for userId
-            performedBy: transactionToEdit.performedBy, // Retain original performer on edit
+            userId: familyId, 
         };
         await updateTransaction(payloadForUpdate);
         toast({ title: "Thành công!", description: "Đã cập nhật giao dịch." });
@@ -140,8 +147,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
         const payloadForAdd: Transaction = {
             ...transactionBasePayload,
             id: crypto.randomUUID(), 
-            userId: familyId, // Always use familyId for userId
-            performedBy: currentUser, // Current logged-in user performs the transaction
+            userId: familyId, 
         };
         await addTransaction(payloadForAdd);
         toast({ title: "Thành công!", description: "Đã thêm giao dịch mới." });
@@ -154,6 +160,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
             date: new Date(),
             type: "expense",
             categoryId: "",
+            performedBy: currentUser || undefined,
             note: "",
         });
       }
@@ -168,55 +175,79 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-1">
-        <FormField
-          control={form.control}
-          name="type"
-          render={({ field }) => (
-            <FormItem className="space-y-3">
-              <FormLabel>Loại giao dịch</FormLabel>
-              <FormControl>
-                <RadioGroup
-                  onValueChange={(value) => {
-                    field.onChange(value);
-                    form.setValue("categoryId", "", {shouldValidate: true}); 
-                  }}
-                  value={field.value} 
-                  className="flex space-x-4"
-                  disabled={isSubmitting}
-                >
-                  <FormItem className="flex items-center space-x-2 space-y-0">
-                    <FormControl><RadioGroupItem value="expense" /></FormControl>
-                    <FormLabel className="font-normal">Khoản Chi</FormLabel>
-                  </FormItem>
-                  <FormItem className="flex items-center space-x-2 space-y-0">
-                    <FormControl><RadioGroupItem value="income" /></FormControl>
-                    <FormLabel className="font-normal">Khoản Thu</FormLabel>
-                  </FormItem>
-                </RadioGroup>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <div className="text-sm text-muted-foreground">
-            Người thực hiện: <span className="font-medium text-foreground">{transactionToEdit ? transactionToEdit.performedBy : currentUser}</span>
-        </div>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 md:space-y-6 p-1">
+        <div className="grid grid-cols-1 gap-4 md:gap-6">
+          <FormField
+            control={form.control}
+            name="type"
+            render={({ field }) => (
+              <FormItem className="space-y-2">
+                <FormLabel>Loại giao dịch</FormLabel>
+                <FormControl>
+                  <RadioGroup
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      form.setValue("categoryId", "", {shouldValidate: true}); 
+                    }}
+                    value={field.value} 
+                    className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
+                    disabled={isSubmitting}
+                  >
+                    <FormItem className="flex items-center space-x-2 space-y-0">
+                      <FormControl><RadioGroupItem value="expense" /></FormControl>
+                      <FormLabel className="font-normal">Khoản Chi</FormLabel>
+                    </FormItem>
+                    <FormItem className="flex items-center space-x-2 space-y-0">
+                      <FormControl><RadioGroupItem value="income" /></FormControl>
+                      <FormLabel className="font-normal">Khoản Thu</FormLabel>
+                    </FormItem>
+                  </RadioGroup>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="performedBy"
+            render={({ field }) => (
+              <FormItem className="space-y-2">
+                <FormLabel>Người thực hiện</FormLabel>
+                <FormControl>
+                  <RadioGroup
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
+                    disabled={isSubmitting || !!transactionToEdit} // Disable if editing
+                  >
+                    {FAMILY_MEMBERS.map((member) => (
+                      <FormItem key={member} className="flex items-center space-x-2 space-y-0">
+                        <FormControl><RadioGroupItem value={member} /></FormControl>
+                        <FormLabel className="font-normal">{member}</FormLabel>
+                      </FormItem>
+                    ))}
+                  </RadioGroup>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Mô tả</FormLabel>
-              <FormControl>
-                <Input placeholder="VD: Ăn tối, Tiền lương tháng 5" {...field} disabled={isSubmitting} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Mô tả</FormLabel>
+                <FormControl>
+                  <Input placeholder="VD: Ăn tối, Tiền lương tháng 5" {...field} disabled={isSubmitting} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
         
         {transactionType === 'expense' && (
            <AiCategorySuggestor
@@ -243,7 +274,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
           )}
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           <FormField
             control={form.control}
             name="amount"
@@ -315,13 +346,13 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
           />
         )}
         
-        <div className="flex gap-2 pt-2">
-            <Button type="submit" className="flex-1" disabled={isSubmitting}>
+        <div className="flex flex-col sm:flex-row gap-2 pt-2">
+            <Button type="submit" className="w-full sm:flex-1" disabled={isSubmitting}>
             {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang xử lý...</> 
                         : transactionToEdit ? "Cập Nhật Giao Dịch" : "Thêm Giao Dịch"}
             </Button>
             {onCancel && ( 
-                 <Button type="button" variant="outline" className="flex-1" onClick={onCancel} disabled={isSubmitting}>
+                 <Button type="button" variant="outline" className="w-full sm:flex-1" onClick={onCancel} disabled={isSubmitting}>
                     Hủy
                 </Button>
             )}

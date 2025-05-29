@@ -5,7 +5,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { MonthlyComparisonChart } from '@/components/reports/MonthlyComparisonChart';
 import { CategoryBreakdownChart } from '@/components/reports/CategoryBreakdownChart';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
-import { useAuthStore, FAMILY_MEMBERS, FAMILY_ACCOUNT_ID } from '@/hooks/useAuth';
+import { useAuthStore } from '@/hooks/useAuth';
+import { FAMILY_MEMBERS } from '@/lib/constants'; // Import FAMILY_MEMBERS from constants
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { CATEGORIES, MONTH_NAMES } from '@/lib/constants';
@@ -95,7 +96,7 @@ export default function ReportsPage() {
           monthsToFetch.add(selectedMonth);
         }
 
-        if (monthsToFetch.size > 0 && familyId) { // Ensure familyId is present
+        if (monthsToFetch.size > 0 && familyId) { 
             await Promise.all(
               Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m))
             );
@@ -113,7 +114,6 @@ export default function ReportsPage() {
       for (let i = 5; i >= 0; i--) {
         const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
         const monthYearKey = format(date, 'yyyy-MM');
-        // familyId is FAMILY_ACCOUNT_ID, so getTransactionsForFamilyByMonth gets all family transactions
         const monthTransactions = getTransactionsForFamilyByMonth(familyId, monthYearKey); 
         
         const income = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);

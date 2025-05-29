@@ -3,15 +3,14 @@
 
 import { format } from 'date-fns';
 import { chatWithSpending, type ChatWithSpendingInput, type ChatWithSpendingOutput, type TransactionForChat } from '@/ai/flows/chat-with-spending-flow';
-import { CATEGORIES, MONTH_NAMES } from '@/lib/constants';
+import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS } from '@/lib/constants'; // Import FAMILY_MEMBERS from constants
 import type { Transaction } from '@/types';
-import { FAMILY_ACCOUNT_ID, FAMILY_MEMBERS } from '@/hooks/useAuth';
+import { FAMILY_ACCOUNT_ID } from '@/hooks/useAuth'; // FAMILY_ACCOUNT_ID is fine here
 
 // Helper to fetch transactions for a given monthYear and familyId
-// This simulates calling your existing API endpoint or directly accessing data.
 async function fetchTransactionsForMonth(familyId: string, monthYear: string): Promise<Transaction[]> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002'; // Adjust port if needed
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002'; 
     const response = await fetch(`${baseUrl}/api/transactions?userId=${encodeURIComponent(familyId)}&monthYear=${encodeURIComponent(monthYear)}`);
 
     if (!response.ok) {
@@ -23,7 +22,6 @@ async function fetchTransactionsForMonth(familyId: string, monthYear: string): P
     return transactions;
   } catch (error) {
     console.error(`Error fetching transactions for ${monthYear}:`, error);
-    // Re-throw or return a specific error structure if needed by the caller
     throw error;
   }
 }
@@ -43,7 +41,7 @@ export async function askSpendingChatbot(userQuestion: string): Promise<ChatWith
         amount: t.amount,
         type: t.type,
         categoryName: category?.name || 'Không xác định',
-        date: t.date, // Assuming t.date is already 'YYYY-MM-DD'
+        date: t.date, 
         performedBy: t.performedBy,
       };
     };
@@ -57,10 +55,9 @@ export async function askSpendingChatbot(userQuestion: string): Promise<ChatWith
       userQuestion,
       transactions: transactionsForChat,
       currentMonthLabel: `${MONTH_NAMES[currentMonthIndex]} ${currentYear}`,
-      familyName: `gia đình ${FAMILY_MEMBERS.join(' và ')}`,
+      familyName: `gia đình ${FAMILY_MEMBERS.join(' và ')}`, // This will now work
     };
     
-    // console.log("Sending to Chatbot AI:", JSON.stringify(chatbotInput, null, 2));
     const result = await chatWithSpending(chatbotInput);
     return result;
 

@@ -7,17 +7,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useAuthStore, FAMILY_MEMBERS } from '@/hooks/useAuth';
-import { APP_NAME } from '@/lib/constants';
+import { useAuthStore } from '@/hooks/useAuth';
+import { APP_NAME, FAMILY_MEMBERS } from '@/lib/constants'; // Import FAMILY_MEMBERS from constants
+import type { FamilyMember } from '@/types';
 import { Users, User, Home, KeyRound, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export function LoginForm() {
   const login = useAuthStore((state) => state.login);
   const router = useRouter();
-  const { toast } = useToast(); // For direct toast usage if needed, though login handles it
+  const { toast } = useToast(); 
   const [password, setPassword] = useState('');
-  const [selectedUser, setSelectedUser] = useState<typeof FAMILY_MEMBERS[number] | null>(null);
+  const [selectedUser, setSelectedUser] = useState<FamilyMember | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleLoginAttempt = () => {
@@ -35,8 +36,7 @@ export function LoginForm() {
       router.push('/dashboard');
     } else {
       // Error toast is handled by useAuthStore.login
-      // You could set local error state too if needed:
-      // setError("Mật khẩu không đúng.");
+      // setError("Mật khẩu không đúng."); // This can be uncommented if specific local error is needed
     }
   };
 

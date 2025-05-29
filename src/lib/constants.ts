@@ -4,6 +4,8 @@ import { Utensils, ShoppingCart, Car, Home, Receipt, Film, HeartPulse, BookOpen,
 
 export const APP_NAME = "Ngân Sách Gia Đình";
 
+export const FAMILY_MEMBERS: FamilyMember[] = ['Minh Đan', 'Minh Hiếu'];
+
 export const CATEGORIES: Category[] = [
   { id: 'an_uong', name: 'Ăn uống', icon: Utensils, type: 'expense' },
   { id: 'mua_sam', name: 'Mua sắm', icon: ShoppingCart, type: 'expense' },
@@ -30,7 +32,7 @@ export const MONTH_NAMES = [
   "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
 ];
 
-export const PERFORMED_BY_OPTIONS: FamilyMember[] = ['Minh Đan', 'Minh Hiếu']; // Used in TransactionForm
+export const PERFORMED_BY_OPTIONS: FamilyMember[] = [...FAMILY_MEMBERS]; // Used in TransactionForm if needed, now directly from FAMILY_MEMBERS
 export const THEME_TOGGLE_ICONS = { // Optional, if you want to manage icons centrally
   light: Moon,
   dark: Sun,

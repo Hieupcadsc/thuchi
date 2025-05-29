@@ -120,8 +120,8 @@ export const useAuthStore = create<AuthState>()(
           showAppToast({ title: "Thành công!", description: "Đã thêm giao dịch mới." });
 
           if (newTransaction.type === 'expense' &&
-              newTransaction.amount > HIGH_EXPENSE_THRESHOLD &&
-              newTransaction.categoryId !== RUT_TIEN_MAT_CATEGORY_ID
+              newTransaction.categoryId !== RUT_TIEN_MAT_CATEGORY_ID && // Exclude cash withdrawal
+              newTransaction.amount > HIGH_EXPENSE_THRESHOLD
              ) {
             const alert: HighValueExpenseAlert = {
               id: newTransaction.id,
@@ -245,7 +245,10 @@ export const useAuthStore = create<AuthState>()(
             familyIdToFetch = FAMILY_ACCOUNT_ID;
         }
         
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 9003}`;
+        // Use NEXT_PUBLIC_APP_URL for deployed environments, otherwise default to localhost:9003
+        // IMPORTANT: Ensure NEXT_PUBLIC_APP_URL is set correctly in your .env file for production/staging.
+        const defaultPort = '9003'; // This should match your package.json dev script port
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${defaultPort}`;
         const apiUrl = `${baseUrl}/api/transactions?userId=${encodeURIComponent(familyIdToFetch)}&monthYear=${encodeURIComponent(monthYear)}`;
         
         console.log(`[useAuthStore fetchTransactionsByMonth] Attempting to fetch from: ${apiUrl}`); 
@@ -401,5 +404,4 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
-// Ensure FAMILY_ACCOUNT_ID is exported if needed elsewhere from this module, though it's better from constants.ts
-// export { FAMILY_ACCOUNT_ID };
+

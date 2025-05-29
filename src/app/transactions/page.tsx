@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -6,18 +7,18 @@ import { TransactionList } from '@/components/transactions/TransactionList';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAuthStore } from '@/hooks/useAuth';
-import { PlusCircle, AlertTriangle } from 'lucide-react';
-import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
+import { useAuthStore, useInitializeTransactions } from '@/hooks/useAuth'; // Import useInitializeTransactions
+import { PlusCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { format, subMonths } from 'date-fns';
 import type { Transaction } from '@/types';
 import { MONTH_NAMES } from '@/lib/constants';
 
 
 export default function TransactionsPage() {
-  const { user, getTransactionsByUserAndMonth, transactions: allTransactions } = useAuthStore(); // Use allTransactions for re-rendering
+  const { user, transactions, getTransactionsByUserAndMonth, fetchTransactionsByMonth } = useAuthStore();
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [currentMonthYear, setCurrentMonthYear] = useState<string>('');
-  const [displayTransactions, setDisplayTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(false); // For loading state
 
   const monthOptions = useMemo(() => {
     const options = [];
@@ -33,24 +34,40 @@ export default function TransactionsPage() {
   }, []);
 
   useEffect(() => {
-    // Set initial month to current month
-    if (monthOptions.length > 0) {
+    if (monthOptions.length > 0 && !currentMonthYear) {
       setCurrentMonthYear(monthOptions[0].value);
     }
-  }, [monthOptions]);
+  }, [monthOptions, currentMonthYear]);
 
+  // Effect to fetch transactions when user or currentMonthYear changes
   useEffect(() => {
     if (user && currentMonthYear) {
-      const fetchedTransactions = getTransactionsByUserAndMonth(user, currentMonthYear);
-      setDisplayTransactions(fetchedTransactions);
-    } else {
-      setDisplayTransactions([]);
+      const loadTransactions = async () => {
+        setIsLoading(true);
+        await fetchTransactionsByMonth(user, currentMonthYear);
+        setIsLoading(false);
+      };
+      loadTransactions();
     }
-  }, [user, currentMonthYear, getTransactionsByUserAndMonth, allTransactions]); // Add allTransactions dependency
+  }, [user, currentMonthYear, fetchTransactionsByMonth]);
 
-  const handleFormSuccess = () => {
+  // Derived state for display, depends on the global transactions cache
+  const displayTransactions = useMemo(() => {
+    if (user && currentMonthYear) {
+      return getTransactionsByUserAndMonth(user, currentMonthYear);
+    }
+    return [];
+  }, [user, currentMonthYear, transactions, getTransactionsByUserAndMonth]);
+
+
+  const handleFormSuccess = async () => {
     setIsFormVisible(false);
-    // Re-fetch or update displayTransactions will happen due to allTransactions dependency change
+    // Re-fetch transactions for the current month to reflect the new addition
+    if (user && currentMonthYear) {
+      setIsLoading(true);
+      await fetchTransactionsByMonth(user, currentMonthYear);
+      setIsLoading(false);
+    }
   };
 
   if (!user) {
@@ -95,7 +112,7 @@ export default function TransactionsPage() {
               <CardDescription>Danh sách các giao dịch đã được ghi lại.</CardDescription>
             </div>
             <div className="w-full sm:w-auto min-w-[200px]">
-              <Select value={currentMonthYear} onValueChange={setCurrentMonthYear}>
+              <Select value={currentMonthYear} onValueChange={setCurrentMonthYear} disabled={isLoading}>
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn tháng" />
                 </SelectTrigger>
@@ -111,7 +128,14 @@ export default function TransactionsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <TransactionList transactions={displayTransactions} />
+          {isLoading ? (
+            <div className="flex justify-center items-center h-[200px]">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="ml-2">Đang tải giao dịch...</p>
+            </div>
+          ) : (
+            <TransactionList transactions={displayTransactions} />
+          )}
         </CardContent>
       </Card>
     </div>

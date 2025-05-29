@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,9 +20,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CategorySelector } from "./CategorySelector";
 import { AiCategorySuggestor } from "./AiCategorySuggestor";
 import { useAuthStore } from "@/hooks/useAuth";
-import { CalendarIcon, Info } from "lucide-react";
+import { CalendarIcon, Info, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import type { Transaction } from "@/types";
 import React from "react";
@@ -41,8 +42,9 @@ interface TransactionFormProps {
 }
 
 export function TransactionForm({ onSuccess }: TransactionFormProps) {
-  const { user, addTransaction } = useAuthStore();
+  const { user, addTransaction } = useAuthStore(); // addTransaction is now async
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(formSchema),
@@ -56,42 +58,48 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
   });
 
   const transactionType = form.watch("type");
-  const transactionDescription = form.watch("description");
+  // const transactionDescription = form.watch("description"); // Not used for AiCategorySuggestor directly in this version
 
-  // Reset categoryId when transactionType changes
   React.useEffect(() => {
     form.resetField("categoryId");
   }, [transactionType, form]);
 
 
-  const onSubmit = (data: TransactionFormValues) => {
+  const onSubmit = async (data: TransactionFormValues) => {
     if (!user) {
+      // This check is also in useAuthStore, but good to have client-side too
       toast({ title: "Lỗi", description: "Không tìm thấy người dùng.", variant: "destructive" });
       return;
     }
+    setIsSubmitting(true);
 
     const formattedDate = format(data.date, "yyyy-MM-dd");
-    const monthYear = format(data.date, "yyyy-MM");
 
-    const newTransaction: Transaction = {
-      id: crypto.randomUUID(),
-      userId: user,
+    // Data structure matches Omit<Transaction, 'id' | 'userId' | 'monthYear'> for the store
+    const transactionPayload = {
       description: data.description,
       amount: data.amount,
-      date: formattedDate,
+      date: formattedDate, 
       type: data.type,
       categoryId: data.categoryId,
-      monthYear: monthYear,
     };
 
     try {
-      addTransaction(newTransaction); // This is the mock function from Zustand
-      toast({ title: "Thành công!", description: "Đã thêm giao dịch mới." });
-      form.reset();
+      await addTransaction(transactionPayload); // Call the async store action
+      // Toast for success is now handled within useAuthStore after API success
+      form.reset({
+        description: "",
+        amount: 0,
+        date: new Date(),
+        type: "expense",
+        categoryId: "",
+      });
       if (onSuccess) onSuccess();
     } catch (error) {
-      console.error("Failed to add transaction:", error);
-      toast({ title: "Lỗi", description: "Không thể thêm giao dịch.", variant: "destructive" });
+      // Error toast is handled within useAuthStore
+      console.error("Error submitting transaction form:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -109,6 +117,7 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
                   onValueChange={field.onChange}
                   defaultValue={field.value}
                   className="flex space-x-4"
+                  disabled={isSubmitting}
                 >
                   <FormItem className="flex items-center space-x-2 space-y-0">
                     <FormControl>
@@ -136,7 +145,7 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
             <FormItem>
               <FormLabel>Mô tả</FormLabel>
               <FormControl>
-                <Input placeholder="VD: Ăn tối, Tiền lương tháng 5" {...field} />
+                <Input placeholder="VD: Ăn tối, Tiền lương tháng 5" {...field} disabled={isSubmitting} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -147,6 +156,7 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
            <AiCategorySuggestor
              onCategorySelect={(categoryId) => form.setValue('categoryId', categoryId, { shouldValidate: true })}
              transactionType={transactionType}
+            //  descriptionForSuggestion={transactionDescription} // Pass description if AiCategorySuggestor needs it directly
            />
         )}
         
@@ -160,7 +170,7 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
                 value={field.value}
                 onChange={field.onChange}
                 transactionType={transactionType}
-                disabled={!transactionType}
+                disabled={!transactionType || isSubmitting}
               />
               <FormMessage />
             </FormItem>
@@ -175,7 +185,7 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
               <FormItem>
                 <FormLabel>Số tiền</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="0" {...field} />
+                  <Input type="number" placeholder="0" {...field} disabled={isSubmitting} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -197,6 +207,7 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
                           "w-full pl-3 text-left font-normal",
                           !field.value && "text-muted-foreground"
                         )}
+                        disabled={isSubmitting}
                       >
                         {field.value ? (
                           format(field.value, "dd/MM/yyyy")
@@ -213,7 +224,7 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
                       selected={field.value}
                       onSelect={field.onChange}
                       disabled={(date) =>
-                        date > new Date() || date < new Date("1900-01-01")
+                        date > new Date() || date < new Date("1900-01-01") || isSubmitting
                       }
                       initialFocus
                     />
@@ -225,8 +236,13 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
           />
         </div>
         
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? "Đang lưu..." : "Thêm Giao Dịch"}
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Đang lưu...
+            </>
+          ) : "Thêm Giao Dịch"}
         </Button>
       </form>
     </Form>

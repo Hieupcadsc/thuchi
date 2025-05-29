@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -8,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CATEGORIES, MONTH_NAMES } from '@/lib/constants';
 import { format, subMonths } from 'date-fns';
 import type { Transaction } from '@/types';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 
 interface MonthlyChartData {
   month: string;
@@ -19,7 +20,7 @@ interface MonthlyChartData {
 interface CategoryChartData {
   name: string;
   value: number;
-  fill: string; // Color will be assigned in the component
+  fill: string; 
 }
 
 const chartColors = [
@@ -28,15 +29,16 @@ const chartColors = [
 ];
 
 export default function ReportsPage() {
-  const { user, getTransactionsByUserAndMonth, transactions: allTransactions } = useAuthStore();
+  const { user, transactions, getTransactionsByUserAndMonth, fetchTransactionsByMonth } = useAuthStore();
   const [monthlyComparisonData, setMonthlyComparisonData] = useState<MonthlyChartData[]>([]);
   const [categoryBreakdownData, setCategoryBreakdownData] = useState<CategoryChartData[]>([]);
   const [selectedMonthForCategory, setSelectedMonthForCategory] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const monthOptions = useMemo(() => {
     const options = [];
     const today = new Date();
-    for (let i = 0; i < 12; i++) { // Show current month and previous 11 months
+    for (let i = 0; i < 12; i++) { 
       const date = subMonths(today, i);
       options.push({
         value: format(date, 'yyyy-MM'),
@@ -47,23 +49,53 @@ export default function ReportsPage() {
   }, []);
 
   useEffect(() => {
-     if (monthOptions.length > 0) {
+     if (monthOptions.length > 0 && !selectedMonthForCategory) {
         setSelectedMonthForCategory(monthOptions[0].value);
     }
-  }, [monthOptions]);
+  }, [monthOptions, selectedMonthForCategory]);
 
+  // Fetch transactions for all relevant months for the charts
   useEffect(() => {
     if (user) {
+      const loadReportData = async () => {
+        setIsLoading(true);
+        const monthsToFetch = new Set<string>();
+        
+        // For MonthlyComparisonChart (last 6 months)
+        const currentDate = new Date();
+        for (let i = 5; i >= 0; i--) {
+          const date = subMonths(currentDate, i);
+          monthsToFetch.add(format(date, 'yyyy-MM'));
+        }
+        // For CategoryBreakdownChart (selected month)
+        if (selectedMonthForCategory) {
+          monthsToFetch.add(selectedMonthForCategory);
+        }
+
+        if (monthsToFetch.size > 0) {
+            await Promise.all(
+              Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(user, m))
+            );
+        }
+        setIsLoading(false);
+      };
+      loadReportData();
+    }
+  }, [user, selectedMonthForCategory, fetchTransactionsByMonth]);
+
+  // Calculate chart data once transactions (global cache) are updated
+  useEffect(() => {
+    if (user && transactions.length > 0) {
       // Prepare data for MonthlyComparisonChart (last 6 months)
       const comparisonData: MonthlyChartData[] = [];
       const currentDate = new Date();
       for (let i = 5; i >= 0; i--) {
         const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-        const monthYear = format(date, 'yyyy-MM');
-        const transactions = getTransactionsByUserAndMonth(user, monthYear);
+        const monthYearKey = format(date, 'yyyy-MM');
+        const monthTransactions = getTransactionsByUserAndMonth(user, monthYearKey);
         
-        const income = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-        const expense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+        const income = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+        const expense = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
         
         comparisonData.push({
           month: MONTH_NAMES[date.getMonth()],
@@ -88,11 +120,14 @@ export default function ReportsPage() {
           name,
           value,
           fill: chartColors[index % chartColors.length],
-        })).sort((a,b) => b.value - a.value); // Sort by value descending
+        })).sort((a,b) => b.value - a.value); 
         setCategoryBreakdownData(categoryData);
       }
+    } else if (user && !isLoading) { // If user exists, not loading, but no transactions
+        setMonthlyComparisonData([]);
+        setCategoryBreakdownData([]);
     }
-  }, [user, getTransactionsByUserAndMonth, selectedMonthForCategory, allTransactions]);
+  }, [user, transactions, selectedMonthForCategory, getTransactionsByUserAndMonth, isLoading]);
 
 
   if (!user) {
@@ -100,6 +135,15 @@ export default function ReportsPage() {
       <div className="text-center p-8">
         <AlertTriangle className="mx-auto h-12 w-12 text-destructive" />
         <p className="mt-4 text-lg">Vui lòng đăng nhập để xem báo cáo.</p>
+      </div>
+    );
+  }
+  
+  if (isLoading && monthlyComparisonData.length === 0 && categoryBreakdownData.length === 0) {
+    return (
+      <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-3 text-lg">Đang tải dữ liệu báo cáo...</p>
       </div>
     );
   }
@@ -116,7 +160,7 @@ export default function ReportsPage() {
       <div>
         <div className="mb-4 flex justify-end">
           <div className="w-full sm:w-auto min-w-[200px]">
-            <Select value={selectedMonthForCategory} onValueChange={setSelectedMonthForCategory}>
+            <Select value={selectedMonthForCategory} onValueChange={setSelectedMonthForCategory} disabled={isLoading}>
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn tháng xem chi tiết" />
                 </SelectTrigger>

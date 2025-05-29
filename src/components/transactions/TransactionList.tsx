@@ -2,11 +2,11 @@
 "use client";
 
 import React from "react";
+import * as AccordionPrimitive from "@radix-ui/react-accordion"; // Import Radix primitive
 import {
   Table,
   TableBody,
   TableCell,
-  TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,11 +15,9 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+  AccordionItem, // Keep using AccordionItem
+  AccordionContent, // Keep using AccordionContent
+} from "@/components/ui/accordion"; // Import only necessary parts from ui/accordion
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,13 +27,14 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger as RadixAlertDialogTrigger, // Renamed to avoid conflict if any
+  AlertDialogTrigger as RadixAlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { CATEGORIES, FAMILY_MEMBERS } from "@/lib/constants";
-import type { Transaction, FamilyMember } from "@/types";
+import { CATEGORIES } from "@/lib/constants";
+import type { Transaction } from "@/types";
 import { format, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { AlertTriangle, User, FileText, StickyNote, Edit3, Trash2, CalendarDays, Tag, ArrowUpDown, ChevronDown } from "lucide-react";
+import { AlertTriangle, User, FileText, StickyNote, Edit3, Trash2, ChevronDown } from "lucide-react"; // Added ChevronDown
+import { cn } from "@/lib/utils";
 
 
 interface TransactionListProps {
@@ -48,7 +47,6 @@ interface TransactionListProps {
 
 export function TransactionList({ transactions, onEdit, onDelete, selectedIds, onToggleSelect }: TransactionListProps) {
   const [itemToConfirmDelete, setItemToConfirmDelete] = React.useState<Transaction | null>(null);
-  // Removed openAccordionItems state as Accordion type="multiple" handles it internally based on AccordionItem value
 
   if (transactions.length === 0) {
     return (
@@ -67,7 +65,7 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
   return (
     <TooltipProvider>
       <ScrollArea className="h-[400px] rounded-md border dark:border-gray-700">
-        <Accordion type="multiple" className="w-full">
+        <AccordionPrimitive.Root type="multiple" className="w-full"> {/* Use Radix Root */}
           {transactions.map((transaction) => {
             const category = getCategoryInfo(transaction.categoryId);
             const Icon = category?.icon;
@@ -121,12 +119,12 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
 
                 {/* Desktop view for trigger content */}
                 <div className="hidden sm:flex w-full flex-grow items-center mr-2"> {/* mr-2 for chevron space */}
-                  <Table className="w-full table-fixed"> {/* Added table-fixed for better column control */}
+                  <Table className="w-full table-fixed"> 
                     <TableBody>
                       <TableRow className="hover:bg-transparent dark:hover:bg-transparent border-none">
-                        <TableCell className="font-medium w-[30%] truncate text-left py-3 px-2"> {/* Adjusted widths */}
+                        <TableCell className="font-medium w-[30%] truncate text-left py-3 px-2"> 
                           <Tooltip>
-                              <TooltipTrigger asChild><span>{transaction.description}</span></TooltipTrigger>
+                              <TooltipTrigger asChild><span className="block truncate">{transaction.description}</span></TooltipTrigger>
                               <TooltipContent><p>{transaction.description}</p></TooltipContent>
                             </Tooltip>
                         </TableCell>
@@ -157,8 +155,8 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
                               {transaction.performedBy || 'Không rõ'}
                           </div>
                         </TableCell>
-                        <TableCell className="w-[4%] text-right py-3 pl-1 pr-0"> {/* Reduced width for actions to make space */}
-                            <div className="flex items-center justify-end gap-0.5 opacity-0 group-data-[state=open]:opacity-100 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                        <TableCell className="w-[4%] text-right py-3 pl-1 pr-0"> 
+                            <div className="flex items-center justify-end gap-0.5 opacity-0 group-data-[state=open]/accordionitem:opacity-100 group-hover/accordionitem:opacity-100 focus-within/accordionitem:opacity-100 transition-opacity">
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onEdit(transaction);}}>
@@ -178,7 +176,7 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
                                       </TooltipTrigger>
                                       <TooltipContent><p>Xóa</p></TooltipContent>
                                   </Tooltip>
-                                  {/* AlertDialogContent moved outside AccordionTrigger, handled per item */}
+                                   {/* AlertDialogContent moved to ensure it's not improperly nested during open state */}
                                 </AlertDialog>
                             </div>
                         </TableCell>
@@ -190,24 +188,37 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
             );
 
             return (
-              <AccordionItem value={transaction.id} key={transaction.id} className="border-b dark:border-gray-700 group">
+              <AccordionItem value={transaction.id} key={transaction.id} className="border-b dark:border-gray-700 group/accordionitem">
                 <div className="flex items-center w-full hover:bg-muted/50 dark:hover:bg-muted/20 focus-within:bg-muted/50 dark:focus-within:bg-muted/20">
                   <div className="p-3 sm:pl-4 sm:pr-2 sm:py-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={() => onToggleSelect(transaction.id)}
                       aria-label={`Chọn giao dịch ${transaction.description}`}
-                      className="mt-1 sm:mt-0" // Checkbox styling
+                      className="mt-1 sm:mt-0"
                     />
                   </div>
-                  {/* AccordionTrigger now only contains the row content and its own chevron */}
-                  <AccordionTrigger
-                    className="flex-grow hover:no-underline focus:outline-none focus:no-underline py-3 text-left [&_svg.accordion-chevron-default]:ml-auto"
-                  >
-                    {triggerContent}
-                  </AccordionTrigger>
+                  <AccordionPrimitive.Header className="flex flex-1 min-w-0">
+                    <AccordionPrimitive.Trigger asChild className="w-full p-0 rounded-none border-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none">
+                      <div
+                        className={cn(
+                          "flex flex-1 items-center justify-between py-3 pl-0 pr-2 text-left font-medium cursor-pointer hover:no-underline focus:outline-none w-full",
+                          // "group/trigger" // Use accordionitem group for chevron
+                        )}
+                      >
+                        <div className="flex-grow min-w-0">
+                          {triggerContent}
+                        </div>
+                        <ChevronDown
+                          className={cn(
+                            "h-4 w-4 shrink-0 transition-transform duration-200",
+                            "group-data-[state=open]/accordionitem:rotate-180" // Rotates based on AccordionItem's state
+                          )}
+                        />
+                      </div>
+                    </AccordionPrimitive.Trigger>
+                  </AccordionPrimitive.Header>
                 </div>
-                 {/* AlertDialog for individual item deletion */}
                 {itemToConfirmDelete && itemToConfirmDelete.id === transaction.id && (
                     <AlertDialog open={!!itemToConfirmDelete} onOpenChange={(open) => !open && setItemToConfirmDelete(null)}>
                         <AlertDialogContent>
@@ -224,7 +235,7 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
                         </AlertDialogContent>
                     </AlertDialog>
                 )}
-                <AccordionContent className="p-4 bg-muted/30 dark:bg-muted/20 text-sm ml-12 sm:ml-16"> {/* Adjusted left margin */}
+                <AccordionContent className="p-4 bg-muted/30 dark:bg-muted/20 text-sm ml-12 sm:ml-16"> 
                   <div className="grid gap-2">
                     <div className="flex items-start">
                         <FileText className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
@@ -233,16 +244,21 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
                             <p className="text-muted-foreground whitespace-pre-wrap">{transaction.description}</p>
                         </div>
                     </div>
-                      <div className="sm:hidden"> {/* Details for mobile view in content */}
+                      <div className="sm:hidden"> 
                         <div className="flex items-start mt-1">
-                          <Tag className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
+                          <div className="w-4 h-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0">{category && category.icon && <category.icon className="w-full h-full" />}</div>
                             <div>
                               <span className="font-semibold">Danh mục:</span>
                               <p className="text-muted-foreground">{category?.name || transaction.categoryId}</p>
                           </div>
                         </div>
                         <div className="flex items-start mt-1">
-                            <ArrowUpDown className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
+                            <div className="w-4 h-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0">
+                                {transaction.type === 'income' ? 
+                                    <span className="text-green-500 font-bold text-lg leading-none">↑</span> : 
+                                    <span className="text-red-500 font-bold text-lg leading-none">↓</span>
+                                }
+                            </div>
                             <div>
                               <span className="font-semibold">Loại:</span>
                               <p className="text-muted-foreground">{transaction.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}</p>
@@ -259,7 +275,7 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
                         </div>
                     )}
                     <div className="text-xs text-muted-foreground/80 pt-1">ID giao dịch: {transaction.id}</div>
-                    <div className="sm:hidden flex items-center justify-end gap-2 mt-2"> {/* Mobile actions in content */}
+                    <div className="sm:hidden flex items-center justify-end gap-2 mt-2"> 
                       <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(transaction);}}>
                           <Edit3 className="h-4 w-4 mr-1.5"/> Sửa
                       </Button>
@@ -269,7 +285,7 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
                                   <Trash2 className="h-4 w-4 mr-1.5"/> Xóa
                               </Button>
                           </RadixAlertDialogTrigger>
-                          {/* Content handled by the per-item AlertDialog instance */}
+                           {/* Content handled by the per-item AlertDialog instance above */}
                         </AlertDialog>
                     </div>
                   </div>
@@ -277,9 +293,11 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
               </AccordionItem>
             );
           })}
-        </Accordion>
+        </AccordionPrimitive.Root>
       </ScrollArea>
     </TooltipProvider>
   );
 }
+    
+
     

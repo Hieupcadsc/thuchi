@@ -65,8 +65,16 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
         spreadsheetId,
         range: `${sheetName}!A1:H1`,
       });
-      if (!headerCheck.data.values || headerCheck.data.values.length === 0) {
-        await sheets.spreadsheets.values.append({
+      if (!headerCheck.data.values || headerCheck.data.values.length === 0 || 
+          (headerCheck.data.values[0] && headerCheck.data.values[0].join(',') !== HEADER_ROW.join(','))) {
+        // Clear the first row if it exists but is not the correct header
+        if (headerCheck.data.values && headerCheck.data.values.length > 0) {
+            await sheets.spreadsheets.values.clear({
+                spreadsheetId,
+                range: `${sheetName}!A1:H1`,
+            });
+        }
+        await sheets.spreadsheets.values.update({ // Use update to be sure it's in the first row
           spreadsheetId,
           range: `${sheetName}!A1`,
           valueInputOption: 'USER_ENTERED',
@@ -76,9 +84,10 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
         });
       }
     }
-  } catch (error) {
-    console.error(`Error ensuring sheet "${sheetName}" exists with header:`, error);
-    throw new Error(`Failed to ensure sheet "${sheetName}" exists.`);
+  } catch (error: any) {
+    console.error(`Error in ensureSheetExistsAndHeader for sheet "${sheetName}":`, error.message, error.stack);
+    // Re-throw the original error to provide more specific details downstream
+    throw error;
   }
 }
 
@@ -123,13 +132,15 @@ async function getTransactionsFromSheet(userId: UserType, monthYear: string): Pr
     }
     return [];
   } catch (err: any) {
-    console.error(`Error fetching from Google Sheets (Sheet: ${sheetName}):`, err);
+    console.error(`Error in getTransactionsFromSheet for sheet "${sheetName}":`, err.message, err.stack);
     // If sheet doesn't exist, it might throw an error that ensureSheetExistsAndHeader didn't catch or handle
     // For example, if ensureSheetExistsAndHeader fails itself.
-    if (err.message && err.message.includes("No sheet with the name")) {
+    if (err.message && (err.message.includes("No sheet with the name") || err.message.includes("Unable to parse range"))) {
+        console.warn(`Sheet "${sheetName}" not found or range invalid, returning empty array.`);
         return []; // Treat as no data if sheet specifically not found after attempt to create
     }
-    throw new Error('Failed to fetch data from Google Sheets.');
+    // Re-throw the original error to provide more specific details downstream
+    throw err;
   }
 }
 
@@ -162,9 +173,10 @@ async function addTransactionToSheet(transaction: Transaction): Promise<Transact
       requestBody: { values },
     });
     return transaction;
-  } catch (err) {
-    console.error(`Error appending to Google Sheets (Sheet: ${sheetName}):`, err);
-    throw new Error('Failed to save data to Google Sheets.');
+  } catch (err: any) {
+    console.error(`Error in addTransactionToSheet for sheet "${sheetName}":`, err.message, err.stack);
+    // Re-throw the original error
+    throw err;
   }
 }
 
@@ -186,8 +198,16 @@ export async function GET(request: NextRequest) {
     const transactions = await getTransactionsFromSheet(userId, monthYear);
     return NextResponse.json(transactions);
   } catch (error: any) {
-    console.error('[API GET /transactions] Error:', error);
-    return NextResponse.json({ message: error.message || 'Failed to fetch transactions' }, { status: 500 });
+    console.error('[API GET /transactions] Caught error:', error.message, error.stack);
+    const message = error.message || 'Failed to fetch transactions';
+    // Check for common Google API error structures
+    if (error.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+        //   message = error.errors[0].message || message; // Prefer more specific Google error
+        // For security, we might not want to expose raw Google API error messages directly to client.
+        // Logging it on server is good, but client gets a generic one unless we explicitly craft it.
+        // For now, we'll use the error.message from the re-thrown error.
+    }
+    return NextResponse.json({ message }, { status: error.code || 500 });
   }
 }
 
@@ -210,12 +230,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(savedTransaction, { status: 201 });
 
   } catch (error: any) {
-    console.error('[API POST /transactions] Error:', error);
+    console.error('[API POST /transactions] Caught error:', error.message, error.stack);
     if (error instanceof SyntaxError) { // JSON parsing error
         return NextResponse.json({ message: 'Invalid JSON in request body' }, { status: 400 });
     }
-    return NextResponse.json({ message: error.message || 'Failed to add transaction' }, { status: 500 });
+    const message = error.message || 'Failed to add transaction';
+    return NextResponse.json({ message }, { status: error.code || 500 });
   }
 }
-
-    

@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore, FAMILY_ACCOUNT_ID } from '@/hooks/useAuth';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
+import { FinancialInsights } from '@/components/dashboard/FinancialInsights'; // Added
 import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
@@ -38,10 +39,15 @@ export default function DashboardPage() {
         monthsToFetch.add(currentMonthYear);
         
         const currentDate = new Date();
+        // Fetch data for the last 6 months for the chart
         for (let i = 5; i >= 0; i--) {
           const date = subMonths(currentDate, i);
           monthsToFetch.add(format(date, 'yyyy-MM'));
         }
+        
+        // Also fetch data for the month before the current one for AI analysis context, if not already included
+        monthsToFetch.add(format(subMonths(currentDate,1),'yyyy-MM'));
+
 
         // familyId will be FAMILY_ACCOUNT_ID
         await Promise.all(
@@ -99,7 +105,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Chào mừng Gia Đình! (Người dùng: {currentUser})</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Chào mừng {currentUser}!</h1>
       
       {isLoading && transactions.length === 0 ? (
         <div className="flex justify-center items-center py-8">
@@ -109,15 +115,15 @@ export default function DashboardPage() {
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <SummaryCard title="Tổng Thu (Gia Đình)" value={summary.totalIncome} icon={TrendingUp} colorClass="text-green-500" />
-            <SummaryCard title="Tổng Chi (Gia Đình)" value={summary.totalExpense} icon={TrendingDown} colorClass="text-red-500" />
-            <SummaryCard title="Số Dư (Gia Đình)" value={summary.balance} icon={Banknote} colorClass={summary.balance >= 0 ? "text-blue-500" : "text-orange-500"} />
+            <SummaryCard title={`Tổng Thu (${MONTH_NAMES[new Date(currentMonthYear + '-01').getMonth()]})`} value={summary.totalIncome} icon={TrendingUp} colorClass="text-green-500" />
+            <SummaryCard title={`Tổng Chi (${MONTH_NAMES[new Date(currentMonthYear + '-01').getMonth()]})`} value={summary.totalExpense} icon={TrendingDown} colorClass="text-red-500" />
+            <SummaryCard title={`Số Dư (${MONTH_NAMES[new Date(currentMonthYear + '-01').getMonth()]})`} value={summary.balance} icon={Banknote} colorClass={summary.balance >= 0 ? "text-blue-500" : "text-orange-500"} />
           </div>
 
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle>Tổng Quan Thu Chi Gia Đình 6 Tháng Gần Nhất</CardTitle>
-              <CardDescription>Biểu đồ cột so sánh tổng thu và tổng chi qua các tháng của cả gia đình.</CardDescription>
+              <CardTitle>Tổng Quan Thu Chi 6 Tháng Gần Nhất</CardTitle>
+              <CardDescription>Biểu đồ cột so sánh tổng thu và tổng chi của gia đình qua các tháng.</CardDescription>
             </CardHeader>
             <CardContent>
               {monthlyChartData.length > 0 ? (
@@ -150,6 +156,9 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
+          
+          {/* AI Financial Insights Section */}
+          <FinancialInsights />
         </>
       )}
     </div>

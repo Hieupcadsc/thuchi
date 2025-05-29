@@ -23,11 +23,16 @@ import { AiCategorySuggestor } from "./AiCategorySuggestor";
 import { useAuthStore } from "@/hooks/useAuth";
 import { FAMILY_MEMBERS } from '@/lib/constants'; 
 import type { Transaction, FamilyMember } from "@/types";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2, UploadCloud, Image as ImageIcon, AlertTriangle } from "lucide-react"; // Added UploadCloud, ImageIcon
 import { cn } from "@/lib/utils";
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, parse as parseDateFns } from 'date-fns';
 import { useToast } from "@/hooks/use-toast"; 
 import React from "react";
+import Image from 'next/image'; // For previewing image
+
+// Server action for bill processing (will be created later)
+// import { processBillImage } from '@/app/transactions/billActions'; 
+
 
 const formSchema = z.object({
   description: z.string().min(1, "Mô tả không được để trống"),
@@ -35,9 +40,7 @@ const formSchema = z.object({
   date: z.date({ required_error: "Ngày không được để trống" }),
   type: z.enum(["income", "expense"], { required_error: "Vui lòng chọn loại giao dịch" }),
   categoryId: z.string().min(1, "Vui lòng chọn danh mục"),
-  performedBy: z.enum(FAMILY_MEMBERS as [string, ...string[]], { // Ensures performedBy is one of the FamilyMembers
-    required_error: "Vui lòng chọn người thực hiện"
-  }),
+  // performedBy removed as it's derived from currentUser
   note: z.string().optional(),
 });
 
@@ -47,12 +50,18 @@ interface TransactionFormProps {
   onSuccess?: () => void;
   transactionToEdit?: Transaction | null;
   onCancel?: () => void; 
+  isBillMode?: boolean; // New prop
 }
 
-export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: TransactionFormProps) {
+export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBillMode = false }: TransactionFormProps) {
   const { addTransaction, updateTransaction, currentUser, familyId } = useAuthStore(); 
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [billImagePreview, setBillImagePreview] = React.useState<string | null>(null);
+  const [billImageDataUri, setBillImageDataUri] = React.useState<string | null>(null);
+  const [isProcessingBill, setIsProcessingBill] = React.useState(false);
+  const [billProcessingError, setBillProcessingError] = React.useState<string | null>(null);
+
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(formSchema),
@@ -62,7 +71,6 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
       date: parseISO(transactionToEdit.date), 
       type: transactionToEdit.type,
       categoryId: transactionToEdit.categoryId,
-      performedBy: transactionToEdit.performedBy,
       note: transactionToEdit.note || "",
     } : {
       description: "",
@@ -70,7 +78,6 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
       date: new Date(),
       type: "expense",
       categoryId: "",
-      performedBy: currentUser || undefined, // Default to current user if adding new
       note: "",
     },
   });
@@ -86,9 +93,10 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
         date: parseISO(transactionToEdit.date),
         type: transactionToEdit.type,
         categoryId: transactionToEdit.categoryId,
-        performedBy: transactionToEdit.performedBy,
         note: transactionToEdit.note || "",
       });
+      setBillImagePreview(null); // Clear bill preview if editing
+      setBillImageDataUri(null);
     } else {
       form.reset({
         description: "",
@@ -96,21 +104,102 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
         date: new Date(),
         type: "expense",
         categoryId: "",
-        performedBy: currentUser || undefined,
         note: "",
       });
+       if (!isBillMode) { // Clear bill stuff if not in bill mode initially
+        setBillImagePreview(null);
+        setBillImageDataUri(null);
+      }
     }
-  }, [transactionToEdit, form, currentUser]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactionToEdit, form, isBillMode]); // Added isBillMode to reset effect
 
 
   React.useEffect(() => {
     if (!transactionToEdit || (transactionToEdit && form.getValues("type") !== transactionToEdit.type)) {
         form.setValue("categoryId", "", { shouldValidate: true });
     }
-    if (transactionType === "income") {
+    if (transactionType === "income" && !isBillMode) { // Only clear note if not bill mode
       form.setValue("note", ""); 
     }
-  }, [transactionType, form, transactionToEdit]);
+  }, [transactionType, form, transactionToEdit, isBillMode]);
+  
+  React.useEffect(() => {
+    // If switching out of bill mode, clear bill related states
+    if (!isBillMode) {
+      setBillImagePreview(null);
+      setBillImageDataUri(null);
+      setBillProcessingError(null);
+    }
+  }, [isBillMode]);
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBillImagePreview(reader.result as string);
+        setBillImageDataUri(reader.result as string);
+        setBillProcessingError(null);
+        // Automatically set type to expense for bill mode
+        form.setValue("type", "expense", { shouldValidate: true });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setBillImagePreview(null);
+      setBillImageDataUri(null);
+    }
+  };
+
+  const handleProcessBill = async () => {
+    if (!billImageDataUri) {
+      toast({ title: "Lỗi", description: "Vui lòng chọn ảnh bill để xử lý.", variant: "destructive" });
+      return;
+    }
+    setIsProcessingBill(true);
+    setBillProcessingError(null);
+    try {
+      // Placeholder for actual AI processing
+      // const result = await processBillImage(billImageDataUri); 
+      // For now, simulate AI response after a delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const simulatedResult = {
+        // totalAmount: 125000,
+        // transactionDate: "19/07/2024", // Example date format from AI
+        // storeName: "Quán Ăn ABC"
+      };
+
+      // For testing, let's hardcode some values to prefill
+      // In real scenario, use `simulatedResult` or actual `result`
+      form.setValue("amount", 12345, { shouldValidate: true }); 
+      form.setValue("description", "Thanh toán tại ABC (từ Bill)", { shouldValidate: true });
+      
+      // Example date parsing (adjust based on AI's actual date output format)
+      // if (simulatedResult.transactionDate) {
+      //   try {
+      //     const parsedDate = parseDateFns(simulatedResult.transactionDate, "dd/MM/yyyy", new Date());
+      //     if (isValid(parsedDate)) {
+      //       form.setValue("date", parsedDate, { shouldValidate: true });
+      //     } else {
+      //       toast({ title: "Lưu ý", description: "Không thể tự động điền ngày từ bill, vui lòng chọn thủ công.", variant: "default"});
+      //     }
+      //   } catch (e) {
+      //     toast({ title: "Lưu ý", description: "Lỗi định dạng ngày từ bill, vui lòng chọn thủ công.", variant: "default"});
+      //   }
+      // }
+      // if (simulatedResult.storeName) {
+      //   form.setValue("description", `Chi tiêu tại ${simulatedResult.storeName} (từ Bill)`, { shouldValidate: true });
+      // }
+
+
+      toast({ title: "Xử lý Bill (Demo)", description: "Thông tin giả lập đã được điền. Sắp có AI thật!" });
+    } catch (error: any) {
+      console.error("Error processing bill:", error);
+      setBillProcessingError(error.message || "Lỗi khi xử lý ảnh bill.");
+      toast({ title: "Lỗi Xử Lý Bill", description: error.message || "Không thể xử lý ảnh bill vào lúc này.", variant: "destructive" });
+    }
+    setIsProcessingBill(false);
+  };
 
 
   const onSubmit = async (data: TransactionFormValues) => {
@@ -130,7 +219,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
       type: data.type,
       categoryId: data.categoryId,
       monthYear: monthYear,
-      performedBy: data.performedBy, 
+      performedBy: currentUser, // Always the current logged-in user
       note: data.type === 'expense' ? data.note : undefined,
     };
     
@@ -140,6 +229,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
             ...transactionBasePayload,
             id: transactionToEdit.id,
             userId: familyId, 
+            performedBy: transactionToEdit.performedBy, // Keep original performer on edit
         };
         await updateTransaction(payloadForUpdate);
         toast({ title: "Thành công!", description: "Đã cập nhật giao dịch." });
@@ -160,9 +250,10 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
             date: new Date(),
             type: "expense",
             categoryId: "",
-            performedBy: currentUser || undefined,
             note: "",
         });
+        setBillImagePreview(null); // Clear image preview after successful submission
+        setBillImageDataUri(null);
       }
       if (onSuccess) onSuccess();
     } catch (error: any) {
@@ -176,6 +267,58 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 md:space-y-6 p-1">
+        
+        {isBillMode && !transactionToEdit && (
+          <Card className="bg-muted/50 dark:bg-muted/30 p-4">
+            <CardTitle className="text-lg mb-3">Tải Lên Ảnh Bill</CardTitle>
+            <FormField
+              control={form.control} // This field is not part of formSchema, just for UI
+              name="description" // Placeholder, actual image data handled by component state
+              render={() => (
+                <FormItem>
+                  <FormLabel htmlFor="bill-image-upload" className="sr-only">Tải ảnh bill</FormLabel>
+                  <FormControl>
+                    <Input 
+                      id="bill-image-upload"
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleImageChange}
+                      className="mb-2 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                      disabled={isSubmitting || isProcessingBill}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {billImagePreview && (
+              <div className="mt-3 space-y-2">
+                <p className="text-sm font-medium">Xem trước ảnh bill:</p>
+                <div className="relative w-full max-w-xs h-auto border rounded-md overflow-hidden aspect-video mx-auto">
+                  <Image src={billImagePreview} alt="Xem trước Bill" layout="fill" objectFit="contain" />
+                </div>
+                <Button 
+                  type="button" 
+                  onClick={handleProcessBill} 
+                  disabled={isProcessingBill || isSubmitting || !billImageDataUri}
+                  className="w-full mt-2"
+                >
+                  {isProcessingBill ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                  {isProcessingBill ? "Đang xử lý..." : "Xử lý Bill (Demo AI)"}
+                </Button>
+              </div>
+            )}
+            {billProcessingError && (
+              <p className="text-sm text-destructive mt-2 flex items-center"><AlertTriangle className="h-4 w-4 mr-1"/> {billProcessingError}</p>
+            )}
+             <p className="text-xs text-muted-foreground mt-3">
+              Sau khi AI xử lý (demo), thông tin sẽ được điền vào form bên dưới. Bạn có thể chỉnh sửa trước khi lưu.
+            </p>
+            <hr className="my-4" />
+          </Card>
+        )}
+
+
         <div className="grid grid-cols-1 gap-4 md:gap-6">
           <FormField
             control={form.control}
@@ -191,7 +334,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
                     }}
                     value={field.value} 
                     className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || (isBillMode && !transactionToEdit) } // Disable if bill mode for new transaction
                   >
                     <FormItem className="flex items-center space-x-2 space-y-0">
                       <FormControl><RadioGroupItem value="expense" /></FormControl>
@@ -208,31 +351,11 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
             )}
           />
           
-          <FormField
-            control={form.control}
-            name="performedBy"
-            render={({ field }) => (
-              <FormItem className="space-y-2">
-                <FormLabel>Người thực hiện</FormLabel>
-                <FormControl>
-                  <RadioGroup
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
-                    disabled={isSubmitting || !!transactionToEdit} // Disable if editing
-                  >
-                    {FAMILY_MEMBERS.map((member) => (
-                      <FormItem key={member} className="flex items-center space-x-2 space-y-0">
-                        <FormControl><RadioGroupItem value={member} /></FormControl>
-                        <FormLabel className="font-normal">{member}</FormLabel>
-                      </FormItem>
-                    ))}
-                  </RadioGroup>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="text-sm">
+            <span className="font-medium">Người thực hiện: </span>
+            <span className="text-muted-foreground">{transactionToEdit ? transactionToEdit.performedBy : currentUser}</span>
+          </div>
+
 
           <FormField
             control={form.control}
@@ -347,12 +470,12 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
         )}
         
         <div className="flex flex-col sm:flex-row gap-2 pt-2">
-            <Button type="submit" className="w-full sm:flex-1" disabled={isSubmitting}>
+            <Button type="submit" className="w-full sm:flex-1" disabled={isSubmitting || isProcessingBill || (isBillMode && !transactionToEdit && !billImageDataUri) }>
             {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang xử lý...</> 
                         : transactionToEdit ? "Cập Nhật Giao Dịch" : "Thêm Giao Dịch"}
             </Button>
             {onCancel && ( 
-                 <Button type="button" variant="outline" className="w-full sm:flex-1" onClick={onCancel} disabled={isSubmitting}>
+                 <Button type="button" variant="outline" className="w-full sm:flex-1" onClick={onCancel} disabled={isSubmitting || isProcessingBill}>
                     Hủy
                 </Button>
             )}
@@ -361,3 +484,4 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel }: Tran
     </Form>
   );
 }
+

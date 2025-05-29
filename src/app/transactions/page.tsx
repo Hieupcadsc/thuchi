@@ -13,7 +13,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { useAuthStore, FAMILY_ACCOUNT_ID } from '@/hooks/useAuth';
 import type { Transaction, FamilyMember } from '@/types';
 import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS } from '@/lib/constants';
-import { PlusCircle, AlertTriangle, Loader2, Search, Filter, CalendarIcon, XCircle, Camera } from 'lucide-react'; // Added Camera
+import { PlusCircle, AlertTriangle, Loader2, Search, Filter, CalendarIcon, XCircle, Camera } from 'lucide-react';
 import { format, subMonths, isValid, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -28,14 +28,14 @@ export default function TransactionsPage() {
   
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-  // Later: const [isBillMode, setIsBillMode] = useState(false);
+  const [isBillModeActive, setIsBillModeActive] = useState(false); // New state for bill mode
   
   const [currentMonthYear, setCurrentMonthYear] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
 
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterCategory, setFilterCategory] = useState<string>(ALL_CATEGORIES_VALUE); // categoryId
+  const [filterCategory, setFilterCategory] = useState<string>(ALL_CATEGORIES_VALUE);
   const [filterPerformedBy, setFilterPerformedBy] = useState<string>(ALL_MEMBERS_VALUE);
   const [filterStartDate, setFilterStartDate] = useState<Date | undefined>(undefined);
   const [filterEndDate, setFilterEndDate] = useState<Date | undefined>(undefined);
@@ -72,21 +72,18 @@ export default function TransactionsPage() {
     }
   }, [currentUser, familyId, currentMonthYear, fetchTransactionsByMonth, isDateFilterActive]);
 
-  // Effect to fetch all transactions if date filter is active
   useEffect(() => {
     if (currentUser && familyId && isDateFilterActive && filterStartDate && filterEndDate) {
         const loadAllTimeTransactions = async () => {
             setIsLoading(true);
-            // Fetch transactions for all months between filterStartDate and filterEndDate
             const monthsToFetch = new Set<string>();
             let currentDate = new Date(filterStartDate);
             const lastDate = new Date(filterEndDate);
 
             while (currentDate <= lastDate) {
               monthsToFetch.add(format(currentDate, 'yyyy-MM'));
-              currentDate = startOfMonth(subMonths(currentDate, -1)); // Move to the start of the next month
+              currentDate = startOfMonth(subMonths(currentDate, -1)); 
             }
-            // Also ensure a broader range like last 12 months is fetched if not already covered
             const today = new Date();
             for (let i = 0; i < 12; i++) {
                 monthsToFetch.add(format(subMonths(today, i), 'yyyy-MM'));
@@ -105,15 +102,14 @@ export default function TransactionsPage() {
   const handleFormSuccess = async () => {
     setIsFormVisible(false);
     setEditingTransaction(null);
-    // setIsBillMode(false); // Later
+    setIsBillModeActive(false); 
     if (currentUser && familyId && currentMonthYear && !isDateFilterActive) {
       setIsLoading(true);
       await fetchTransactionsByMonth(familyId, currentMonthYear);
       setIsLoading(false);
     } else if (currentUser && familyId && isDateFilterActive && filterStartDate && filterEndDate) {
-        // Refetch all potentially relevant data if date filter was active
          const monthsToFetch = new Set<string>();
-            let dateIterator = new Date(filterStartDate); // Renamed variable
+            let dateIterator = new Date(filterStartDate); 
             const lastDate = new Date(filterEndDate);
             while (dateIterator <= lastDate) {
               monthsToFetch.add(format(dateIterator, 'yyyy-MM'));
@@ -131,25 +127,30 @@ export default function TransactionsPage() {
 
   const handleEdit = (transaction: Transaction) => {
     setEditingTransaction(transaction);
-    // setIsBillMode(false); // Later
+    setIsBillModeActive(false); 
     setIsFormVisible(true);
   };
 
   const handleAddNewTransaction = () => {
     setEditingTransaction(null);
-    // setIsBillMode(false); // Later
+    setIsBillModeActive(false);
     setIsFormVisible(true);
   };
 
   const handleAddFromBill = () => {
     setEditingTransaction(null);
-    // setIsBillMode(true); // Later
-    setIsFormVisible(true); // For now, just open the normal form
-    // Later: we might navigate or show a modal with file input first
-    toast({
-        title: "Tính năng sắp ra mắt!",
-        description: "Chức năng thêm giao dịch từ bill đang được phát triển.",
-    });
+    setIsBillModeActive(true);
+    setIsFormVisible(true);
+    // toast({
+    //     title: "Tính năng Thêm từ Bill",
+    //     description: "Chọn ảnh bill để AI xử lý thông tin.",
+    // });
+  };
+  
+  const handleCancelForm = () => {
+    setIsFormVisible(false);
+    setEditingTransaction(null);
+    setIsBillModeActive(false);
   };
 
 
@@ -208,7 +209,7 @@ export default function TransactionsPage() {
             const loadRangeData = async () => {
                 setIsLoading(true);
                 const monthsToFetch = new Set<string>();
-                let dateIterator = new Date(filterStartDate); // Renamed
+                let dateIterator = new Date(filterStartDate); 
                 const lastDate = new Date(filterEndDate);
                 while (dateIterator <= lastDate) {
                     monthsToFetch.add(format(dateIterator, 'yyyy-MM'));
@@ -246,11 +247,11 @@ export default function TransactionsPage() {
         <div className="flex gap-2">
             <Button onClick={handleAddNewTransaction} size="lg" variant="outline">
             <PlusCircle className="mr-2 h-5 w-5" />
-            {isFormVisible && !editingTransaction ? 'Đóng Form' : 'Thêm Mới'}
+            {isFormVisible && !editingTransaction && !isBillModeActive ? 'Đóng Form' : 'Thêm Mới'}
             </Button>
             <Button onClick={handleAddFromBill} size="lg">
             <Camera className="mr-2 h-5 w-5" />
-            Thêm từ Bill
+            {isFormVisible && isBillModeActive ? 'Đóng Form Bill' : 'Thêm từ Bill'}
             </Button>
         </div>
       </div>
@@ -258,15 +259,18 @@ export default function TransactionsPage() {
       {(isFormVisible || editingTransaction) && (
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>{editingTransaction ? 'Chỉnh Sửa Giao Dịch' : 'Thêm Giao Dịch Mới'}</CardTitle>
-            <CardDescription>Điền thông tin chi tiết cho khoản thu hoặc chi của gia đình.</CardDescription>
+            <CardTitle>{editingTransaction ? 'Chỉnh Sửa Giao Dịch' : (isBillModeActive ? 'Thêm Giao Dịch từ Bill' : 'Thêm Giao Dịch Mới')}</CardTitle>
+            <CardDescription>
+              {editingTransaction ? 'Chỉnh sửa thông tin chi tiết cho khoản thu hoặc chi.' : 
+               (isBillModeActive ? 'Tải ảnh bill để AI trích xuất thông tin tự động.' : 'Điền thông tin chi tiết cho khoản thu hoặc chi của gia đình.')}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <TransactionForm 
                 onSuccess={handleFormSuccess} 
                 transactionToEdit={editingTransaction}
-                onCancel={() => { setIsFormVisible(false); setEditingTransaction(null); /* setIsBillMode(false); */ }}
-                // isBillMode={isBillMode} // Later
+                onCancel={handleCancelForm}
+                isBillMode={isBillModeActive && !editingTransaction} // Only bill mode if adding new and bill mode is active
             />
           </CardContent>
         </Card>
@@ -422,6 +426,7 @@ export default function TransactionsPage() {
                     
                     setEditingTransaction(null); 
                     setIsFormVisible(false);
+                    setIsBillModeActive(false);
                     
                     await deleteTransaction(transactionId, monthYearToDelete); 
                     

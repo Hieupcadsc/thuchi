@@ -33,3 +33,11 @@ export interface MonthlySummary {
   balance: number;
 }
 
+export interface HighValueExpenseAlert {
+  id: string; // Matches transaction.id
+  performedBy: FamilyMember;
+  amount: number;
+  description: string;
+  date: string; // ISO string, when the alert was generated
+  spouseHasViewed: boolean;
+}

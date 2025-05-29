@@ -8,6 +8,7 @@ import { useAuthStore } from '@/hooks/useAuth';
 import { NAV_LINKS, APP_NAME } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { UserNav } from '@/components/layout/UserNav';
+import { GlobalAlertToaster } from '@/components/layout/GlobalAlertToaster'; // Added
 import {
   SidebarProvider,
   Sidebar,
@@ -23,7 +24,7 @@ import {
 import { LogOut, PiggyBank } from 'lucide-react';
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
-  const currentUser = useAuthStore((state) => state.currentUser); // Check for currentUser
+  const currentUser = useAuthStore((state) => state.currentUser); 
   const logout = useAuthStore((state) => state.logout);
   const router = useRouter();
   const pathname = usePathname();
@@ -45,6 +46,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
   
   return (
     <SidebarProvider defaultOpen>
+      <GlobalAlertToaster /> {/* Added GlobalAlertToaster here */}
       <div className="flex min-h-screen">
         <Sidebar className="border-r" collapsible="icon">
           <SidebarHeader className="p-4 border-b border-sidebar-border">

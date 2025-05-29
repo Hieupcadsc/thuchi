@@ -24,7 +24,7 @@ import { useAuthStore } from "@/hooks/useAuth";
 import { FAMILY_MEMBERS } from '@/lib/constants';
 import type { Transaction, FamilyMember } from "@/types";
 import { CalendarIcon, Loader2, UploadCloud, AlertTriangle, User, Camera, FileUp } from "lucide-react";
-import { Card, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardTitle, CardDescription } from "@/components/ui/card"; // Card was missing from imports previously
 import { cn } from "@/lib/utils";
 import { format, parseISO, parse as parseDateFns, isValid as isValidDate } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
@@ -53,6 +53,25 @@ interface TransactionFormProps {
   onCancel?: () => void;
   isBillMode?: boolean;
 }
+
+// Helper function to format number with Vietnamese style separators
+const formatVnCurrency = (value: number | string | undefined): string => {
+  if (value === undefined || value === null || String(value).trim() === '') return '';
+  const numString = String(value).replace(/[^\d]/g, '');
+  if (numString === '') return '';
+
+  const num = Number(numString);
+  if (isNaN(num)) return ''; 
+
+  return num.toLocaleString('vi-VN');
+};
+
+// Helper function to parse formatted string back to number
+const parseVnCurrencyToNumber = (value: string): number => {
+  if (value === null || value === undefined) return 0;
+  return Number(String(value).replace(/[^\d]/g, '')) || 0;
+};
+
 
 export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBillMode = false }: TransactionFormProps) {
   const { addTransaction, updateTransaction, currentUser } = useAuthStore();
@@ -91,6 +110,37 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
 
   const transactionType = form.watch("type");
   const currentDescription = form.watch("description");
+  const [displayAmount, setDisplayAmount] = React.useState<string>('');
+
+
+  // Initialize displayAmount and sync with RHF value
+  React.useEffect(() => {
+    const initialAmount = transactionToEdit
+      ? Number(transactionToEdit.amount)
+      : (form.formState.defaultValues?.amount || 0);
+    
+    const currentRHFValue = form.getValues('amount');
+    if (currentRHFValue !== initialAmount) {
+        form.setValue('amount', initialAmount, { shouldValidate: !transactionToEdit }); // Validate only if new or values explicitly differ
+    }
+    // This will be handled by the watch effect below if RHF value changes
+    // For direct initialization:
+    setDisplayAmount(formatVnCurrency(initialAmount));
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactionToEdit, form.formState.defaultValues?.amount]); // form.setValue and form.getValues should ideally not be in dep array if form instance is stable.
+
+  // Watch for changes in RHF 'amount' value (e.g., from AI processing or reset)
+  // and update the displayAmount accordingly.
+  const watchedAmountFromRHF = form.watch('amount');
+  React.useEffect(() => {
+    const numericRHFValue = Number(watchedAmountFromRHF);
+    if (parseVnCurrencyToNumber(displayAmount) !== numericRHFValue) {
+      setDisplayAmount(formatVnCurrency(numericRHFValue));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedAmountFromRHF]);
+
 
   React.useEffect(() => {
     if (transactionToEdit) {
@@ -103,6 +153,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         performedBy: transactionToEdit.performedBy,
         note: transactionToEdit.note || "",
       });
+      // displayAmount will be updated by the watchedAmountFromRHF effect
       setBillImagePreview(null);
       setBillImageDataUri(null);
       setBillProcessingError(null);
@@ -121,9 +172,10 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         setBillImageDataUri(null);
         setBillProcessingError(null);
       }
+      // displayAmount will be updated by the watchedAmountFromRHF effect
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactionToEdit, form, isBillMode, currentUser]);
+  }, [transactionToEdit, form.reset, isBillMode, currentUser]);
 
 
   React.useEffect(() => {
@@ -131,10 +183,10 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         form.setValue("categoryId", "", { shouldValidate: false });
     }
     if (transactionType === "income" && !isBillMode) {
-      form.setValue("note", "");
+      form.setValue("note", ""); // Clear note for income if not bill mode
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactionType, form, transactionToEdit, isBillMode]);
+  }, [transactionType, transactionToEdit, isBillMode]); // form.setValue/getValues ideally not in dep array
 
   React.useEffect(() => {
     if (!isBillMode) {
@@ -146,7 +198,8 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         form.setValue("type", "expense", { shouldValidate: true });
       }
     }
-  }, [isBillMode, transactionToEdit, form]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBillMode, transactionToEdit]); // form.setValue ideally not in dep array
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -166,13 +219,13 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
       setBillImageDataUri(null);
     }
     if(event.target) {
-        event.target.value = '';
+        event.target.value = ''; // Reset file input
     }
   };
 
   const parseAIDate = (dateString?: string): Date | undefined => {
     if (!dateString) return undefined;
-    console.log("[TransactionForm parseAIDate] Attempting to parse AI date string:", dateString);
+    // console.log("[TransactionForm parseAIDate] Attempting to parse AI date string:", dateString);
     const formatsToTry = [
       'yyyy-MM-dd', 'dd/MM/yyyy', 'MM/dd/yyyy', 'yyyy/MM/dd',
       'dd-MM-yyyy', 'MM-dd-yyyy',
@@ -182,7 +235,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
       try {
         const parsed = parseDateFns(dateString, fmt, new Date());
         if (isValidDate(parsed)) {
-          console.log(`[TransactionForm parseAIDate] Parsed "${dateString}" with format "${fmt}" to:`, parsed);
+          // console.log(`[TransactionForm parseAIDate] Parsed "${dateString}" with format "${fmt}" to:`, parsed);
           return parsed;
         }
       } catch (e) { /* ignore */ }
@@ -190,12 +243,12 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
     try { // ISO format last attempt
       const parsed = parseISO(dateString);
       if (isValidDate(parsed)) {
-        console.log(`[TransactionForm parseAIDate] Parsed "${dateString}" with ISO to:`, parsed);
+        // console.log(`[TransactionForm parseAIDate] Parsed "${dateString}" with ISO to:`, parsed);
         return parsed;
       }
     } catch(e) { /* ignore */ }
 
-    console.warn(`[TransactionForm parseAIDate] Could not parse date string from AI: "${dateString}"`);
+    // console.warn(`[TransactionForm parseAIDate] Could not parse date string from AI: "${dateString}"`);
     return undefined;
   };
 
@@ -208,27 +261,23 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
     setBillProcessingError(null);
     try {
       const result = await processBillImage(billImageDataUri);
-      console.log("[TransactionForm handleProcessBill] AI Result:", result);
+      // console.log("[TransactionForm handleProcessBill] AI Result:", result);
 
       if (result.success && result.data) {
         const { totalAmount, transactionDate, description } = result.data;
-        let dateToSet = new Date(); // Default to today if AI fails or no date
+        let dateToSet = new Date(); 
 
-        if (totalAmount !== undefined) form.setValue("amount", totalAmount, { shouldValidate: true });
+        if (totalAmount !== undefined) form.setValue("amount", totalAmount, { shouldValidate: true }); // This will trigger watch to update displayAmount
         if (description) form.setValue("description", description, { shouldValidate: true });
 
         const parsedDate = parseAIDate(transactionDate);
         if (parsedDate) {
           dateToSet = parsedDate;
-          form.setValue("date", parsedDate, { shouldValidate: true });
         } else if (transactionDate) {
           toast({ title: "Lưu ý ngày tháng", description: `AI trả về ngày: "${transactionDate}". Không thể tự động điền, vui lòng kiểm tra và chọn thủ công. Mặc định là ngày hôm nay.`, variant: "default", duration: 7000 });
-           form.setValue("date", dateToSet, { shouldValidate: true }); // Set to today if parsing failed but AI gave a string
-        } else {
-           form.setValue("date", dateToSet, { shouldValidate: true }); // Set to today if AI gave no date
         }
-         console.log("[TransactionForm handleProcessBill] Date being set to form after AI:", dateToSet);
-
+        form.setValue("date", dateToSet, { shouldValidate: true });
+        // console.log("[TransactionForm handleProcessBill] Date being set to form after AI:", dateToSet);
 
         if (Object.keys(result.data).length === 0){
             toast({ title: "AI không tìm thấy thông tin", description: "Không thể trích xuất dữ liệu từ bill. Vui lòng nhập thủ công.", variant: "default"});
@@ -255,51 +304,50 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
     setIsSubmitting(true);
 
     const formattedDate = format(data.date, "yyyy-MM-dd");
-    // const monthYear = formattedDate.substring(0,7); // This is now calculated in useAuthStore
+    const finalPerformedBy = transactionToEdit ? data.performedBy : currentUser;
 
-    console.log("[TransactionForm onSubmit] Data submitted to useAuthStore:", {
-      description: data.description,
-      amount: data.amount,
-      date: formattedDate, // Send YYYY-MM-DD string
-      type: data.type,
-      categoryId: data.categoryId,
-      performedBy: data.performedBy, // This is crucial
-      note: data.type === 'expense' ? data.note : undefined,
-    });
+
+    // console.log("[TransactionForm onSubmit] Data submitted to useAuthStore:", {
+    //   description: data.description,
+    //   amount: data.amount,
+    //   date: formattedDate, 
+    //   type: data.type,
+    //   categoryId: data.categoryId,
+    //   performedBy: finalPerformedBy, 
+    //   note: data.type === 'expense' ? data.note : undefined,
+    // });
 
     try {
       if (transactionToEdit) {
-        // For update, we need the full transaction object format expected by updateTransaction
         const payloadForUpdate: Transaction = {
             id: transactionToEdit.id,
-            userId: transactionToEdit.userId, // Keep original userId (FAMILY_ACCOUNT_ID)
+            userId: transactionToEdit.userId, 
             description: data.description,
             amount: data.amount,
             date: formattedDate,
             type: data.type,
             categoryId: data.categoryId,
-            monthYear: formattedDate.substring(0,7), // Recalculate in case date changed
-            performedBy: data.performedBy, // Allow changing performedBy on edit
+            monthYear: formattedDate.substring(0,7), 
+            performedBy: data.performedBy, 
             note: data.type === 'expense' ? data.note : undefined,
         };
         await updateTransaction(payloadForUpdate);
       } else {
-        // For add, pass data to addTransaction, which constructs the full Transaction object
         await addTransaction({
           description: data.description,
           amount: data.amount,
-          date: formattedDate, // Pass formatted date string
+          date: formattedDate, 
           type: data.type,
           categoryId: data.categoryId,
-          performedBy: data.performedBy, // Pass the selected performer
+          performedBy: currentUser, // Always current user for new transactions
           note: data.type === 'expense' ? data.note : undefined,
         });
       }
 
-      if (!transactionToEdit) {
+      if (!transactionToEdit) { // Only reset fully if it was a new transaction
         form.reset({
             description: "",
-            amount: 0,
+            amount: 0, // RHF will be 0, displayAmount will be updated by watch
             date: new Date(),
             type: isBillMode ? "expense" : "expense",
             categoryId: "",
@@ -427,20 +475,19 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
             )}
           />
 
-         <FormField
+          <FormField
             control={form.control}
             name="performedBy"
             render={({ field }) => (
               <FormItem className="space-y-2">
                 <FormLabel>Người thực hiện</FormLabel>
-                 <FormControl>
+                {transactionToEdit ? (
+                  <FormControl>
                     <RadioGroup
                       onValueChange={field.onChange}
                       value={field.value}
                       className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
-                      // Disable if not editing and currentUser is set (auto-selects currentUser)
-                      // Enable if editing, or if currentUser is somehow null (fallback to selection)
-                      disabled={isSubmitting || (!transactionToEdit && !!currentUser)}
+                      disabled={isSubmitting}
                     >
                       {FAMILY_MEMBERS.map((member) => (
                         <FormItem key={member} className="flex items-center space-x-2 space-y-0">
@@ -450,6 +497,12 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
                       ))}
                     </RadioGroup>
                   </FormControl>
+                ) : (
+                  <div className="flex items-center space-x-2 p-2 rounded-md bg-muted/50 dark:bg-muted/30 min-h-[40px]">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">{currentUser || 'Không xác định'}</span>
+                  </div>
+                )}
                 <FormMessage />
               </FormItem>
             )}
@@ -504,8 +557,25 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
               <FormItem>
                 <FormLabel>Số tiền</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="0" {...field} disabled={isSubmitting || isProcessingBill}
-                  onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="0"
+                    name={field.name}
+                    ref={field.ref}
+                    value={displayAmount}
+                    onChange={(e) => {
+                      const inputValue = e.target.value;
+                      const numericValue = parseVnCurrencyToNumber(inputValue);
+                      field.onChange(numericValue); 
+                      setDisplayAmount(formatVnCurrency(inputValue)); 
+                    }}
+                    onBlur={(e) => {
+                      field.onBlur(); 
+                      setDisplayAmount(formatVnCurrency(form.getValues('amount')));
+                    }}
+                    disabled={isSubmitting || isProcessingBill}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -569,7 +639,15 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         )}
 
         <div className="flex flex-col sm:flex-row gap-2 pt-2">
-            <Button type="submit" className="w-full sm:flex-1" disabled={isSubmitting || isProcessingBill || (isBillMode && !transactionToEdit && !billImageDataUri && !form.formState.isDirty) }>
+            <Button 
+              type="submit" 
+              className="w-full sm:flex-1" 
+              disabled={
+                isSubmitting || 
+                isProcessingBill || 
+                (isBillMode && !transactionToEdit && !billImageDataUri && !form.formState.dirtyFields.amount && !form.formState.dirtyFields.description && !form.formState.dirtyFields.date)
+              }
+            >
             {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang lưu...</>
                         : transactionToEdit ? "Cập Nhật Giao Dịch" : "Thêm Giao Dịch"}
             </Button>

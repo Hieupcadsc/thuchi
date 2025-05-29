@@ -6,7 +6,7 @@ import { MonthlyComparisonChart } from '@/components/reports/MonthlyComparisonCh
 import { CategoryBreakdownChart } from '@/components/reports/CategoryBreakdownChart';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { useAuthStore } from '@/hooks/useAuth';
-import { FAMILY_MEMBERS } from '@/lib/constants'; // Import FAMILY_MEMBERS from constants
+import { FAMILY_MEMBERS, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID } from '@/lib/constants'; // Import FAMILY_MEMBERS from constants
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { CATEGORIES, MONTH_NAMES } from '@/lib/constants';
@@ -35,7 +35,9 @@ const chartColors = [
 const initialMemberSummary: MonthlySummary = {
   totalIncome: 0,
   totalExpense: 0,
-  balance: 0,
+  balance: 0, // Note: This balance might be confusing if it also excludes internal transfers. 
+                // For member-specific balance, it might be better to show Bank/Cash balances.
+                // For now, this balance will be totalIncome (excluding transfers) - totalExpense (excluding transfers)
 };
 
 // Helper to create initial state for member summaries and breakdowns
@@ -61,6 +63,10 @@ export default function ReportsPage() {
 
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Family-wide summary for the selected month (excluding internal transfers)
+  const [familyMonthlySummary, setFamilyMonthlySummary] = useState<MonthlySummary>(initialMemberSummary);
+
 
   const monthOptions = useMemo(() => {
     const options = [];
@@ -109,6 +115,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if (currentUser && familyId && transactions.length > 0) {
+      // Monthly Comparison Chart Data (excluding internal transfers)
       const comparisonData: MonthlyChartData[] = [];
       const currentDate = new Date();
       for (let i = 5; i >= 0; i--) {
@@ -116,8 +123,12 @@ export default function ReportsPage() {
         const monthYearKey = format(date, 'yyyy-MM');
         const monthTransactions = getTransactionsForFamilyByMonth(familyId, monthYearKey); 
         
-        const income = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-        const expense = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+        const income = monthTransactions
+          .filter(t => t.type === 'income' && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID)
+          .reduce((sum, t) => sum + t.amount, 0);
+        const expense = monthTransactions
+          .filter(t => t.type === 'expense' && t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID)
+          .reduce((sum, t) => sum + t.amount, 0);
         
         comparisonData.push({
           month: MONTH_NAMES[date.getMonth()],
@@ -130,7 +141,8 @@ export default function ReportsPage() {
       if (selectedMonth) {
         const transactionsForSelectedMonth = getTransactionsForFamilyByMonth(familyId, selectedMonth);
 
-        const familyExpenseTransactions = transactionsForSelectedMonth.filter(t => t.type === 'expense');
+        // Family-wide breakdown and summary (excluding internal transfers)
+        const familyExpenseTransactions = transactionsForSelectedMonth.filter(t => t.type === 'expense' && t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID);
         const familyBreakdown: { [key: string]: number } = {};
         familyExpenseTransactions.forEach(t => {
           const categoryName = CATEGORIES.find(c => c.id === t.categoryId)?.name || 'Khác';
@@ -141,6 +153,18 @@ export default function ReportsPage() {
         })).sort((a,b) => b.value - a.value); 
         setCategoryBreakdownDataFamily(familyCategoryData);
 
+        const familyTotalIncome = transactionsForSelectedMonth
+            .filter(t => t.type === 'income' && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID)
+            .reduce((sum, t) => sum + t.amount, 0);
+        const familyTotalExpense = familyExpenseTransactions.reduce((sum, t) => sum + t.amount, 0); // Already filtered
+        setFamilyMonthlySummary({
+            totalIncome: familyTotalIncome,
+            totalExpense: familyTotalExpense,
+            balance: familyTotalIncome - familyTotalExpense
+        });
+
+
+        // Per-member breakdown and summary (excluding internal transfers)
         const newMemberSummary = createInitialMemberData(initialMemberSummary);
         const newMemberCategoryBreakdown = createInitialMemberData<CategoryChartData[]>([]);
 
@@ -151,8 +175,8 @@ export default function ReportsPage() {
           const memberExpenseBreakdown: { [key: string]: number } = {};
 
           memberTransactions.forEach(t => {
-            if (t.type === 'income') totalIncome += t.amount;
-            else {
+            if (t.type === 'income' && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID) totalIncome += t.amount;
+            else if (t.type === 'expense' && t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID) {
               totalExpense += t.amount;
               const categoryName = CATEGORIES.find(c => c.id === t.categoryId)?.name || 'Khác';
               memberExpenseBreakdown[categoryName] = (memberExpenseBreakdown[categoryName] || 0) + t.amount;
@@ -169,6 +193,7 @@ export default function ReportsPage() {
     } else if (currentUser && familyId && !isLoading) {
         setMonthlyComparisonData([]);
         setCategoryBreakdownDataFamily([]);
+        setFamilyMonthlySummary(initialMemberSummary);
         setMemberSummary(createInitialMemberData(initialMemberSummary));
         setMemberCategoryBreakdown(createInitialMemberData<CategoryChartData[]>([]));
     }
@@ -191,12 +216,14 @@ export default function ReportsPage() {
       </div>
     );
   }
+  
+  const selectedMonthLabel = monthOptions.find(m => m.value === selectedMonth)?.label || selectedMonth;
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Báo Cáo Thu Chi Gia Đình</h1>
-        <p className="text-muted-foreground">Phân tích trực quan tình hình tài chính của gia đình và từng thành viên.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Báo Cáo Thu Chi Gia Đình (Thực tế)</h1>
+        <p className="text-muted-foreground">Phân tích trực quan tình hình tài chính (không bao gồm giao dịch rút/nạp tiền mặt nội bộ).</p>
       </div>
 
       <Card className="shadow-lg">
@@ -214,7 +241,7 @@ export default function ReportsPage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                 <div>
                     <CardTitle>Phân Tích Chi Tiết Theo Tháng</CardTitle>
-                    <CardDescription>Chọn tháng để xem phân bổ chi tiêu của gia đình và từng thành viên.</CardDescription>
+                    <CardDescription>Chọn tháng để xem phân bổ chi tiêu của gia đình và từng thành viên (không bao gồm giao dịch nội bộ).</CardDescription>
                 </div>
                 <div className="w-full sm:w-auto min-w-[200px]">
                     <Select value={selectedMonth} onValueChange={setSelectedMonth} disabled={isLoading}>
@@ -234,14 +261,19 @@ export default function ReportsPage() {
         </CardHeader>
         <CardContent className="space-y-6">
             <div>
-                <h3 className="text-xl font-semibold mb-2">Tổng Quan Gia Đình - {monthOptions.find(m=>m.value === selectedMonth)?.label}</h3>
+                <h3 className="text-xl font-semibold mb-2">Tổng Quan Gia Đình - {selectedMonthLabel}</h3>
+                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+                    <SummaryCard title={`Tổng Thu (${selectedMonthLabel})`} value={familyMonthlySummary.totalIncome} icon={TrendingUp} colorClass="text-green-500" />
+                    <SummaryCard title={`Tổng Chi (${selectedMonthLabel})`} value={familyMonthlySummary.totalExpense} icon={TrendingDown} colorClass="text-red-500" />
+                    <SummaryCard title={`Số Dư (${selectedMonthLabel})`} value={familyMonthlySummary.balance} icon={Banknote} colorClass={familyMonthlySummary.balance >= 0 ? "text-blue-500" : "text-orange-500"} />
+                </div>
                 <CategoryBreakdownChart data={categoryBreakdownDataFamily} />
             </div>
             <hr className="my-6 border-border"/>
             <div className="grid md:grid-cols-2 gap-6">
             {FAMILY_MEMBERS.map(member => (
                 <div key={member} className="space-y-4">
-                    <h3 className="text-xl font-semibold">Thống Kê Của {member} - {monthOptions.find(m=>m.value === selectedMonth)?.label}</h3>
+                    <h3 className="text-xl font-semibold">Thống Kê Của {member} - {selectedMonthLabel}</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <SummaryCard title={`Tổng Thu (${member})`} value={memberSummary[member]?.totalIncome || 0} icon={TrendingUp} colorClass="text-green-500" />
                         <SummaryCard title={`Tổng Chi (${member})`} value={memberSummary[member]?.totalExpense || 0} icon={TrendingDown} colorClass="text-red-500" />
@@ -256,3 +288,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    

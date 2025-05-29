@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import type { Transaction } from '@/types'; // MonthlySummary removed, will calculate directly
-import { MONTH_NAMES } from '@/lib/constants';
+import { MONTH_NAMES, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID } from '@/lib/constants';
 import { format, subMonths } from 'date-fns';
 
 interface DashboardSummary {
@@ -50,8 +50,9 @@ export default function DashboardPage() {
       const loadDashboardData = async () => {
         setIsLoading(true);
         const monthsToFetch = new Set<string>();
-        monthsToFetch.add(currentMonthYear);
+        monthsToFetch.add(currentMonthYear); // Current month for summary
 
+        // Last 6 months for the chart (including current)
         const currentDate = new Date();
         for (let i = 5; i >= 0; i--) {
           const date = subMonths(currentDate, i);
@@ -78,14 +79,22 @@ export default function DashboardPage() {
       let expenseCash = 0;
 
       currentMonthTransactions.forEach(t => {
+        // For Bank/Cash balances, include all transactions affecting them
         if (t.type === 'income') {
-          totalIncome += t.amount;
           if (t.paymentSource === 'bank') incomeBank += t.amount;
           else if (t.paymentSource === 'cash') incomeCash += t.amount;
         } else {
-          totalExpense += t.amount;
           if (t.paymentSource === 'bank') expenseBank += t.amount;
           else if (t.paymentSource === 'cash') expenseCash += t.amount;
+        }
+
+        // For Total Income/Expense, exclude internal transfers
+        if (t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID) {
+          if (t.type === 'income') {
+            totalIncome += t.amount;
+          } else {
+            totalExpense += t.amount;
+          }
         }
       });
       const balanceBank = incomeBank - expenseBank;
@@ -98,6 +107,7 @@ export default function DashboardPage() {
         totalBalance: balanceBank + balanceCash
       });
 
+      // Chart data should also exclude internal transfers for a clearer picture of external income/expense
       const chartData = [];
       const currentDate = new Date();
       for (let i = 5; i >= 0; i--) {
@@ -105,8 +115,12 @@ export default function DashboardPage() {
         const monthYearKey = format(date, 'yyyy-MM');
         const monthTransactions = getTransactionsForFamilyByMonth(familyId, monthYearKey);
 
-        const income = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-        const expense = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+        const income = monthTransactions
+          .filter(t => t.type === 'income' && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID)
+          .reduce((sum, t) => sum + t.amount, 0);
+        const expense = monthTransactions
+          .filter(t => t.type === 'expense' && t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID)
+          .reduce((sum, t) => sum + t.amount, 0);
 
         chartData.push({
           month: MONTH_NAMES[date.getMonth()],
@@ -154,8 +168,8 @@ export default function DashboardPage() {
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            <SummaryCard title={`Tổng Thu (${currentMonthName})`} value={summary.totalIncome} icon={TrendingUp} colorClass="text-green-500" />
-            <SummaryCard title={`Tổng Chi (${currentMonthName})`} value={summary.totalExpense} icon={TrendingDown} colorClass="text-red-500" />
+            <SummaryCard title={`Tổng Thu Thực (${currentMonthName})`} value={summary.totalIncome} icon={TrendingUp} colorClass="text-green-500" />
+            <SummaryCard title={`Tổng Chi Thực (${currentMonthName})`} value={summary.totalExpense} icon={TrendingDown} colorClass="text-red-500" />
             <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 col-span-1 relative">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">Số Dư NH ({currentMonthName})</CardTitle>
@@ -208,8 +222,8 @@ export default function DashboardPage() {
 
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle>Tổng Quan Thu Chi 6 Tháng Gần Nhất</CardTitle>
-              <CardDescription>Biểu đồ cột so sánh tổng thu và tổng chi của gia đình qua các tháng.</CardDescription>
+              <CardTitle>Tổng Quan Thu Chi 6 Tháng Gần Nhất (Thực tế)</CardTitle>
+              <CardDescription>Biểu đồ cột so sánh tổng thu và tổng chi (không tính giao dịch rút/nạp tiền mặt nội bộ) của gia đình qua các tháng.</CardDescription>
             </CardHeader>
             <CardContent>
               {monthlyChartData.length > 0 ? (
@@ -249,3 +263,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

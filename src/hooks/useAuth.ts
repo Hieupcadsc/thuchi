@@ -4,7 +4,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Transaction, UserType } from '@/types';
-import { useToast } from './use-toast'; // Assuming useToast is available for notifications
+import { toast } from './use-toast'; // Import the global toast function directly
 
 interface AuthState {
   user: UserType | null;
@@ -25,7 +25,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => set({ user: null, transactions: [] }), // Clear transactions on logout
 
       addTransaction: async (transactionData) => {
-        const { toast } = useToast();
+        // const { toast } = useToast(); // No longer call the hook here
         const user = get().user;
         if (!user) {
           toast({ title: "Lỗi", description: "Bạn cần đăng nhập để thêm giao dịch.", variant: "destructive" });
@@ -72,7 +72,7 @@ export const useAuthStore = create<AuthState>()(
       },
       
       fetchTransactionsByMonth: async (userId, monthYear) => {
-        const { toast } = useToast();
+        // const { toast } = useToast(); // No longer call the hook here
         try {
           const response = await fetch(`/api/transactions?userId=${encodeURIComponent(userId)}&monthYear=${encodeURIComponent(monthYear)}`);
           if (!response.ok) {

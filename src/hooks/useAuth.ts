@@ -54,28 +54,38 @@ export const useAuthStore = create<AuthState>()(
         });
         return false;
       },
-      logout: () => set({
-        currentUser: null,
-        familyId: null,
-        // transactions: [], // Optionally clear transactions on logout
-        // highValueExpenseAlerts: [], // Optionally clear alerts
-      }),
+      logout: () => {
+        set({
+          currentUser: null,
+          familyId: null,
+          // Consider if transactions and alerts should be cleared on logout
+          // transactions: [],
+          // highValueExpenseAlerts: [],
+        });
+        // Optionally clear all local storage if desired, but be careful
+        // localStorage.removeItem('auth-storage-v2');
+      },
 
       addTransaction: async (transactionData) => {
         const currentFamilyId = get().familyId;
-        const loggedInUser = get().currentUser; // Get the currently logged-in user for performedBy
+        const loggedInUser = get().currentUser;
 
         if (!currentFamilyId || !loggedInUser) {
           toast({ title: "Lỗi", description: "Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.", variant: "destructive" });
           return null;
         }
+         // Ensure performedBy is the logged-in user, overriding any passed value for new transactions
+        if (transactionData.performedBy !== loggedInUser) {
+            console.warn(`[useAuthStore addTransaction] performedBy mismatch. Expected: ${loggedInUser}, Got: ${transactionData.performedBy}. Overriding.`);
+            transactionData.performedBy = loggedInUser;
+        }
+
 
         const monthYear = transactionData.date.substring(0, 7);
 
         const newTransaction: Transaction = {
           id: crypto.randomUUID(),
           userId: currentFamilyId, // Use the shared family ID
-          performedBy: loggedInUser, // Who actually performed it
           description: transactionData.description,
           amount: transactionData.amount,
           date: transactionData.date,
@@ -83,6 +93,7 @@ export const useAuthStore = create<AuthState>()(
           categoryId: transactionData.categoryId,
           monthYear: monthYear,
           note: transactionData.note || undefined,
+          performedBy: transactionData.performedBy, // This is now correctly set to loggedInUser
           paymentSource: transactionData.paymentSource,
         };
 
@@ -133,6 +144,8 @@ export const useAuthStore = create<AuthState>()(
             set((state) => ({
               highValueExpenseAlerts: [...state.highValueExpenseAlerts, alert],
             }));
+            // Only toast the creator if they are the one who performed the high-value expense
+            // This check might be redundant if performedBy is always currentUser for new transactions
             if (get().currentUser === newTransaction.performedBy) {
                  toast({
                     title: "Lưu ý chi tiêu",
@@ -153,6 +166,18 @@ export const useAuthStore = create<AuthState>()(
 
       updateTransaction: async (updatedTransaction) => {
         const originalTransactions = get().transactions;
+        const loggedInUser = get().currentUser;
+
+        if (!loggedInUser) {
+          toast({ title: "Lỗi", description: "Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.", variant: "destructive" });
+          return;
+        }
+        // Optionally, ensure that only the person who performed the transaction or some admin can update it
+        // For now, we allow update if logged in.
+        // Ensure monthYear is correctly derived from the updated date
+        updatedTransaction.monthYear = updatedTransaction.date.substring(0,7);
+
+
         // Optimistic update
         set(state => ({
             transactions: state.transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t)
@@ -230,6 +255,7 @@ export const useAuthStore = create<AuthState>()(
 
       fetchTransactionsByMonth: async (familyIdToFetch, monthYear) => {
         if (familyIdToFetch !== FAMILY_ACCOUNT_ID) {
+            // console.warn(`[useAuthStore fetchTransactionsByMonth] Requested familyId "${familyIdToFetch}" does not match constant "${FAMILY_ACCOUNT_ID}". Using constant.`);
             familyIdToFetch = FAMILY_ACCOUNT_ID;
         }
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 9003}`;
@@ -262,7 +288,7 @@ export const useAuthStore = create<AuthState>()(
             let finalErrorMessage = 'Không thể tải giao dịch từ server.';
             if (errorData?.message) {
               finalErrorMessage = errorData.message;
-            } else if (responseBodyText && responseBodyText.trim() !== '' && responseBodyText.trim() !== '{}') {
+            } else if (responseBodyText && responseBodyText.trim() !== '' && !responseBodyText.trim().startsWith('<') && responseBodyText.trim() !== '{}' ) { // Avoid HTML error pages
               finalErrorMessage = `Lỗi server: ${responseBodyText.substring(0, 150)}${responseBodyText.length > 150 ? '...' : ''}`;
             } else if (response.statusText) {
               finalErrorMessage = `Lỗi server: ${response.status} ${response.statusText}`;
@@ -273,32 +299,33 @@ export const useAuthStore = create<AuthState>()(
           const fetchedTransactions: Transaction[] = await response.json();
 
           set((state) => {
-            const existingTransactionIdsForMonth = new Set(
-              state.transactions.filter(t => t.userId === familyIdToFetch && t.monthYear === monthYear).map(t => t.id)
+            // Create a map of existing transactions for quick lookups
+            const existingTransactionsMap = new Map(state.transactions.map(t => [t.id, t]));
+            
+            // Update existing or add new transactions from fetched data
+            fetchedTransactions.forEach(ft => {
+                existingTransactionsMap.set(ft.id, ft);
+            });
+
+            // Filter out transactions for the current monthYear that are no longer on the server
+            const currentMonthTransactionsFromServerIds = new Set(fetchedTransactions.map(ft => ft.id));
+            const transactionsToKeepForCurrentMonth = state.transactions.filter(t => 
+                !(t.monthYear === monthYear && t.userId === familyIdToFetch && !currentMonthTransactionsFromServerIds.has(t.id))
             );
-            const newTransactionsFromServer = fetchedTransactions.filter(ft => !existingTransactionIdsForMonth.has(ft.id));
 
-            const allOtherTransactions = state.transactions.filter(t => !(t.userId === familyIdToFetch && t.monthYear === monthYear));
-
-            const updatedTransactionsForMonth = state.transactions
-              .filter(t => t.userId === familyIdToFetch && t.monthYear === monthYear)
-              .map(existingT => {
-                const serverT = fetchedTransactions.find(ft => ft.id === existingT.id);
-                return serverT || existingT;
-              })
-              .concat(newTransactionsFromServer);
-
-            const finalTransactions = [...allOtherTransactions, ...updatedTransactionsForMonth]
+            // Rebuild the transactions array efficiently
+            // Start with transactions not in the current month/familyId context
+            const otherTransactions = transactionsToKeepForCurrentMonth.filter(t => 
+                !(t.monthYear === monthYear && t.userId === familyIdToFetch)
+            );
+            
+            const updatedTransactions = [...otherTransactions, ...fetchedTransactions]
                                       .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            return { transactions: finalTransactions };
+            
+            return { transactions: updatedTransactions };
           });
         } catch (error: any) {
           console.error(`[useAuthStore fetchTransactionsByMonth] CATCH_ALL Error for ${monthYear}:`, error.message, error.stack);
-          // toast({ // Avoid toasting here if the calling component will also toast
-          //   title: "Lỗi Tải Dữ Liệu",
-          //   description: error.message || `Không thể tải dữ liệu cho tháng ${monthYear}.`,
-          //   variant: "destructive",
-          // });
           throw error; // Re-throw to be caught by the calling component
         }
       },
@@ -342,7 +369,7 @@ export const useAuthStore = create<AuthState>()(
           date: currentDate,
           type: 'expense' as 'expense',
           categoryId: RUT_TIEN_MAT_CATEGORY_ID,
-          performedBy: loggedInUser, // Add performedBy here
+          performedBy: loggedInUser, 
           paymentSource: 'bank' as PaymentSource,
           note: note || undefined,
         };
@@ -353,28 +380,28 @@ export const useAuthStore = create<AuthState>()(
           date: currentDate,
           type: 'income' as 'income',
           categoryId: NAP_TIEN_MAT_CATEGORY_ID,
-          performedBy: loggedInUser, // Add performedBy here
+          performedBy: loggedInUser, 
           paymentSource: 'cash' as PaymentSource,
           note: note || undefined,
         };
         
-        setIsSubmitting(true); 
+        // setIsSubmitting(true); // This state is local to WithdrawCashModal
         const expenseResult = await get().addTransaction(expenseTransactionData);
         if (!expenseResult) {
           toast({ title: "Lỗi Rút Tiền", description: "Không thể tạo giao dịch chi từ ngân hàng.", variant: "destructive" });
-          setIsSubmitting(false);
+          // setIsSubmitting(false);
           return false;
         }
         const incomeResult = await get().addTransaction(incomeTransactionData);
         if (!incomeResult) {
           toast({ title: "Lỗi Rút Tiền", description: "Đã tạo giao dịch chi, nhưng không thể tạo giao dịch thu tiền mặt. Vui lòng kiểm tra lại.", variant: "destructive" });
           // Consider if you need to attempt to delete expenseResult here
-          setIsSubmitting(false);
+          // setIsSubmitting(false);
           return false;
         }
         
         toast({ title: "Thành Công", description: `Đã rút ${amount.toLocaleString('vi-VN')} VND tiền mặt.` });
-        setIsSubmitting(false);
+        // setIsSubmitting(false);
         return true;
       },
     }),
@@ -386,13 +413,8 @@ export const useAuthStore = create<AuthState>()(
         familyId: state.familyId,
         highValueExpenseAlerts: state.highValueExpenseAlerts,
         // Do not persist transactions here, as they are fetched from the API
+        // Keep transactions in memory, fetch on mount/month change
       }),
     }
   )
 );
-
-// Helper state for forms outside Zustand, if needed for submission states
-let isSubmitting = false; 
-const setIsSubmitting = (val: boolean) => { isSubmitting = val; };
-
-export { FAMILY_ACCOUNT_ID }; // Ensure FAMILY_ACCOUNT_ID is exported if needed elsewhere from this module, though it's better from constants.ts

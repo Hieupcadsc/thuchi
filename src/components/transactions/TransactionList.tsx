@@ -44,6 +44,9 @@ interface TransactionListProps {
 }
 
 export function TransactionList({ transactions, onEdit, onDelete }: TransactionListProps) {
+  // This state is still useful if you want to visually indicate which item is being considered for deletion,
+  // or if other parts of the UI need to react to it.
+  // However, for the dialog's direct operation, Radix will manage the open state of each individual AlertDialog.
   const [itemToConfirmDelete, setItemToConfirmDelete] = React.useState<Transaction | null>(null);
 
   if (transactions.length === 0) {
@@ -60,13 +63,6 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
     return CATEGORIES.find(cat => cat.id === categoryId);
   };
 
-  const handleDeleteConfirm = async () => {
-    if (itemToConfirmDelete) {
-        await onDelete(itemToConfirmDelete.id, itemToConfirmDelete.monthYear);
-        setItemToConfirmDelete(null);
-    }
-  };
-
   return (
     <TooltipProvider>
       <ScrollArea className="h-[400px] rounded-md border dark:border-gray-700">
@@ -74,10 +70,28 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
           {transactions.map((transaction) => {
             const category = getCategoryInfo(transaction.categoryId);
             const Icon = category?.icon;
+
+            const handleDeleteRequest = (e: React.MouseEvent) => {
+              e.stopPropagation();
+              setItemToConfirmDelete(transaction);
+              // Radix will open the AlertDialog associated with this trigger.
+            };
+
+            const handleCancelDeleteDialog = (e?: React.MouseEvent) => {
+              e?.stopPropagation();
+              setItemToConfirmDelete(null); // Clear state
+              // Radix handles closing the dialog.
+            };
+
+            const handleDeleteConfirmation = async (e: React.MouseEvent) => {
+              e.stopPropagation();
+              await onDelete(transaction.id, transaction.monthYear);
+              setItemToConfirmDelete(null); // Clear state after deletion
+            };
+
             return (
               <AccordionItem value={transaction.id} key={transaction.id} className="border-b dark:border-gray-700">
                 <AccordionTrigger className="w-full hover:no-underline focus:no-underline py-0 group">
-                  {/* Added group class for hover effects on buttons inside trigger */}
                   <Table className="w-full">
                     <TableBody>
                       <TableRow className="hover:bg-muted/50 dark:hover:bg-muted/20 border-none">
@@ -112,13 +126,13 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
                             {transaction.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="w-[120px] text-left py-3 pl-2 pr-1"> {/* Reduced pr for buttons */}
+                        <TableCell className="w-[120px] text-left py-3 pl-2 pr-1">
                           <div className="flex items-center">
                               <User className="h-4 w-4 mr-1 text-muted-foreground"/>
                               {transaction.performedBy || 'Không rõ'}
                           </div>
                         </TableCell>
-                        <TableCell className="w-[80px] text-right py-3 pl-1 pr-4"> {/* Cell for buttons */}
+                        <TableCell className="w-[80px] text-right py-3 pl-1 pr-4">
                             <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                                 <Tooltip>
                                     <TooltipTrigger asChild>
@@ -128,16 +142,31 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
                                     </TooltipTrigger>
                                     <TooltipContent><p>Sửa</p></TooltipContent>
                                 </Tooltip>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                         <AlertDialogTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-destructive/20 hover:text-destructive" onClick={(e) => {e.stopPropagation(); setItemToConfirmDelete(transaction);}}>
-                                                <Trash2 className="h-4 w-4"/>
-                                            </Button>
-                                        </AlertDialogTrigger>
-                                    </TooltipTrigger>
-                                    <TooltipContent><p>Xóa</p></TooltipContent>
-                                </Tooltip>
+                                
+                                <AlertDialog>
+                                  <Tooltip>
+                                      <TooltipTrigger asChild>
+                                          <AlertDialogTrigger asChild onClick={handleDeleteRequest}>
+                                              <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-destructive/20 hover:text-destructive">
+                                                  <Trash2 className="h-4 w-4"/>
+                                              </Button>
+                                          </AlertDialogTrigger>
+                                      </TooltipTrigger>
+                                      <TooltipContent><p>Xóa</p></TooltipContent>
+                                  </Tooltip>
+                                  <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                      <AlertDialogTitle>Xác nhận xóa giao dịch?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                          Hành động này không thể hoàn tác. Giao dịch "{transaction.description}" trị giá {transaction.amount.toLocaleString('vi-VN')} VND sẽ bị xóa vĩnh viễn.
+                                      </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                      <AlertDialogCancel onClick={handleCancelDeleteDialog}>Hủy</AlertDialogCancel>
+                                      <AlertDialogAction onClick={handleDeleteConfirmation} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
+                                      </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
                             </div>
                         </TableCell>
                       </TableRow>
@@ -170,22 +199,7 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
           })}
         </Accordion>
       </ScrollArea>
-      {itemToConfirmDelete && (
-        <AlertDialog open={!!itemToConfirmDelete} onOpenChange={() => setItemToConfirmDelete(null)}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                <AlertDialogTitle>Xác nhận xóa giao dịch?</AlertDialogTitle>
-                <AlertDialogDescription>
-                    Hành động này không thể hoàn tác. Giao dịch "{itemToConfirmDelete.description}" trị giá {itemToConfirmDelete.amount.toLocaleString('vi-VN')} VND sẽ bị xóa vĩnh viễn.
-                </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setItemToConfirmDelete(null)}>Hủy</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-      )}
+      {/* The single, shared AlertDialog is no longer needed here */}
     </TooltipProvider>
   );
 }

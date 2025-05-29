@@ -23,7 +23,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger as RadixAlertDialogTrigger, // Renamed to avoid conflict
+  AlertDialogTrigger as RadixAlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { CATEGORIES, PAYMENT_SOURCE_OPTIONS } from "@/lib/constants";
 import type { Transaction } from "@/types";
@@ -31,13 +31,6 @@ import { format, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { AlertTriangle, User, FileText, StickyNote, Edit3, Trash2, ChevronDown, Landmark, Wallet, Coins, CalendarDays, Tag, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// Using Radix Accordion components directly for more control
-const Accordion = AccordionPrimitive.Root;
-const AccordionItem = AccordionPrimitive.Item;
-const AccordionTrigger = AccordionPrimitive.Trigger;
-const AccordionContent = AccordionPrimitive.Content;
-
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -49,6 +42,7 @@ interface TransactionListProps {
 
 export function TransactionList({ transactions, onEdit, onDelete, selectedIds, onToggleSelect }: TransactionListProps) {
   const [itemToConfirmDelete, setItemToConfirmDelete] = React.useState<Transaction | null>(null);
+  const [openAccordionItems, setOpenAccordionItems] = React.useState<string[]>([]);
 
   if (transactions.length === 0) {
     return (
@@ -72,7 +66,12 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
   return (
     <TooltipProvider>
       <ScrollArea className="h-[400px] rounded-md border dark:border-gray-700">
-        <Accordion type="multiple" className="w-full">
+        <AccordionPrimitive.Root 
+            type="multiple" 
+            className="w-full"
+            value={openAccordionItems}
+            onValueChange={setOpenAccordionItems}
+        >
           {transactions.map((transaction) => {
             const category = getCategoryInfo(transaction.categoryId);
             const CategoryIcon = category?.icon;
@@ -100,11 +99,11 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
             
             const triggerContent = (
               <div className="w-full min-w-0">
-                {/* Mobile Summary View (Accordion Trigger) */}
-                <div className="sm:hidden flex flex-col space-y-1 p-2 pr-0">
+                {/* Mobile Summary View */}
+                <div className="flex flex-col space-y-1 p-2 pr-0 sm:hidden">
                   <div className="flex justify-between items-start">
-                    <span className="font-medium text-base truncate pr-2 flex-1">{transaction.description}</span>
-                    <span className={`font-semibold text-base whitespace-nowrap ${transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    <span className="font-medium text-sm truncate pr-2 flex-1">{transaction.description}</span>
+                    <span className={`font-semibold text-sm whitespace-nowrap ${transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                       {transaction.type === 'income' ? '+' : '-'}
                       {new Intl.NumberFormat('vi-VN').format(transaction.amount)} ₫
                     </span>
@@ -116,15 +115,15 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
                         <span className="truncate">{category?.name || transaction.categoryId}</span>
                       </div>
                     )}
-                    <div className="flex items-center">
+                     <div className="flex items-center">
                       <CalendarDays className="h-3.5 w-3.5 mr-1" />
                       <span>{format(parseISO(transaction.date), "dd/MM/yy", { locale: vi })}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Desktop Table View (Accordion Trigger) */}
-                <div className="hidden sm:flex w-full">
+                {/* Desktop Table View */}
+                <div className="hidden sm:block w-full">
                   <Table className="w-full table-fixed">
                     <TableBody>
                       <TableRow className="hover:bg-transparent dark:hover:bg-transparent border-none">
@@ -151,7 +150,7 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
                         <TableCell className="w-[10%] text-left py-3 px-2">{format(parseISO(transaction.date), "dd/MM/yyyy", { locale: vi })}</TableCell>
                         <TableCell className="w-[10%] text-left py-3 px-2">
                           <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'}
-                                className={`${transaction.type === 'income' ? 'bg-green-100 text-green-700 border-green-300 dark:bg-green-700 dark:text-green-100 dark:border-green-500' : 'bg-red-100 text-red-700 border-red-300 dark:bg-red-700 dark:text-red-100 dark:border-red-500'} hover:opacity-90`}>
+                                className={`${transaction.type === 'income' ? 'bg-green-100 text-green-700 border-green-300 dark:bg-green-700 dark:text-green-100 dark:border-green-500' : 'bg-red-100 text-red-700 border-red-300 dark:bg-red-700 dark:text-red-100 dark:border-red-500'} hover:opacity-90 text-xs`}>
                             {transaction.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}
                           </Badge>
                         </TableCell>
@@ -202,7 +201,7 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
 
             return (
             <AlertDialog key={transaction.id} open={itemToConfirmDelete?.id === transaction.id} onOpenChange={(open) => !open && setItemToConfirmDelete(null)}>
-              <AccordionItem value={transaction.id} className="border-b dark:border-gray-700 group/item">
+              <AccordionPrimitive.Item value={transaction.id} className="border-b dark:border-gray-700 group/item">
                 <div className="flex items-center w-full hover:bg-muted/50 dark:hover:bg-muted/20 focus-within:bg-muted/50 dark:focus-within:bg-muted/20">
                   <div className="p-3 sm:pl-4 sm:pr-2 sm:py-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                     <Checkbox
@@ -213,86 +212,107 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
                     />
                   </div>
                   <AccordionPrimitive.Header className="flex flex-1 min-w-0">
-                    {/* Use asChild to render a div as trigger, avoiding button-inside-button */}
-                    <AccordionTrigger asChild className={cn(
+                    <AccordionPrimitive.Trigger asChild className={cn(
                         "flex flex-1 items-center justify-between py-0 sm:py-1 text-left font-medium cursor-pointer hover:no-underline focus:outline-none w-full group-data-[state=open]/item:pb-2",
-                        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm" // Added focus styling
+                        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
                       )}>
                       <div className="flex flex-grow items-center justify-between w-full min-w-0">
                         <div className="flex-grow min-w-0">{triggerContent}</div>
                         <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 text-muted-foreground group-data-[state=open]/item:rotate-180 mx-2" />
                       </div>
-                    </AccordionTrigger>
+                    </AccordionPrimitive.Trigger>
                   </AccordionPrimitive.Header>
                 </div>
                 
-                <AccordionContent className="p-4 bg-muted/30 dark:bg-muted/20 text-sm sm:ml-12">
-                  <div className="space-y-2">
-                    <div className="flex items-start">
+                <AccordionPrimitive.Content className="overflow-hidden text-sm transition-all data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
+                  <div className="px-4 py-3 bg-muted/30 dark:bg-muted/20 sm:pl-16">
+                    <div className="space-y-2">
+                      
+                      <div className="flex items-start py-1">
                         <FileText className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
-                        <div>
-                            <span className="font-semibold text-foreground">Mô tả đầy đủ:</span>
-                            <p className="text-muted-foreground whitespace-pre-wrap">{transaction.description}</p>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-semibold text-foreground">Mô tả đầy đủ: </span>
+                          <span className="text-muted-foreground break-words">{transaction.description}</span>
                         </div>
-                    </div>
-                    <div className="flex items-center">
-                        {CategoryIcon && <Tag className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />}
-                        <span className="font-semibold text-foreground">Danh mục:</span>
-                        <span className="ml-1 text-muted-foreground">{category?.name || transaction.categoryId}</span>
-                    </div>
-                    <div className="flex items-center">
-                        <ArrowRightLeft className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />
-                        <span className="font-semibold text-foreground">Loại:</span>
-                        <span className="ml-1 text-muted-foreground">{transaction.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}</span>
-                    </div>
-                    <div className="flex items-center sm:hidden"> {/* Show only on mobile if not in trigger */}
-                        <Coins className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />
-                        <span className="font-semibold text-foreground">Số tiền:</span>
-                        <span className={`ml-1 font-medium ${transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {transaction.type === 'income' ? '+' : '-'}
-                            {new Intl.NumberFormat('vi-VN').format(transaction.amount)} ₫
-                        </span>
-                    </div>
-                    <div className="flex items-center sm:hidden"> {/* Show only on mobile if not in trigger */}
-                        <CalendarDays className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />
-                        <span className="font-semibold text-foreground">Ngày:</span>
-                        <span className="ml-1 text-muted-foreground">{format(parseISO(transaction.date), "dd/MM/yyyy", { locale: vi })}</span>
-                    </div>
-                     <div className="flex items-center">
-                        <User className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />
-                        <span className="font-semibold text-foreground">Người thực hiện:</span>
-                        <span className="ml-1 text-muted-foreground">{transaction.performedBy || 'Không rõ'}</span>
-                    </div>
-                    {paymentSourceInfo && (
-                         <div className="flex items-center">
-                            {PaymentSourceIcon && <PaymentSourceIcon className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />}
-                            <span className="font-semibold text-foreground">Nguồn tiền:</span>
-                            <span className="ml-1 text-muted-foreground">{paymentSourceInfo.label}</span>
+                      </div>
+
+                      <div className="flex items-start py-1">
+                        {CategoryIcon ? <CategoryIcon className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" /> : <Tag className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <span className="font-semibold text-foreground">Danh mục: </span>
+                          <span className="text-muted-foreground break-words">{category?.name || transaction.categoryId}</span>
                         </div>
-                    )}
-                    {transaction.note && (
-                          <div className="flex items-start">
+                      </div>
+
+                      <div className="flex items-start py-1">
+                        <ArrowRightLeft className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="font-semibold text-foreground">Loại: </span>
+                          <span className="text-muted-foreground break-words">{transaction.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}</span>
+                        </div>
+                      </div>
+                     
+                      <div className="flex items-start py-1">
+                        <Coins className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <span className="font-semibold text-foreground">Số tiền: </span>
+                            <span className={`font-medium break-words ${transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                {transaction.type === 'income' ? '+' : '-'}
+                                {new Intl.NumberFormat('vi-VN').format(transaction.amount)} ₫
+                            </span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start py-1">
+                        <CalendarDays className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="font-semibold text-foreground">Ngày: </span>
+                          <span className="text-muted-foreground break-words">{format(parseISO(transaction.date), "dd/MM/yyyy", { locale: vi })}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start py-1">
+                        <User className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
+                         <div className="flex-1 min-w-0">
+                          <span className="font-semibold text-foreground">Người thực hiện: </span>
+                          <span className="text-muted-foreground break-words">{transaction.performedBy || 'Không rõ'}</span>
+                        </div>
+                      </div>
+
+                      {paymentSourceInfo && (
+                           <div className="flex items-start py-1">
+                            {PaymentSourceIcon ? <PaymentSourceIcon className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" /> : <Wallet className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />}
+                            <div className="flex-1 min-w-0">
+                              <span className="font-semibold text-foreground">Nguồn tiền: </span>
+                              <span className="text-muted-foreground break-words">{paymentSourceInfo.label}</span>
+                            </div>
+                          </div>
+                      )}
+
+                      {transaction.note && (
+                        <div className="flex items-start py-1">
                             <StickyNote className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
-                            <div>
-                                <span className="font-semibold text-foreground">Ghi chú:</span>
-                                <p className="text-muted-foreground whitespace-pre-wrap">{transaction.note}</p>
+                            <div className="flex-1 min-w-0">
+                                <span className="font-semibold text-foreground">Ghi chú: </span>
+                                <p className="text-muted-foreground whitespace-pre-wrap break-words">{transaction.note}</p>
                             </div>
                         </div>
-                    )}
-                    <div className="text-xs text-muted-foreground/80 pt-1">ID: {transaction.id}</div>
-                    <div className="flex flex-col sm:flex-row gap-2 mt-3">
-                      <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(transaction);}} className="w-full sm:w-auto">
-                          <Edit3 className="h-4 w-4 mr-1.5"/> Sửa
-                      </Button>
-                      <RadixAlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="w-full sm:w-auto hover:bg-destructive/20 hover:text-destructive" onClick={handleDeleteRequest}>
-                              <Trash2 className="h-4 w-4 mr-1.5"/> Xóa
-                          </Button>
-                      </RadixAlertDialogTrigger>
+                      )}
+                      <div className="text-xs text-muted-foreground/80 pt-1">ID: {transaction.id}</div>
+                      
+                      <div className="flex flex-col sm:flex-row gap-2 pt-3">
+                        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(transaction);}} className="w-full sm:w-auto">
+                            <Edit3 className="h-4 w-4 mr-1.5"/> Sửa
+                        </Button>
+                        <RadixAlertDialogTrigger asChild>
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto hover:bg-destructive/20 hover:text-destructive" onClick={handleDeleteRequest}>
+                                <Trash2 className="h-4 w-4 mr-1.5"/> Xóa
+                            </Button>
+                        </RadixAlertDialogTrigger>
+                      </div>
                     </div>
                   </div>
-                </AccordionContent>
-                 {/* AlertDialogContent for individual item deletion */}
+                </AccordionPrimitive.Content>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                     <AlertDialogTitle>Xác nhận xóa giao dịch?</AlertDialogTitle>
@@ -305,13 +325,12 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
                     <AlertDialogAction onClick={handleConfirmDeleteDialog} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
-              </AccordionItem>
+              </AccordionPrimitive.Item>
               </AlertDialog>
             );
           })}
-        </Accordion>
+        </AccordionPrimitive.Root>
       </ScrollArea>
     </TooltipProvider>
   );
 }
-

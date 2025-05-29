@@ -74,9 +74,12 @@ export const useAuthStore = create<AuthState>()(
           toast({ title: "Lỗi", description: "Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.", variant: "destructive" });
           return null;
         }
-         // Ensure performedBy is the logged-in user, overriding any passed value for new transactions
+        
+        // Ensure performedBy is the logged-in user FOR NEW transactions
+        // For updates, this logic is handled in updateTransaction
+        // This check is crucial for new transactions submitted through this function.
         if (transactionData.performedBy !== loggedInUser) {
-            console.warn(`[useAuthStore addTransaction] performedBy mismatch. Expected: ${loggedInUser}, Got: ${transactionData.performedBy}. Overriding.`);
+            console.warn(`[useAuthStore addTransaction] performedBy mismatch for new transaction. Expected: ${loggedInUser}, Got: ${transactionData.performedBy}. Overriding.`);
             transactionData.performedBy = loggedInUser;
         }
 
@@ -145,7 +148,6 @@ export const useAuthStore = create<AuthState>()(
               highValueExpenseAlerts: [...state.highValueExpenseAlerts, alert],
             }));
             // Only toast the creator if they are the one who performed the high-value expense
-            // This check might be redundant if performedBy is always currentUser for new transactions
             if (get().currentUser === newTransaction.performedBy) {
                  toast({
                     title: "Lưu ý chi tiêu",
@@ -172,8 +174,7 @@ export const useAuthStore = create<AuthState>()(
           toast({ title: "Lỗi", description: "Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.", variant: "destructive" });
           return;
         }
-        // Optionally, ensure that only the person who performed the transaction or some admin can update it
-        // For now, we allow update if logged in.
+        
         // Ensure monthYear is correctly derived from the updated date
         updatedTransaction.monthYear = updatedTransaction.date.substring(0,7);
 
@@ -255,11 +256,12 @@ export const useAuthStore = create<AuthState>()(
 
       fetchTransactionsByMonth: async (familyIdToFetch, monthYear) => {
         if (familyIdToFetch !== FAMILY_ACCOUNT_ID) {
-            // console.warn(`[useAuthStore fetchTransactionsByMonth] Requested familyId "${familyIdToFetch}" does not match constant "${FAMILY_ACCOUNT_ID}". Using constant.`);
             familyIdToFetch = FAMILY_ACCOUNT_ID;
         }
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 9003}`;
-        const apiUrl = `${appUrl}/api/transactions?userId=${encodeURIComponent(familyIdToFetch)}&monthYear=${encodeURIComponent(monthYear)}`;
+        // Determine the base URL. If NEXT_PUBLIC_APP_URL is set (e.g., in Vercel deployment), use it.
+        // Otherwise, assume local development.
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 9003}`;
+        const apiUrl = `${baseUrl}/api/transactions?userId=${encodeURIComponent(familyIdToFetch)}&monthYear=${encodeURIComponent(monthYear)}`;
         
         console.log(`[useAuthStore fetchTransactionsByMonth] Attempting to fetch from: ${apiUrl}`); 
 
@@ -297,6 +299,7 @@ export const useAuthStore = create<AuthState>()(
             throw new Error(finalErrorMessage);
           }
           const fetchedTransactions: Transaction[] = await response.json();
+          console.log(`[useAuthStore fetchTransactionsByMonth] Successfully fetched ${fetchedTransactions.length} transactions for ${monthYear} from ${apiUrl}`);
 
           set((state) => {
             // Create a map of existing transactions for quick lookups
@@ -322,6 +325,7 @@ export const useAuthStore = create<AuthState>()(
             const updatedTransactions = [...otherTransactions, ...fetchedTransactions]
                                       .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
+            // console.log(`[useAuthStore fetchTransactionsByMonth] State updated. Total transactions now: ${updatedTransactions.length}`);
             return { transactions: updatedTransactions };
           });
         } catch (error: any) {
@@ -385,23 +389,18 @@ export const useAuthStore = create<AuthState>()(
           note: note || undefined,
         };
         
-        // setIsSubmitting(true); // This state is local to WithdrawCashModal
         const expenseResult = await get().addTransaction(expenseTransactionData);
         if (!expenseResult) {
           toast({ title: "Lỗi Rút Tiền", description: "Không thể tạo giao dịch chi từ ngân hàng.", variant: "destructive" });
-          // setIsSubmitting(false);
           return false;
         }
         const incomeResult = await get().addTransaction(incomeTransactionData);
         if (!incomeResult) {
           toast({ title: "Lỗi Rút Tiền", description: "Đã tạo giao dịch chi, nhưng không thể tạo giao dịch thu tiền mặt. Vui lòng kiểm tra lại.", variant: "destructive" });
-          // Consider if you need to attempt to delete expenseResult here
-          // setIsSubmitting(false);
           return false;
         }
         
         toast({ title: "Thành Công", description: `Đã rút ${amount.toLocaleString('vi-VN')} VND tiền mặt.` });
-        // setIsSubmitting(false);
         return true;
       },
     }),
@@ -418,3 +417,5 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
+// Ensure FAMILY_ACCOUNT_ID is exported if needed elsewhere from this module, though it's better from constants.ts
+// export { FAMILY_ACCOUNT_ID }; 

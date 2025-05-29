@@ -64,14 +64,21 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
       if (!headerCheck.data.values || headerCheck.data.values.length === 0 ||
           (headerCheck.data.values[0] && headerCheck.data.values[0].join(',') !== HEADER_ROW.join(','))) {
         console.warn(`[API /transactions] Header row in "${sheetName}" is missing or incorrect. Attempting to fix.`);
-        if (headerCheck.data.values && headerCheck.data.values.length > 0) {
-            console.log(`[API /transactions] Clearing existing incorrect header in "${sheetName}".`);
-            await sheets.spreadsheets.values.clear({
-                spreadsheetId,
-                range: `${sheetName}!A1:${String.fromCharCode(64 + HEADER_ROW.length)}1`,
-            });
+        // It's safer to clear only if we are sure it's not empty and incorrect, to avoid clearing a sheet that might be in use.
+        // For now, we'll just update. If the sheet was completely empty, update would work like append.
+        // If it had data but wrong header, this update might overwrite the first row if it's not actually empty.
+        // A more robust solution would check if row 1 is empty before deciding to clear or just update.
+        // For now, let's assume update is generally safe.
+        if (headerCheck.data.values && headerCheck.data.values.length > 0 && headerCheck.data.values[0].length > 0) {
+            console.log(`[API /transactions] Existing header in "${sheetName}":`, headerCheck.data.values[0].join(','));
+            console.log(`[API /transactions] Expected header:`, HEADER_ROW.join(','));
+            // To be absolutely safe, one might consider not automatically "fixing" headers if data exists beyond row 1.
+            // For this app, we'll assume auto-fixing is desired.
+             console.log(`[API /transactions] Attempting to update header row in "${sheetName}".`);
+        } else {
+             console.log(`[API /transactions] Header row in "${sheetName}" is empty or malformed. Attempting to set header.`);
         }
-        console.log(`[API /transactions] Updating header row in "${sheetName}".`);
+        
         await sheets.spreadsheets.values.update({
           spreadsheetId,
           range: `${sheetName}!A1`,
@@ -80,11 +87,12 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
             values: [HEADER_ROW],
           },
         });
-        console.log(`[API /transactions] Header row updated in "${sheetName}".`);
+        console.log(`[API /transactions] Header row updated/set in "${sheetName}".`);
       } else {
         console.log(`[API /transactions] Header row in "${sheetName}" is correct.`);
       }
     }
+    console.log(`[API /transactions] ensureSheetExistsAndHeader completed for sheet: ${sheetName}`);
   } catch (error: any) {
     console.error(`[API /transactions] Error in ensureSheetExistsAndHeader for sheet "${sheetName}":`, error.message, error.stack);
     // Propagate the error so the caller knows something went wrong
@@ -109,11 +117,11 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
       spreadsheetId: SPREADSHEET_ID,
       range: `${sheetName}!A:${String.fromCharCode(64 + HEADER_ROW.length)}`, // Fetch all defined header columns
     });
-    console.log(`[API /transactions] Successfully fetched values from sheet "${sheetName}". Processing rows.`);
+    console.log(`[API /transactions] Successfully fetched values from sheet "${sheetName}". Raw response:`, response.data.values ? `${response.data.values.length} rows` : 'No values');
 
     const rows = response.data.values;
     if (rows && rows.length > 1) { // rows.length > 1 to skip header
-      return rows
+      const transactions = rows
         .slice(1) // Skip header row
         .map((row, index): Transaction | null => {
           // Basic check for row integrity - should have at least enough core data
@@ -123,9 +131,12 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
           }
 
           const transactionUserId = row[1];
-          if (transactionUserId !== userIdToFetch) {
-            // console.log(`[API /transactions] Row ${index + 2} in sheet "${sheetName}" does not match userIdToFetch. Expected: ${userIdToFetch}, Got: ${transactionUserId}`);
-            return null; // Filter by userId (familyId)
+          // For a shared family account, all transactions belong to the familyId.
+          // The 'performedBy' field distinguishes who actually did it.
+          // So, we should always fetch all transactions if the userIdToFetch matches the FAMILY_ACCOUNT_ID.
+          if (userIdToFetch !== FAMILY_ACCOUNT_ID || transactionUserId !== FAMILY_ACCOUNT_ID) {
+             // console.log(`[API /transactions] Row ${index + 2} in sheet "${sheetName}" has UserID "${transactionUserId}" which does not match requested family ID "${userIdToFetch}". Skipping.`);
+            return null; 
           }
 
           const performedByValue = row[9] as FamilyMember | undefined;
@@ -142,7 +153,7 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
 
           return {
             id: row[0] || `row-${index + 2}-${sheetName}`, // Fallback ID if missing
-            userId: transactionUserId as UserType,
+            userId: transactionUserId as UserType, // Should be FAMILY_ACCOUNT_ID
             description: row[2] || 'Không có mô tả',
             amount: parseFloat(row[3]) || 0,
             date: row[4] || new Date().toISOString().split('T')[0], // Fallback date
@@ -155,6 +166,8 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
           };
         })
         .filter((t): t is Transaction => t !== null);
+      console.log(`[API /transactions] Parsed ${transactions.length} transactions from sheet "${sheetName}".`);
+      return transactions;
     }
     console.log(`[API /transactions] No data rows found in sheet "${sheetName}" or only header exists.`);
     return [];
@@ -256,7 +269,7 @@ export async function POST(request: NextRequest) {
   }
   try {
     const transaction = await request.json() as Transaction;
-    console.log(`[API /transactions POST] Received transaction data for ID: ${transaction.id}`);
+    console.log(`[API /transactions POST] Received transaction data for ID: ${transaction.id}, UserID: ${transaction.userId}, PerformedBy: ${transaction.performedBy}`);
 
     if (!transaction || typeof transaction !== 'object') {
         console.error("[API /transactions POST] Invalid transaction data in request body: not an object.");

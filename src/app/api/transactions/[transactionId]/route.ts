@@ -2,7 +2,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import type { Transaction, PaymentSource } from '@/types';
-import { PAYMENT_SOURCE_OPTIONS } from '@/lib/constants'; // Import if needed for validation, though type system helps
+// import { PAYMENT_SOURCE_OPTIONS } from '@/lib/constants'; // Not strictly needed here
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
 const auth = new google.auth.GoogleAuth({
@@ -10,7 +10,6 @@ const auth = new google.auth.GoogleAuth({
 });
 const sheets = google.sheets({ version: 'v4', auth });
 
-// Ensure PaymentSource is the last column
 const HEADER_ROW = ['ID', 'UserID', 'Description', 'Amount', 'Date', 'Type', 'CategoryID', 'MonthYear', 'Note', 'PerformedBy', 'PaymentSource'];
 
 
@@ -18,13 +17,13 @@ async function findRowById(spreadsheetId: string, sheetName: string, transaction
   try {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${sheetName}!A:A`, // Assuming ID is in column A
+      range: `${sheetName}!A:A`, 
     });
     const rows = response.data.values;
     if (rows) {
       for (let i = 0; i < rows.length; i++) {
         if (rows[i][0] === transactionId) {
-          return i + 1; // Return 1-based row index
+          return i + 1; 
         }
       }
     }
@@ -52,8 +51,15 @@ export async function PUT(request: NextRequest, { params }: { params: { transact
     if (!updatedTransactionData.monthYear) {
         return NextResponse.json({ message: 'monthYear is required in transaction data for update.' }, { status: 400 });
     }
-    if (!updatedTransactionData.paymentSource) { // Added paymentSource check
+    if (!updatedTransactionData.paymentSource) {
         return NextResponse.json({ message: 'paymentSource is required in transaction data for update.' }, { status: 400 });
+    }
+    // Ensure date is YYYY-MM-DD and monthYear is YYYY-MM
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(updatedTransactionData.date)) {
+        return NextResponse.json({ message: 'Invalid date format. Expected YYYY-MM-DD.' }, { status: 400 });
+    }
+    if (!/^\d{4}-\d{2}$/.test(updatedTransactionData.monthYear)) {
+        return NextResponse.json({ message: 'Invalid monthYear format. Expected YYYY-MM.' }, { status: 400 });
     }
 
     const sheetName = updatedTransactionData.monthYear;
@@ -68,19 +74,19 @@ export async function PUT(request: NextRequest, { params }: { params: { transact
       updatedTransactionData.userId,
       updatedTransactionData.description,
       updatedTransactionData.amount,
-      updatedTransactionData.date,
+      updatedTransactionData.date, // Expected YYYY-MM-DD
       updatedTransactionData.type,
       updatedTransactionData.categoryId,
-      updatedTransactionData.monthYear,
+      updatedTransactionData.monthYear, // Expected YYYY-MM
       updatedTransactionData.note || '',
       updatedTransactionData.performedBy,
-      updatedTransactionData.paymentSource || '', // Add paymentSource
+      updatedTransactionData.paymentSource || '',
     ]];
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
       range: `${sheetName}!A${rowIndex}:${String.fromCharCode(64 + HEADER_ROW.length)}${rowIndex}`,
-      valueInputOption: 'USER_ENTERED',
+      valueInputOption: 'USER_ENTERED', // Helps Sheets parse dates correctly
       requestBody: { values },
     });
 
@@ -108,7 +114,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { trans
     const sheetData = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID, ranges: [sheetName] });
     const sheetId = sheetData.data.sheets?.find(s => s.properties?.title === sheetName)?.properties?.sheetId;
 
-    if (sheetId === undefined) { // Check for undefined explicitly
+    if (sheetId === undefined) {
         return NextResponse.json({ message: `Sheet with name ${sheetName} not found.` }, { status: 404 });
     }
 
@@ -118,7 +124,6 @@ export async function DELETE(request: NextRequest, { params }: { params: { trans
       return NextResponse.json({ message: `Transaction with ID ${transactionId} not found in sheet ${sheetName}.` }, { status: 404 });
     }
 
-    // Delete the row
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
       requestBody: {
@@ -128,7 +133,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { trans
               range: {
                 sheetId: sheetId,
                 dimension: 'ROWS',
-                startIndex: rowIndex - 1, // 0-indexed
+                startIndex: rowIndex - 1,
                 endIndex: rowIndex,
               },
             },
@@ -143,3 +148,5 @@ export async function DELETE(request: NextRequest, { params }: { params: { trans
     return NextResponse.json({ message: error.message || 'Failed to delete transaction.', details: error.stack }, { status: error.code || 500 });
   }
 }
+
+    

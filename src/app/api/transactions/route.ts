@@ -1,19 +1,18 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
-import type { Transaction, UserType, FamilyMember } from '@/types'; // Added FamilyMember
+import type { Transaction, UserType, FamilyMember } from '@/types'; 
 import { google } from 'googleapis';
+import { FAMILY_MEMBERS } from '@/lib/constants'; // Import FAMILY_MEMBERS
 
 // --- Google Sheets Configuration ---
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
 
 // --- Authentication ---
-// The GCLOUD_PROJECT and GOOGLE_APPLICATION_CREDENTIALS environment variables are used by default
 const auth = new google.auth.GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 const sheets = google.sheets({ version: 'v4', auth });
 
-// Ensure PerformedBy is the last column for backward compatibility if sheets were created before
 const HEADER_ROW = ['ID', 'UserID', 'Description', 'Amount', 'Date', 'Type', 'CategoryID', 'MonthYear', 'Note', 'PerformedBy'];
 
 // --- Helper Functions ---
@@ -28,7 +27,6 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
     );
 
     if (!sheetExists) {
-      // Create new sheet
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId,
         requestBody: {
@@ -43,31 +41,27 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
           ],
         },
       });
-      // Add header to new sheet
       await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: `${sheetName}!A1`, // Start at A1
+        range: `${sheetName}!A1`, 
         valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: [HEADER_ROW],
         },
       });
     } else {
-      // Check and update header if necessary
       const headerCheck = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${sheetName}!A1:${String.fromCharCode(64 + HEADER_ROW.length)}1`, // Dynamically get range for header
+        range: `${sheetName}!A1:${String.fromCharCode(64 + HEADER_ROW.length)}1`, 
       });
       if (!headerCheck.data.values || headerCheck.data.values.length === 0 || 
           (headerCheck.data.values[0] && headerCheck.data.values[0].join(',') !== HEADER_ROW.join(','))) {
-        // Clear existing header if it's incorrect or missing
         if (headerCheck.data.values && headerCheck.data.values.length > 0) {
             await sheets.spreadsheets.values.clear({
                 spreadsheetId,
                 range: `${sheetName}!A1:${String.fromCharCode(64 + HEADER_ROW.length)}1`,
             });
         }
-        // Update/Set header
         await sheets.spreadsheets.values.update({
           spreadsheetId,
           range: `${sheetName}!A1`,
@@ -97,22 +91,25 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:${String.fromCharCode(64 + HEADER_ROW.length)}`, // Read all defined header columns
+      range: `${sheetName}!A:${String.fromCharCode(64 + HEADER_ROW.length)}`, 
     });
 
     const rows = response.data.values;
-    if (rows && rows.length > 1) { // Ensure there's more than just the header
+    if (rows && rows.length > 1) { 
       return rows
-        .slice(1) // Skip header row
+        .slice(1) 
         .map((row): Transaction | null => {
-          // Ensure row has enough data for core fields, PerformedBy might be missing in old data
-          if (row.length < HEADER_ROW.length - 2 ) return null; // Allow note and performedBy to be potentially missing
+          if (row.length < HEADER_ROW.length - 2 ) return null; 
           
-          // Filter by userId (column B, index 1) - this userId is now the familyId
-          if (row[1] === userIdToFetch) {
+          if (row[1] === userIdToFetch) { // Filter by userId (familyId)
+            const performedByValue = row[9];
+            // Ensure performedBy is one of the valid FamilyMember types, otherwise default.
+            const isValidFamilyMember = FAMILY_MEMBERS.includes(performedByValue as FamilyMember);
+            const finalPerformedBy = isValidFamilyMember ? performedByValue as FamilyMember : FAMILY_MEMBERS[0]; // Default to first member if invalid/empty
+
             return {
               id: row[0],
-              userId: row[1] as UserType, // This is the familyId
+              userId: row[1] as UserType, 
               description: row[2],
               amount: parseFloat(row[3]),
               date: row[4],
@@ -120,7 +117,7 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
               categoryId: row[6],
               monthYear: row[7],
               note: row[8] || undefined,
-              performedBy: row[9] as FamilyMember || 'Chồng', // Default to 'Chồng' or handle as undefined if necessary
+              performedBy: finalPerformedBy, 
             };
           }
           return null;
@@ -134,7 +131,7 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
         console.warn(`Sheet "${sheetName}" not found or range invalid, returning empty array.`);
         return []; 
     }
-    throw err; // Re-throw to be caught by handler
+    throw err; 
   }
 }
 
@@ -151,7 +148,7 @@ async function addTransactionToSheet(transaction: Transaction): Promise<Transact
 
     const values = [[
       transaction.id,
-      transaction.userId, // This will be the familyId
+      transaction.userId, 
       transaction.description,
       transaction.amount,
       transaction.date,
@@ -159,14 +156,14 @@ async function addTransactionToSheet(transaction: Transaction): Promise<Transact
       transaction.categoryId,
       transaction.monthYear,
       transaction.note || '',
-      transaction.performedBy, // Save who performed the transaction
+      transaction.performedBy, 
     ]];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
       range: `${sheetName}!A:${String.fromCharCode(64 + HEADER_ROW.length)}`,
       valueInputOption: 'USER_ENTERED',
-      insertDataOption: 'INSERT_ROWS', // Ensures it appends to the end
+      insertDataOption: 'INSERT_ROWS', 
       requestBody: { values },
     });
     return transaction;
@@ -178,7 +175,7 @@ async function addTransactionToSheet(transaction: Transaction): Promise<Transact
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('userId') as UserType | null; // This will be the familyId
+  const userId = searchParams.get('userId') as UserType | null; 
   const monthYear = searchParams.get('monthYear');
 
   if (!userId || !monthYear) {
@@ -209,7 +206,6 @@ export async function POST(request: NextRequest) {
     if (!transaction || typeof transaction !== 'object') {
         return NextResponse.json({ message: 'Invalid transaction data in request body' }, { status: 400 });
     }
-    // Added performedBy check
     if (!transaction.id || !transaction.userId || !transaction.description || transaction.amount === undefined || !transaction.date || !transaction.type || !transaction.categoryId || !transaction.monthYear || !transaction.performedBy) {
         return NextResponse.json({ message: 'Missing required fields in transaction data (ensure performedBy is included)' }, { status: 400 });
     }

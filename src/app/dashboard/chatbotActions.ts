@@ -12,7 +12,7 @@ async function fetchTransactionsForMonth(familyId: string, monthYear: string): P
   try {
     // Ensure NEXT_PUBLIC_APP_URL is set in your .env.local or .env file for deployed environments
     // For local development, ensure the port matches your running app.
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 9002}`;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 9003}`; // Updated port to 9003
     const apiUrl = `${appUrl}/api/transactions?userId=${encodeURIComponent(familyId)}&monthYear=${encodeURIComponent(monthYear)}`;
     
     console.log(`[ChatbotActions] Fetching transactions from: ${apiUrl}`);

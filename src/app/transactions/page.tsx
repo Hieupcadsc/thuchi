@@ -85,15 +85,19 @@ export default function TransactionsPage() {
     } else if (currentMonthYear && !isDateFilterActive) {
       await fetchTransactionsByMonth(familyId, currentMonthYear);
     } else if (monthOptions.length > 0 && !isDateFilterActive) {
-      await fetchTransactionsByMonth(familyId, monthOptions[0].value);
+      // Fallback to the first month in options if currentMonthYear is somehow not set
+      const defaultMonth = monthOptions[0].value;
+      setCurrentMonthYear(defaultMonth); // Ensure currentMonthYear is set before fetching
+      await fetchTransactionsByMonth(familyId, defaultMonth);
     }
     setIsLoading(false);
   };
-
+  
   useEffect(() => {
+    // Initial load and when specific dependencies change
     loadDataForCurrentFilters();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, familyId, currentMonthYear, isDateFilterActive, filterStartDate, filterEndDate]); // Removed fetchTransactionsByMonth
+  }, [currentUser, familyId, currentMonthYear, isDateFilterActive]); // Removed filterStartDate, filterEndDate to rely on loadDataForCurrentFilters
 
 
   const fetchTransactionsForDateRange = async (start: Date, end: Date) => {
@@ -181,7 +185,7 @@ export default function TransactionsPage() {
 
   }, [currentUser, familyId, transactions, currentMonthYear, getTransactionsForFamilyByMonth, searchTerm, filterCategory, filterPerformedBy, filterStartDate, filterEndDate, isDateFilterActive]);
 
-  const resetFilters = () => {
+  const resetFilters = async () => {
     setSearchTerm('');
     setFilterCategory(ALL_CATEGORIES_VALUE);
     setFilterPerformedBy(ALL_MEMBERS_VALUE);
@@ -189,8 +193,11 @@ export default function TransactionsPage() {
     setFilterEndDate(undefined);
     setIsDateFilterActive(false);
     setSelectedTransactionIds([]); // Clear selection when filters reset
-    if (monthOptions.length > 0) {
+    if (monthOptions.length > 0 && currentMonthYear !== monthOptions[0].value) {
         setCurrentMonthYear(monthOptions[0].value); 
+    } else {
+        // If already on the default month, or no month options, force a reload
+        await loadDataForCurrentFilters();
     }
   };
   
@@ -257,17 +264,17 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Quản Lý Giao Dịch ({currentUser})</h1>
           <p className="text-muted-foreground">Thêm mới, sửa, xóa và xem lại các khoản thu chi của gia đình.</p>
         </div>
-        <div className="flex gap-2">
-            <Button onClick={handleAddNewTransaction} size="lg" variant="outline">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button onClick={handleAddNewTransaction} size="lg" variant="outline" className="w-full sm:w-auto">
             <PlusCircle className="mr-2 h-5 w-5" />
             {isFormVisible && !editingTransaction && !isBillModeActive ? 'Đóng Form' : 'Thêm Mới'}
             </Button>
-            <Button onClick={handleAddFromBill} size="lg">
+            <Button onClick={handleAddFromBill} size="lg" className="w-full sm:w-auto">
             <Camera className="mr-2 h-5 w-5" />
             {isFormVisible && isBillModeActive ? 'Đóng Form Bill' : 'Thêm từ Bill'}
             </Button>
@@ -358,7 +365,7 @@ export default function TransactionsPage() {
                         <span className="text-sm font-medium">Từ ngày</span>
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn("h-10 justify-start text-left font-normal", !filterStartDate && "text-muted-foreground")}>
+                                <Button variant="outline" className={cn("h-10 justify-start text-left font-normal w-full", !filterStartDate && "text-muted-foreground")}>
                                     <CalendarIcon className="mr-2 h-4 w-4" />
                                     {filterStartDate ? format(filterStartDate, "dd/MM/yyyy", {locale: vi}) : <span>Chọn ngày bắt đầu</span>}
                                 </Button>
@@ -372,7 +379,7 @@ export default function TransactionsPage() {
                         <span className="text-sm font-medium">Đến ngày</span>
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn("h-10 justify-start text-left font-normal", !filterEndDate && "text-muted-foreground")}>
+                                <Button variant="outline" className={cn("h-10 justify-start text-left font-normal w-full", !filterEndDate && "text-muted-foreground")}>
                                     <CalendarIcon className="mr-2 h-4 w-4" />
                                     {filterEndDate ? format(filterEndDate, "dd/MM/yyyy", {locale: vi}) : <span>Chọn ngày kết thúc</span>}
                                 </Button>
@@ -382,7 +389,7 @@ export default function TransactionsPage() {
                             </PopoverContent>
                         </Popover>
                     </div>
-                    <Button onClick={handleApplyDateFilter} className="h-10" disabled={!filterStartDate || !filterEndDate || isLoading}>
+                    <Button onClick={handleApplyDateFilter} className="h-10 w-full md:w-auto" disabled={!filterStartDate || !filterEndDate || isLoading}>
                         {isLoading && isDateFilterActive ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Áp dụng khoảng ngày
                     </Button>
@@ -410,7 +417,7 @@ export default function TransactionsPage() {
               </CardDescription>
             </div>
             {!isDateFilterActive && (
-                <div className="w-full sm:w-auto min-w-[200px]">
+                <div className="w-full sm:w-auto min-w-[180px] sm:min-w-[200px]">
                 <Select 
                     value={currentMonthYear || (monthOptions[0]?.value ?? '')} 
                     onValueChange={(value) => {
@@ -438,20 +445,22 @@ export default function TransactionsPage() {
           </div>
           {/* Bulk Actions Section */}
           {displayTransactions.length > 0 && (
-             <div className="flex items-center gap-2 mt-4 border-t pt-4">
-                <Checkbox
-                    id="select-all-transactions"
-                    checked={selectedTransactionIds.length === displayTransactions.length && displayTransactions.length > 0}
-                    onCheckedChange={handleToggleSelectAll}
-                    aria-label="Chọn tất cả giao dịch đang hiển thị"
-                />
-                <label htmlFor="select-all-transactions" className="text-sm font-medium">
-                    Chọn tất cả ({selectedTransactionIds.length} / {displayTransactions.length})
-                </label>
+             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mt-4 border-t pt-4">
+                <div className="flex items-center gap-2">
+                    <Checkbox
+                        id="select-all-transactions"
+                        checked={selectedTransactionIds.length === displayTransactions.length && displayTransactions.length > 0}
+                        onCheckedChange={handleToggleSelectAll}
+                        aria-label="Chọn tất cả giao dịch đang hiển thị"
+                    />
+                    <label htmlFor="select-all-transactions" className="text-sm font-medium whitespace-nowrap">
+                        Chọn tất cả ({selectedTransactionIds.length}/{displayTransactions.length})
+                    </label>
+                </div>
                 {selectedTransactionIds.length > 0 && (
                 <AlertDialog>
                     <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" className="ml-auto" disabled={isBulkDeleting}>
+                        <Button variant="destructive" size="sm" className="w-full mt-2 sm:mt-0 sm:w-auto sm:ml-auto" disabled={isBulkDeleting}>
                             {isBulkDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                             Xóa mục đã chọn ({selectedTransactionIds.length})
                         </Button>

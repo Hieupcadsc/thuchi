@@ -165,7 +165,8 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         setBillProcessingError(null);
       }
     }
-  }, [transactionToEdit, form.reset, isBillMode, currentUser, form]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactionToEdit, isBillMode, currentUser]); // form removed from deps
 
   React.useEffect(() => {
     if (!transactionToEdit || (transactionToEdit && form.getValues("type") !== transactionToEdit.type)) {
@@ -175,7 +176,8 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
       form.setValue("note", "");
       form.setValue("paymentSource", "bank"); // Default payment source for income
     }
-  }, [transactionType, transactionToEdit, isBillMode, form]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactionType, transactionToEdit, isBillMode]); // form removed from deps
 
   React.useEffect(() => {
     if (!isBillMode) {
@@ -188,7 +190,8 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         form.setValue("paymentSource", "bank", { shouldValidate: true }); // Default for bill mode
       }
     }
-  }, [isBillMode, transactionToEdit, form]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBillMode, transactionToEdit]); // form removed from deps
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -445,22 +448,23 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
             render={({ field }) => (
               <FormItem className="space-y-2">
                 <FormLabel>Người thực hiện</FormLabel>
-                <FormControl>
-                  <RadioGroup
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
-                    disabled={isSubmitting || !transactionToEdit} // Disabled if new, enabled if editing
-                  >
-                    {FAMILY_MEMBERS.map((member) => (
-                      <FormItem key={member} className="flex items-center space-x-2 space-y-0">
-                        <FormControl><RadioGroupItem value={member} checked={field.value === member} /></FormControl>
-                        <FormLabel className="font-normal">{member}</FormLabel>
-                      </FormItem>
-                    ))}
-                  </RadioGroup>
-                </FormControl>
-                {!transactionToEdit && (
+                {transactionToEdit ? (
+                    <FormControl>
+                    <RadioGroup
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
+                        disabled={isSubmitting}
+                    >
+                        {FAMILY_MEMBERS.map((member) => (
+                        <FormItem key={member} className="flex items-center space-x-2 space-y-0">
+                            <FormControl><RadioGroupItem value={member} checked={field.value === member} /></FormControl>
+                            <FormLabel className="font-normal">{member}</FormLabel>
+                        </FormItem>
+                        ))}
+                    </RadioGroup>
+                    </FormControl>
+                ) : (
                     <div className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/30">
                         Tự động chọn: {currentUser}
                     </div>
@@ -633,7 +637,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
               disabled={
                 isSubmitting ||
                 isProcessingBill ||
-                (isBillMode && !transactionToEdit && !billImageDataUri && !form.formState.dirtyFields.amount && !form.formState.dirtyFields.description && !form.formState.dirtyFields.date)
+                (isBillMode && !transactionToEdit && !billImageDataUri && !(form.formState.dirtyFields.amount || form.formState.dirtyFields.description || form.formState.dirtyFields.date))
               }
             >
             {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang lưu...</>

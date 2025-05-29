@@ -57,7 +57,7 @@ export function LoginForm() {
         <CardContent className="space-y-6">
           <div>
             <Label htmlFor="user-select" className="mb-2 block text-center">Chọn tài khoản để đăng nhập:</Label>
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
               {FAMILY_MEMBERS.map((member) => (
                 <Button 
                   key={member} 

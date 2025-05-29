@@ -178,11 +178,11 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <SummaryCard title={`Tổng Thu Thực (${currentMonthName})`} value={summary.totalIncome} icon={TrendingUp} colorClass="text-green-500" />
             <SummaryCard title={`Tổng Chi Thực (${currentMonthName})`} value={summary.totalExpense} icon={TrendingDown} colorClass="text-red-500" />
             
-            <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 col-span-1 md:col-span-2 lg:col-span-1">
+            <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 col-span-1 sm:col-span-2 lg:col-span-1">
               <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="balances" className="border-b-0"> {/* Remove border from item if Card handles it */}
                   <AccordionTrigger className="hover:no-underline focus:outline-none w-full text-left p-6 data-[state=open]:pb-2 data-[state=closed]:pb-6 rounded-lg">

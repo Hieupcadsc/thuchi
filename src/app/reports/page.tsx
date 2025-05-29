@@ -243,7 +243,7 @@ export default function ReportsPage() {
                     <CardTitle>Phân Tích Chi Tiết Theo Tháng</CardTitle>
                     <CardDescription>Chọn tháng để xem phân bổ chi tiêu của gia đình và từng thành viên (không bao gồm giao dịch nội bộ).</CardDescription>
                 </div>
-                <div className="w-full sm:w-auto min-w-[200px]">
+                <div className="w-full sm:w-auto min-w-[180px] sm:min-w-[200px]">
                     <Select value={selectedMonth} onValueChange={setSelectedMonth} disabled={isLoading}>
                         <SelectTrigger>
                         <SelectValue placeholder="Chọn tháng xem chi tiết" />
@@ -270,7 +270,7 @@ export default function ReportsPage() {
                 <CategoryBreakdownChart data={categoryBreakdownDataFamily} />
             </div>
             <hr className="my-6 border-border"/>
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {FAMILY_MEMBERS.map(member => (
                 <div key={member} className="space-y-4">
                     <h3 className="text-xl font-semibold">Thống Kê Của {member} - {selectedMonthLabel}</h3>

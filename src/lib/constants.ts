@@ -1,6 +1,6 @@
 
 import type { Category, FamilyMember, PaymentSource } from '@/types';
-import { Utensils, ShoppingCart, Car, Home, Receipt, Film, HeartPulse, BookOpen, MoreHorizontal, TrendingUp, TrendingDown, LayoutDashboard, ArrowRightLeft, LineChart, Settings, LogOut, CircleDollarSign, Moon, Sun, Landmark, Wallet } from 'lucide-react'; // Added Landmark, Wallet
+import { Utensils, ShoppingCart, Car, Home, Receipt, Film, HeartPulse, BookOpen, MoreHorizontal, TrendingUp, TrendingDown, LayoutDashboard, ArrowRightLeft, LineChart, Settings, LogOut, CircleDollarSign, Moon, Sun, Landmark, Wallet, ArrowDownUp, ArrowUpDown } from 'lucide-react'; // Added ArrowDownUp, ArrowUpDown
 import type { LucideIcon } from 'lucide-react';
 
 
@@ -26,6 +26,8 @@ export const CATEGORIES: Category[] = [
   { id: 'thu_nhap_thuong', name: 'Thưởng', icon: TrendingUp, type: 'income' },
   { id: 'thu_nhap_khac', name: 'Thu nhập khác', icon: MoreHorizontal, type: 'income' },
   { id: 'chi_phi_khac', name: 'Chi phí khác', icon: MoreHorizontal, type: 'expense' },
+  { id: 'rut_tien_mat', name: 'Rút tiền mặt (NH)', icon: ArrowDownUp, type: 'expense' }, // From Bank
+  { id: 'nap_tien_mat_tu_nh', name: 'Nạp tiền mặt (từ NH)', icon: ArrowUpDown, type: 'income' }, // To Cash
 ];
 
 export const NAV_LINKS = [
@@ -40,7 +42,10 @@ export const MONTH_NAMES = [
 ];
 
 export const PERFORMED_BY_OPTIONS: FamilyMember[] = [...FAMILY_MEMBERS];
-export const THEME_TOGGLE_ICONS = { 
+export const THEME_TOGGLE_ICONS = {
   light: Moon,
   dark: Sun,
 };
+
+export const RUT_TIEN_MAT_CATEGORY_ID = 'rut_tien_mat';
+export const NAP_TIEN_MAT_CATEGORY_ID = 'nap_tien_mat_tu_nh';

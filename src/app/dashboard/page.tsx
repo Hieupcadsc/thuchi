@@ -2,11 +2,13 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link'; // Added Link
 import { useAuthStore, FAMILY_ACCOUNT_ID } from '@/hooks/useAuth';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
-import { SpendingChatbot } from '@/components/dashboard/SpendingChatbot'; // Added
-import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2 } from 'lucide-react';
+import { SpendingChatbot } from '@/components/dashboard/SpendingChatbot'; 
+import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera } from 'lucide-react'; // Added Camera
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button'; // Added Button
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import type { MonthlySummary } from '@/types';
@@ -36,10 +38,9 @@ export default function DashboardPage() {
       const loadDashboardData = async () => {
         setIsLoading(true);
         const monthsToFetch = new Set<string>();
-        monthsToFetch.add(currentMonthYear); // Current month for summary and chatbot context
+        monthsToFetch.add(currentMonthYear); 
         
         const currentDate = new Date();
-        // Fetch data for the last 6 months for the chart
         for (let i = 5; i >= 0; i--) {
           const date = subMonths(currentDate, i);
           monthsToFetch.add(format(date, 'yyyy-MM'));
@@ -113,6 +114,27 @@ export default function DashboardPage() {
             <SummaryCard title={`Tổng Chi (${MONTH_NAMES[new Date(currentMonthYear + '-01').getMonth()]})`} value={summary.totalExpense} icon={TrendingDown} colorClass="text-red-500" />
             <SummaryCard title={`Số Dư (${MONTH_NAMES[new Date(currentMonthYear + '-01').getMonth()]})`} value={summary.balance} icon={Banknote} colorClass={summary.balance >= 0 ? "text-blue-500" : "text-orange-500"} />
           </div>
+          
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle>Thêm Giao Dịch Nhanh</CardTitle>
+              <CardDescription>Thêm giao dịch mới hoặc sử dụng ảnh bill.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col sm:flex-row gap-4 items-center justify-center">
+              <Button asChild size="lg" className="w-full sm:w-auto">
+                <Link href="/transactions">
+                  <PlusCircle className="mr-2 h-5 w-5" />
+                  Thêm Giao Dịch Mới
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="w-full sm:w-auto">
+                <Link href="/transactions?mode=bill"> {/* Later we can use this query param */}
+                  <Camera className="mr-2 h-5 w-5" />
+                  Thêm từ Bill (Sắp ra mắt)
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
 
           <Card className="shadow-lg">
             <CardHeader>
@@ -151,10 +173,10 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
           
-          {/* Chatbot Section */}
           <SpendingChatbot />
         </>
       )}
     </div>
   );
 }
+

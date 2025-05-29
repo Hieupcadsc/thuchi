@@ -13,7 +13,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { useAuthStore, FAMILY_ACCOUNT_ID } from '@/hooks/useAuth';
 import type { Transaction, FamilyMember } from '@/types';
 import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS } from '@/lib/constants';
-import { PlusCircle, AlertTriangle, Loader2, Search, Filter, CalendarIcon, XCircle } from 'lucide-react';
+import { PlusCircle, AlertTriangle, Loader2, Search, Filter, CalendarIcon, XCircle, Camera } from 'lucide-react'; // Added Camera
 import { format, subMonths, isValid, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -28,6 +28,7 @@ export default function TransactionsPage() {
   
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  // Later: const [isBillMode, setIsBillMode] = useState(false);
   
   const [currentMonthYear, setCurrentMonthYear] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
@@ -104,6 +105,7 @@ export default function TransactionsPage() {
   const handleFormSuccess = async () => {
     setIsFormVisible(false);
     setEditingTransaction(null);
+    // setIsBillMode(false); // Later
     if (currentUser && familyId && currentMonthYear && !isDateFilterActive) {
       setIsLoading(true);
       await fetchTransactionsByMonth(familyId, currentMonthYear);
@@ -111,11 +113,11 @@ export default function TransactionsPage() {
     } else if (currentUser && familyId && isDateFilterActive && filterStartDate && filterEndDate) {
         // Refetch all potentially relevant data if date filter was active
          const monthsToFetch = new Set<string>();
-            let currentDate = new Date(filterStartDate);
+            let dateIterator = new Date(filterStartDate); // Renamed variable
             const lastDate = new Date(filterEndDate);
-            while (currentDate <= lastDate) {
-              monthsToFetch.add(format(currentDate, 'yyyy-MM'));
-              currentDate = startOfMonth(subMonths(currentDate, -1));
+            while (dateIterator <= lastDate) {
+              monthsToFetch.add(format(dateIterator, 'yyyy-MM'));
+              dateIterator = startOfMonth(subMonths(dateIterator, -1));
             }
             const today = new Date();
             for (let i = 0; i < 12; i++) { 
@@ -129,32 +131,46 @@ export default function TransactionsPage() {
 
   const handleEdit = (transaction: Transaction) => {
     setEditingTransaction(transaction);
+    // setIsBillMode(false); // Later
     setIsFormVisible(true);
   };
+
+  const handleAddNewTransaction = () => {
+    setEditingTransaction(null);
+    // setIsBillMode(false); // Later
+    setIsFormVisible(true);
+  };
+
+  const handleAddFromBill = () => {
+    setEditingTransaction(null);
+    // setIsBillMode(true); // Later
+    setIsFormVisible(true); // For now, just open the normal form
+    // Later: we might navigate or show a modal with file input first
+    toast({
+        title: "Tính năng sắp ra mắt!",
+        description: "Chức năng thêm giao dịch từ bill đang được phát triển.",
+    });
+  };
+
 
   const displayTransactions = useMemo(() => {
     if (!currentUser || !familyId) return [];
     
-    let sourceTransactions = transactions; // Start with all loaded transactions
+    let sourceTransactions = transactions; 
 
-    // 1. Date Range Filter (if active)
     if (isDateFilterActive && filterStartDate && filterEndDate) {
         sourceTransactions = sourceTransactions.filter(t => {
             const transactionDate = parseISO(t.date);
-            // Ensure comparison is inclusive of start and end dates by normalizing time or comparing date parts
             const startDateNormalized = new Date(filterStartDate.getFullYear(), filterStartDate.getMonth(), filterStartDate.getDate());
             const endDateNormalized = new Date(filterEndDate.getFullYear(), filterEndDate.getMonth(), filterEndDate.getDate(), 23, 59, 59, 999);
             return isValid(transactionDate) && transactionDate >= startDateNormalized && transactionDate <= endDateNormalized;
         });
     } else if (currentMonthYear && !isDateFilterActive) {
-        // 2. Month Filter (if date range is not active)
         sourceTransactions = getTransactionsForFamilyByMonth(familyId, currentMonthYear);
     }
-    // If no date filter and no month selected, it implies all transactions (though UI drives this)
 
     let filtered = sourceTransactions;
 
-    // 3. Other Filters applied to the result of date/month filtering
     if (searchTerm) {
       filtered = filtered.filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase()));
     }
@@ -176,7 +192,6 @@ export default function TransactionsPage() {
     setFilterStartDate(undefined);
     setFilterEndDate(undefined);
     setIsDateFilterActive(false);
-    // Reset currentMonthYear to default if date filter was primary view
     if (monthOptions.length > 0) {
         setCurrentMonthYear(monthOptions[0].value);
     }
@@ -189,16 +204,15 @@ export default function TransactionsPage() {
              return;
         }
         setIsDateFilterActive(true);
-         // Fetch data for the custom range
         if (currentUser && familyId) {
             const loadRangeData = async () => {
                 setIsLoading(true);
                 const monthsToFetch = new Set<string>();
-                let currentDate = new Date(filterStartDate);
+                let dateIterator = new Date(filterStartDate); // Renamed
                 const lastDate = new Date(filterEndDate);
-                while (currentDate <= lastDate) {
-                    monthsToFetch.add(format(currentDate, 'yyyy-MM'));
-                    currentDate = startOfMonth(subMonths(currentDate, -1)); // Move to start of next month
+                while (dateIterator <= lastDate) {
+                    monthsToFetch.add(format(dateIterator, 'yyyy-MM'));
+                    dateIterator = startOfMonth(subMonths(dateIterator, -1)); 
                 }
                 if (monthsToFetch.size > 0) {
                     await Promise.all(Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m)));
@@ -229,10 +243,16 @@ export default function TransactionsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Quản Lý Giao Dịch ({currentUser})</h1>
           <p className="text-muted-foreground">Thêm mới, sửa, xóa và xem lại các khoản thu chi của gia đình.</p>
         </div>
-        <Button onClick={() => { setEditingTransaction(null); setIsFormVisible(!isFormVisible); }} size="lg">
-          <PlusCircle className="mr-2 h-5 w-5" />
-          {isFormVisible && !editingTransaction ? 'Đóng Form' : editingTransaction ? 'Đóng Form Sửa' : 'Thêm Giao Dịch Mới'}
-        </Button>
+        <div className="flex gap-2">
+            <Button onClick={handleAddNewTransaction} size="lg" variant="outline">
+            <PlusCircle className="mr-2 h-5 w-5" />
+            {isFormVisible && !editingTransaction ? 'Đóng Form' : 'Thêm Mới'}
+            </Button>
+            <Button onClick={handleAddFromBill} size="lg">
+            <Camera className="mr-2 h-5 w-5" />
+            Thêm từ Bill
+            </Button>
+        </div>
       </div>
 
       {(isFormVisible || editingTransaction) && (
@@ -245,7 +265,8 @@ export default function TransactionsPage() {
             <TransactionForm 
                 onSuccess={handleFormSuccess} 
                 transactionToEdit={editingTransaction}
-                onCancel={() => { setIsFormVisible(false); setEditingTransaction(null); }}
+                onCancel={() => { setIsFormVisible(false); setEditingTransaction(null); /* setIsBillMode(false); */ }}
+                // isBillMode={isBillMode} // Later
             />
           </CardContent>
         </Card>
@@ -283,8 +304,6 @@ export default function TransactionsPage() {
                     onValueChange={(value) => {
                         if (value === "custom") {
                             setIsDateFilterActive(true);
-                            // Optionally clear month selection or set to a specific state
-                            // setCurrentMonthYear(''); 
                         } else {
                             setIsDateFilterActive(false);
                             setCurrentMonthYear(value);
@@ -361,14 +380,13 @@ export default function TransactionsPage() {
                 }
               </CardDescription>
             </div>
-             { /* Month selector hidden if date filter is active to avoid confusion */}
             {!isDateFilterActive && (
                 <div className="w-full sm:w-auto min-w-[200px]">
                 <Select 
                     value={currentMonthYear || monthOptions[0]?.value || ''} 
                     onValueChange={(value) => {
                         setCurrentMonthYear(value);
-                        setIsDateFilterActive(false); // Ensure date filter is off
+                        setIsDateFilterActive(false); 
                         setFilterStartDate(undefined);
                         setFilterEndDate(undefined);
                     }} 
@@ -390,7 +408,7 @@ export default function TransactionsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading && displayTransactions.length === 0 ? ( // Show loader if loading AND no transactions to display yet
+          {isLoading && displayTransactions.length === 0 ? ( 
             <div className="flex justify-center items-center h-[200px]">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2">Đang tải giao dịch...</p>
@@ -399,27 +417,24 @@ export default function TransactionsPage() {
             <TransactionList 
                 transactions={displayTransactions}
                 onEdit={handleEdit}
-                onDelete={async (transactionId, monthYearToDelete) => { // Renamed monthYear to monthYearToDelete
+                onDelete={async (transactionId, monthYearToDelete) => { 
                     if (!currentUser || !familyId) return;
-                    const originalTransactions = [...transactions];
-                    // Optimistic update
-                    setEditingTransaction(null); // Close form if editing this item
+                    
+                    setEditingTransaction(null); 
                     setIsFormVisible(false);
                     
-                    await deleteTransaction(transactionId, monthYearToDelete); // Use monthYearToDelete
+                    await deleteTransaction(transactionId, monthYearToDelete); 
                     
-                    // Refetch data based on current filter/view
                     if (!isDateFilterActive && currentMonthYear) {
                         await fetchTransactionsByMonth(familyId, currentMonthYear);
                     } else if (isDateFilterActive && filterStartDate && filterEndDate) {
                         const monthsToFetch = new Set<string>();
-                        let currentDateIterator = new Date(filterStartDate); // Renamed currentDate to currentDateIterator
+                        let dateIterator = new Date(filterStartDate); 
                         const lastDate = new Date(filterEndDate);
-                        while (currentDateIterator <= lastDate) {
-                            monthsToFetch.add(format(currentDateIterator, 'yyyy-MM'));
-                            currentDateIterator = startOfMonth(subMonths(currentDateIterator, -1)); // Move to start of next month
+                        while (dateIterator <= lastDate) {
+                            monthsToFetch.add(format(dateIterator, 'yyyy-MM'));
+                            dateIterator = startOfMonth(subMonths(dateIterator, -1)); 
                         }
-                        // also ensure a broader range like last 12 months is fetched if not already covered
                         const today = new Date();
                         for (let i = 0; i < 12; i++) { 
                             monthsToFetch.add(format(subMonths(today, i), 'yyyy-MM'));
@@ -428,7 +443,6 @@ export default function TransactionsPage() {
                           await Promise.all(Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m)));
                         }
                     } else {
-                        // Fallback: refetch current month if no specific filter
                         if (monthOptions.length > 0 && !isDateFilterActive) {
                             await fetchTransactionsByMonth(familyId, currentMonthYear || monthOptions[0].value);
                         }
@@ -441,6 +455,3 @@ export default function TransactionsPage() {
     </div>
   );
 }
-
-
-    

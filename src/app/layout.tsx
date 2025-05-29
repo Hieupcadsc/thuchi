@@ -1,11 +1,13 @@
+
 import type { Metadata } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { Providers } from './providers';
+import { ThemeProvider } from '@/contexts/ThemeContext'; // Added
 
-const geistSans = GeistSans; // Use the default export directly
+const geistSans = GeistSans; 
 const geistMono = GeistMono;
 
 export const metadata: Metadata = {
@@ -21,10 +23,12 @@ export default function RootLayout({
   return (
     <html lang="vi" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="antialiased">
-        <Providers>
-          {children}
-          <Toaster />
-        </Providers>
+        <ThemeProvider> {/* Added ThemeProvider */}
+          <Providers>
+            {children}
+            <Toaster />
+          </Providers>
+        </ThemeProvider>
       </body>
     </html>
   );

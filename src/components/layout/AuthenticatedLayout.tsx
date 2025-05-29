@@ -8,7 +8,8 @@ import { useAuthStore } from '@/hooks/useAuth';
 import { NAV_LINKS, APP_NAME } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { UserNav } from '@/components/layout/UserNav';
-import { GlobalAlertToaster } from '@/components/layout/GlobalAlertToaster'; // Added
+import { GlobalAlertToaster } from '@/components/layout/GlobalAlertToaster';
+import { useTheme } from '@/contexts/ThemeContext'; // Added
 import {
   SidebarProvider,
   Sidebar,
@@ -21,13 +22,14 @@ import {
   SidebarTrigger,
   SidebarFooter
 } from '@/components/ui/sidebar';
-import { LogOut, PiggyBank } from 'lucide-react';
+import { LogOut, PiggyBank, Moon, Sun } from 'lucide-react'; // Added Moon, Sun
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const currentUser = useAuthStore((state) => state.currentUser); 
   const logout = useAuthStore((state) => state.logout);
   const router = useRouter();
   const pathname = usePathname();
+  const { theme, toggleTheme } = useTheme(); // Added
 
   useEffect(() => {
     if (!currentUser) {
@@ -46,7 +48,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
   
   return (
     <SidebarProvider defaultOpen>
-      <GlobalAlertToaster /> {/* Added GlobalAlertToaster here */}
+      <GlobalAlertToaster />
       <div className="flex min-h-screen">
         <Sidebar className="border-r" collapsible="icon">
           <SidebarHeader className="p-4 border-b border-sidebar-border">
@@ -92,7 +94,12 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
               <SidebarTrigger className="md:hidden" />
               <h2 className="text-lg font-semibold">{NAV_LINKS.find(link => pathname.startsWith(link.href))?.label || APP_NAME}</h2>
             </div>
-            <UserNav />
+            <div className="flex items-center gap-2"> {/* Added gap for theme toggle */}
+              <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
+                {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+              </Button>
+              <UserNav />
+            </div>
           </header>
           <main className="flex-1 overflow-y-auto p-4 sm:p-6">
             {children}

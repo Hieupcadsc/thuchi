@@ -1,5 +1,6 @@
-import type { Category } from '@/types';
-import { Utensils, ShoppingCart, Car, Home, Receipt, Film, HeartPulse, BookOpen, MoreHorizontal, TrendingUp, TrendingDown, LayoutDashboard, ArrowRightLeft, LineChart, Settings, LogOut, CircleDollarSign } from 'lucide-react';
+
+import type { Category, FamilyMember } from '@/types'; // Added FamilyMember
+import { Utensils, ShoppingCart, Car, Home, Receipt, Film, HeartPulse, BookOpen, MoreHorizontal, TrendingUp, TrendingDown, LayoutDashboard, ArrowRightLeft, LineChart, Settings, LogOut, CircleDollarSign, Moon, Sun } from 'lucide-react'; // Added Moon, Sun
 
 export const APP_NAME = "Ngân Sách Gia Đình";
 
@@ -22,10 +23,15 @@ export const NAV_LINKS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/transactions', label: 'Giao dịch', icon: ArrowRightLeft },
   { href: '/reports', label: 'Báo cáo', icon: LineChart },
-  // { href: '/settings', label: 'Cài đặt', icon: Settings },
 ];
 
 export const MONTH_NAMES = [
   "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
   "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
 ];
+
+export const PERFORMED_BY_OPTIONS: FamilyMember[] = ['Vợ', 'Chồng']; // Used in TransactionForm
+export const THEME_TOGGLE_ICONS = { // Optional, if you want to manage icons centrally
+  light: Moon,
+  dark: Sun,
+};

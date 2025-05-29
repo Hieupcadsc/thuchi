@@ -4,7 +4,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Transaction, UserType, FamilyMember, HighValueExpenseAlert } from '@/types';
-import { toast } from './use-toast'; // Use the standalone toast function
+import { toast } from './use-toast';
 import React from 'react'; 
 
 export const FAMILY_ACCOUNT_ID: UserType = "GIA_DINH"; 
@@ -19,6 +19,8 @@ interface AuthState {
   login: (user: FamilyMember) => void;
   logout: () => void;
   addTransaction: (transaction: Omit<Transaction, 'id' | 'userId' | 'monthYear' | 'performedBy'>) => Promise<void>;
+  updateTransaction: (updatedTransaction: Transaction) => Promise<void>;
+  deleteTransaction: (transactionId: string, monthYear: string) => Promise<void>;
   fetchTransactionsByMonth: (familyId: UserType, monthYear: string) => Promise<void>;
   getTransactionsForFamilyByMonth: (familyId: UserType, monthYear: string) => Transaction[];
   markAlertAsViewedBySpouse: (alertId: string) => void;
@@ -35,15 +37,13 @@ export const useAuthStore = create<AuthState>()(
         set({ 
           currentUser: user, 
           familyId: FAMILY_ACCOUNT_ID, 
-          transactions: [], // Reset transactions on login to fetch fresh for the family
-          // Do not reset highValueExpenseAlerts here, they are persistent for the family
+          transactions: [], 
         });
       },
       logout: () => set({ 
         currentUser: null, 
         familyId: null, 
         transactions: [],
-        // highValueExpenseAlerts are kept on logout as they pertain to family data
       }),
 
       addTransaction: async (transactionData) => {
@@ -64,9 +64,8 @@ export const useAuthStore = create<AuthState>()(
           performedBy: loggedInUser,
           monthYear: monthYear,
         };
-
-        // Optimistic update for transactions
-        set((state) => ({ transactions: [...state.transactions, newTransaction] }));
+        
+        set((state) => ({ transactions: [...state.transactions, newTransaction].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
 
         try {
           const response = await fetch('/api/transactions', {
@@ -80,9 +79,15 @@ export const useAuthStore = create<AuthState>()(
             throw new Error(errorData.message || 'Không thể thêm giao dịch lên server.');
           }
           
+          const savedTransaction = await response.json();
+          // Update local state with the actual saved transaction (e.g., if server modifies it)
+          set((state) => ({ 
+            transactions: state.transactions.map(t => t.id === newTransaction.id ? savedTransaction : t)
+                                       .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          }));
+
           toast({ title: "Thành công!", description: "Đã thêm giao dịch mới." });
 
-          // Handle high-value expense alert
           if (newTransaction.type === 'expense' && newTransaction.amount > HIGH_EXPENSE_THRESHOLD) {
             const alert: HighValueExpenseAlert = {
               id: newTransaction.id,
@@ -97,7 +102,7 @@ export const useAuthStore = create<AuthState>()(
             }));
             toast({
               title: "Lưu ý chi tiêu",
-              description: `Bạn vừa ghi nhận một khoản chi lớn: ${newTransaction.amount.toLocaleString('vi-VN')} VND cho "${newTransaction.description}".`,
+              description: `${newTransaction.performedBy} vừa ghi nhận một khoản chi lớn: ${newTransaction.amount.toLocaleString('vi-VN')} VND cho "${newTransaction.description}".`,
               variant: "default",
               duration: 7000,
             });
@@ -106,46 +111,91 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: any) {
           console.error("Failed to add transaction via API:", error);
           toast({ title: "Lỗi Server", description: error.message, variant: "destructive" });
-          // Revert optimistic update on error for transactions
           set((state) => ({ transactions: state.transactions.filter(t => t.id !== newTransaction.id) }));
+        }
+      },
+
+      updateTransaction: async (updatedTransaction) => {
+        const originalTransactions = get().transactions;
+        // Optimistic update
+        set(state => ({
+            transactions: state.transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t)
+                                            .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        }));
+        try {
+            const response = await fetch(`/api/transactions/${updatedTransaction.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedTransaction),
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Không thể cập nhật giao dịch.');
+            }
+            toast({ title: "Thành công!", description: "Đã cập nhật giao dịch." });
+        } catch (error: any) {
+            console.error("Failed to update transaction:", error);
+            toast({ title: "Lỗi cập nhật", description: error.message, variant: "destructive" });
+            set({ transactions: originalTransactions }); // Revert on error
+        }
+      },
+
+      deleteTransaction: async (transactionId, monthYear) => {
+        const originalTransactions = get().transactions;
+        // Optimistic update
+        set(state => ({
+            transactions: state.transactions.filter(t => t.id !== transactionId)
+        }));
+        try {
+            const response = await fetch(`/api/transactions/${transactionId}?monthYear=${encodeURIComponent(monthYear)}`, {
+                method: 'DELETE',
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Không thể xóa giao dịch.');
+            }
+            toast({ title: "Thành công!", description: "Đã xóa giao dịch." });
+        } catch (error: any) {
+            console.error("Failed to delete transaction:", error);
+            toast({ title: "Lỗi xóa", description: error.message, variant: "destructive" });
+            set({ transactions: originalTransactions }); // Revert on error
         }
       },
       
       fetchTransactionsByMonth: async (familyIdToFetch, monthYear) => {
         if (familyIdToFetch !== FAMILY_ACCOUNT_ID) {
-            console.warn("fetchTransactionsByMonth called with incorrect familyId. Defaulting to FAMILY_ACCOUNT_ID");
             familyIdToFetch = FAMILY_ACCOUNT_ID;
         }
         try {
           const response = await fetch(`/api/transactions?userId=${encodeURIComponent(familyIdToFetch)}&monthYear=${encodeURIComponent(monthYear)}`);
           if (!response.ok) {
             const errorData = await response.json();
-            // console.error("API Error fetching transactions:", errorData);
             throw new Error(errorData.message || 'Không thể tải giao dịch từ server.');
           }
           const fetchedTransactions: Transaction[] = await response.json();
           
-          set((state) => ({
-            transactions: [
-              ...state.transactions.filter(t => !(t.userId === familyIdToFetch && t.monthYear === monthYear)), 
-              ...fetchedTransactions 
-            ]
-          }));
+          set((state) => {
+            // Create a map of existing transactions for quick lookup
+            const existingTransactionMap = new Map(state.transactions.map(t => [t.id, t]));
+            // Add or update fetched transactions
+            fetchedTransactions.forEach(ft => existingTransactionMap.set(ft.id, ft));
+            // Filter out transactions that belong to the current monthYear but were not in fetched (e.g. deleted server side)
+            const updatedTransactions = Array.from(existingTransactionMap.values())
+                                            .filter(t => !(t.userId === familyIdToFetch && t.monthYear === monthYear && !fetchedTransactions.find(ft => ft.id === t.id)))
+                                            .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            return { transactions: updatedTransactions };
+          });
         } catch (error: any) {
-          // console.error("Failed to fetch transactions via API:", error.message, error.stack);
           toast({ title: "Lỗi tải giao dịch", description: error.message, variant: "destructive" });
-           set((state) => ({
-            transactions: state.transactions.filter(t => !(t.userId === familyIdToFetch && t.monthYear === monthYear))
-          }));
         }
       },
 
       getTransactionsForFamilyByMonth: (familyIdToFilter, monthYear) => {
         if (familyIdToFilter !== FAMILY_ACCOUNT_ID) {
-            console.warn("getTransactionsForFamilyByMonth called with incorrect familyId. Defaulting to FAMILY_ACCOUNT_ID");
             familyIdToFilter = FAMILY_ACCOUNT_ID;
         }
-        return get().transactions.filter(t => t.userId === familyIdToFilter && t.monthYear === monthYear);
+        return get().transactions.filter(t => t.userId === familyIdToFilter && t.monthYear === monthYear)
+                                 .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       },
 
       markAlertAsViewedBySpouse: (alertId: string) => {
@@ -162,21 +212,11 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({ 
         currentUser: state.currentUser, 
         familyId: state.familyId,
-        highValueExpenseAlerts: state.highValueExpenseAlerts, // Persist alerts
+        highValueExpenseAlerts: state.highValueExpenseAlerts,
       }), 
     }
   )
 );
 
-export function useInitializeTransactions(monthYear: string) {
-  const { familyId, fetchTransactionsByMonth, transactions } = useAuthStore();
-
-  React.useEffect(() => {
-    if (familyId && monthYear) { 
-      const existingForMonth = transactions.some(t => t.userId === familyId && t.monthYear === monthYear);
-      if (!existingForMonth) { 
-         fetchTransactionsByMonth(familyId, monthYear);
-      }
-    }
-  }, [familyId, monthYear, fetchTransactionsByMonth, transactions]);
-}
+// This hook is no longer needed here as fetchTransactionsByMonth handles its own loading if necessary inside components
+// export function useInitializeTransactions(monthYear: string) { ... }

@@ -20,11 +20,12 @@ import { Calendar } from "@/components/ui/calendar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CategorySelector } from "./CategorySelector";
 import { AiCategorySuggestor } from "./AiCategorySuggestor";
-import { useAuthStore } from "@/hooks/useAuth";
+import { useAuthStore, FAMILY_MEMBERS } from "@/hooks/useAuth";
+import type { Transaction, FamilyMember } from "@/types";
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format } from 'date-fns';
-import { useToast } from "@/hooks/use-toast"; // Standalone toast
+import { format, parseISO } from 'date-fns';
+import { useToast } from "@/hooks/use-toast"; 
 import React from "react";
 
 const formSchema = z.object({
@@ -34,39 +35,75 @@ const formSchema = z.object({
   type: z.enum(["income", "expense"], { required_error: "Vui lòng chọn loại giao dịch" }),
   categoryId: z.string().min(1, "Vui lòng chọn danh mục"),
   note: z.string().optional(),
+  performedBy: z.enum(FAMILY_MEMBERS, { required_error: "Vui lòng chọn người thực hiện" }),
 });
 
 type TransactionFormValues = z.infer<typeof formSchema>;
 
 interface TransactionFormProps {
   onSuccess?: () => void;
+  transactionToEdit?: Transaction | null;
 }
 
-export function TransactionForm({ onSuccess }: TransactionFormProps) {
-  const { addTransaction, currentUser } = useAuthStore(); 
-  const { toast } = useToast(); // Using the hook here is fine as this is a component
+export function TransactionForm({ onSuccess, transactionToEdit }: TransactionFormProps) {
+  const { addTransaction, updateTransaction, currentUser } = useAuthStore(); 
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  const defaultPerformedBy = transactionToEdit ? transactionToEdit.performedBy : currentUser || undefined;
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
+    defaultValues: transactionToEdit ? {
+      ...transactionToEdit,
+      date: parseISO(transactionToEdit.date), // Convert date string back to Date object
+      amount: Number(transactionToEdit.amount), // Ensure amount is number
+      performedBy: transactionToEdit.performedBy,
+    } : {
       description: "",
       amount: 0,
       date: new Date(),
       type: "expense",
       categoryId: "",
       note: "",
+      performedBy: currentUser || undefined,
     },
   });
 
   const transactionType = form.watch("type");
 
   React.useEffect(() => {
-    form.resetField("categoryId");
-    if (transactionType === "income") {
-      form.setValue("note", ""); // Clear note for income
+    // Reset form if transactionToEdit changes (e.g., from editing to adding new)
+    if (transactionToEdit) {
+      form.reset({
+        ...transactionToEdit,
+        date: parseISO(transactionToEdit.date),
+        amount: Number(transactionToEdit.amount),
+        performedBy: transactionToEdit.performedBy,
+      });
+    } else {
+      form.reset({
+        description: "",
+        amount: 0,
+        date: new Date(),
+        type: "expense",
+        categoryId: "",
+        note: "",
+        performedBy: currentUser || undefined,
+      });
     }
-  }, [transactionType, form]);
+  }, [transactionToEdit, form, currentUser]);
+
+
+  React.useEffect(() => {
+    if (!transactionToEdit) { // Only reset categoryId for new transactions on type change
+        form.resetField("categoryId");
+    }
+    if (transactionType === "income") {
+      form.setValue("note", ""); 
+    }
+  }, [transactionType, form, transactionToEdit]);
+
 
   const onSubmit = async (data: TransactionFormValues) => {
     if (!currentUser) { 
@@ -76,31 +113,36 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
     setIsSubmitting(true);
 
     const formattedDate = format(data.date, "yyyy-MM-dd");
+    const monthYear = formattedDate.substring(0,7);
 
-    // performedBy will be taken from currentUser in useAuthStore.addTransaction
     const transactionPayload = {
-      description: data.description,
-      amount: data.amount,
-      date: formattedDate, 
-      type: data.type,
-      categoryId: data.categoryId,
+      ...data, // includes performedBy from form
+      date: formattedDate,
+      monthYear: monthYear,
       note: data.type === 'expense' ? data.note : undefined,
     };
 
     try {
-      await addTransaction(transactionPayload); 
-      form.reset({
-        description: "",
-        amount: 0,
-        date: new Date(),
-        type: "expense",
-        categoryId: "",
-        note: "",
-      });
+      if (transactionToEdit) {
+        await updateTransaction({ ...transactionPayload, id: transactionToEdit.id, userId: transactionToEdit.userId });
+      } else {
+        await addTransaction(transactionPayload);
+      }
+      
+      if (!transactionToEdit) { // Only reset fully if it was an add operation
+        form.reset({
+            description: "",
+            amount: 0,
+            date: new Date(),
+            type: "expense",
+            categoryId: "",
+            note: "",
+            performedBy: currentUser || undefined,
+        });
+      }
       if (onSuccess) onSuccess();
     } catch (error) {
       console.error("Error submitting transaction form:", error);
-      // Toast for error is handled within addTransaction
     } finally {
       setIsSubmitting(false);
     }
@@ -118,20 +160,16 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
               <FormControl>
                 <RadioGroup
                   onValueChange={field.onChange}
-                  defaultValue={field.value}
+                  value={field.value} // Controlled component
                   className="flex space-x-4"
                   disabled={isSubmitting}
                 >
                   <FormItem className="flex items-center space-x-2 space-y-0">
-                    <FormControl>
-                      <RadioGroupItem value="expense" />
-                    </FormControl>
+                    <FormControl><RadioGroupItem value="expense" /></FormControl>
                     <FormLabel className="font-normal">Khoản Chi</FormLabel>
                   </FormItem>
                   <FormItem className="flex items-center space-x-2 space-y-0">
-                    <FormControl>
-                      <RadioGroupItem value="income" />
-                    </FormControl>
+                    <FormControl><RadioGroupItem value="income" /></FormControl>
                     <FormLabel className="font-normal">Khoản Thu</FormLabel>
                   </FormItem>
                 </RadioGroup>
@@ -140,6 +178,34 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
             </FormItem>
           )}
         />
+        
+        {/* Performed By Field */}
+        <FormField
+          control={form.control}
+          name="performedBy"
+          render={({ field }) => (
+            <FormItem className="space-y-3">
+              <FormLabel>Người thực hiện</FormLabel>
+              <FormControl>
+                <RadioGroup
+                  onValueChange={field.onChange}
+                  value={field.value} // Controlled component
+                  className="flex space-x-4"
+                  disabled={isSubmitting}
+                >
+                  {FAMILY_MEMBERS.map(member => (
+                    <FormItem key={member} className="flex items-center space-x-2 space-y-0">
+                      <FormControl><RadioGroupItem value={member} /></FormControl>
+                      <FormLabel className="font-normal">{member}</FormLabel>
+                    </FormItem>
+                  ))}
+                </RadioGroup>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
 
         <FormField
           control={form.control}
@@ -187,7 +253,8 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
               <FormItem>
                 <FormLabel>Số tiền</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="0" {...field} disabled={isSubmitting} />
+                  <Input type="number" placeholder="0" {...field} disabled={isSubmitting} 
+                  onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -205,17 +272,10 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
                     <FormControl>
                       <Button
                         variant={"outline"}
-                        className={cn(
-                          "w-full pl-3 text-left font-normal",
-                          !field.value && "text-muted-foreground"
-                        )}
+                        className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
                         disabled={isSubmitting}
                       >
-                        {field.value ? (
-                          format(field.value, "dd/MM/yyyy")
-                        ) : (
-                          <span>Chọn ngày</span>
-                        )}
+                        {field.value ? format(field.value, "dd/MM/yyyy") : <span>Chọn ngày</span>}
                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                       </Button>
                     </FormControl>
@@ -225,9 +285,7 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
                       mode="single"
                       selected={field.value}
                       onSelect={field.onChange}
-                      disabled={(date) =>
-                        date > new Date() || date < new Date("1900-01-01") || isSubmitting
-                      }
+                      disabled={(date) => date > new Date() || date < new Date("1900-01-01") || isSubmitting}
                       initialFocus
                     />
                   </PopoverContent>
@@ -260,12 +318,8 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
         )}
         
         <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Đang lưu...
-            </>
-          ) : "Thêm Giao Dịch"}
+          {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang xử lý...</> 
+                       : transactionToEdit ? "Cập Nhật Giao Dịch" : "Thêm Giao Dịch"}
         </Button>
       </form>
     </Form>

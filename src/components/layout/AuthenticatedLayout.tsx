@@ -5,7 +5,7 @@ import React, { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/hooks/useAuth';
-import { NAV_LINKS, APP_NAME } from '@/lib/constants';
+import { NAV_LINKS, APP_NAME, FAMILY_MEMBERS } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { UserNav } from '@/components/layout/UserNav';
 import { GlobalAlertToaster } from '@/components/layout/GlobalAlertToaster';
@@ -25,7 +25,10 @@ import {
 import { LogOut, PiggyBank, Moon, Sun } from 'lucide-react'; 
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
-  const currentUser = useAuthStore((state) => state.currentUser); 
+  const { currentUser, familyId } = useAuthStore((state) => ({ // Destructure familyId as well
+    currentUser: state.currentUser,
+    familyId: state.familyId,
+  }));
   const logout = useAuthStore((state) => state.logout);
   const router = useRouter();
   const pathname = usePathname();
@@ -43,7 +46,8 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
 
   const handleLogout = () => {
     logout();
-    router.push("/login");
+    // No need to push to /login here if the effect above handles it
+    // router.push("/login"); 
   };
   
   return (
@@ -102,7 +106,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
                 <UserNav />
               </div>
             </header>
-            <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+            <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6"> {/* Added overflow-x-hidden */}
               {children}
             </main>
           </SidebarInset>

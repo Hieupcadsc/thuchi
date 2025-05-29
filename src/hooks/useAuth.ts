@@ -4,7 +4,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Transaction, UserType, FamilyMember, HighValueExpenseAlert } from '@/types';
-import { toast } from './use-toast'; // Ensure this is the standalone toast function
+import { toast } from './use-toast'; 
 import { FAMILY_MEMBERS, APP_NAME } from '@/lib/constants';
 
 export const FAMILY_ACCOUNT_ID: UserType = "GIA_DINH";
@@ -21,6 +21,7 @@ interface AuthState {
   addTransaction: (transactionData: Omit<Transaction, 'id' | 'userId' | 'monthYear' | 'performedBy' | 'note'> & { date: string, performedBy: FamilyMember, note?: string }) => Promise<void>;
   updateTransaction: (updatedTransaction: Transaction) => Promise<void>;
   deleteTransaction: (transactionId: string, monthYear: string) => Promise<void>;
+  bulkDeleteTransactions: (transactionsToDelete: Array<{ id: string, monthYear: string }>) => Promise<void>; // Added
   fetchTransactionsByMonth: (familyId: UserType, monthYear: string) => Promise<void>;
   getTransactionsForFamilyByMonth: (familyId: UserType, monthYear: string) => Transaction[];
   markAlertAsViewedBySpouse: (alertId: string) => void;
@@ -38,7 +39,6 @@ export const useAuthStore = create<AuthState>()(
           set({
             currentUser: user,
             familyId: FAMILY_ACCOUNT_ID,
-            // transactions: [], // Keep existing transactions on login if any
           });
           return true;
         }
@@ -52,35 +52,33 @@ export const useAuthStore = create<AuthState>()(
       logout: () => set({
         currentUser: null,
         familyId: null,
-        // transactions: [], // Optionally clear transactions on logout
-        // highValueExpenseAlerts: [], // Optionally clear alerts on logout
       }),
 
       addTransaction: async (transactionData) => {
         const currentFamilyId = get().familyId;
-        // performedBy is now passed in transactionData
-        // const loggedInUser = get().currentUser;
+        const loggedInUser = get().currentUser;
 
 
-        if (!currentFamilyId || !transactionData.performedBy) {
-          toast({ title: "Lỗi", description: "Không tìm thấy thông tin người dùng hoặc người thực hiện. Vui lòng đăng nhập lại.", variant: "destructive" });
+        if (!currentFamilyId || !loggedInUser) {
+          toast({ title: "Lỗi", description: "Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.", variant: "destructive" });
           return;
         }
-        console.log("[useAuthStore addTransaction] Received data for add:", transactionData);
-
+        
         const monthYear = transactionData.date.substring(0, 7);
 
         const newTransaction: Transaction = {
-          ...transactionData, // description, amount, date (already formatted YYYY-MM-DD), type, categoryId, note?
           id: crypto.randomUUID(),
-          userId: currentFamilyId,
-          performedBy: transactionData.performedBy,
+          userId: currentFamilyId, 
+          performedBy: loggedInUser, 
+          description: transactionData.description,
+          amount: transactionData.amount,
+          date: transactionData.date, 
+          type: transactionData.type,
+          categoryId: transactionData.categoryId,
           monthYear: monthYear,
           note: transactionData.note || undefined,
         };
-        console.log("[useAuthStore addTransaction] Constructed newTransaction:", newTransaction);
-
-
+        
         const originalTransactions = get().transactions;
         set((state) => ({ transactions: [...state.transactions, newTransaction].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
 
@@ -115,12 +113,16 @@ export const useAuthStore = create<AuthState>()(
             set((state) => ({
               highValueExpenseAlerts: [...state.highValueExpenseAlerts, alert],
             }));
-            toast({
-              title: "Lưu ý chi tiêu",
-              description: `${newTransaction.performedBy} vừa ghi nhận một khoản chi lớn: ${newTransaction.amount.toLocaleString('vi-VN')} VND cho "${newTransaction.description}".`,
-              variant: "default",
-              duration: 7000,
-            });
+            // Toast for the spouse will be handled by GlobalAlertToaster
+            // Toast for the current user who made the large expense:
+            if (get().currentUser === newTransaction.performedBy) {
+                 toast({
+                    title: "Lưu ý chi tiêu",
+                    description: `Bạn vừa ghi nhận một khoản chi lớn: ${newTransaction.amount.toLocaleString('vi-VN')} VND cho "${newTransaction.description}".`,
+                    variant: "default",
+                    duration: 7000,
+                });
+            }
           }
 
         } catch (error: any) {
@@ -132,7 +134,6 @@ export const useAuthStore = create<AuthState>()(
 
       updateTransaction: async (updatedTransaction) => {
         const originalTransactions = get().transactions;
-        console.log("[useAuthStore updateTransaction] Updating with:", updatedTransaction);
         set(state => ({
             transactions: state.transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t)
                                             .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -176,6 +177,37 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      bulkDeleteTransactions: async (transactionsToDelete) => {
+        if (transactionsToDelete.length === 0) return;
+        const originalTransactions = get().transactions;
+        const idsToDelete = new Set(transactionsToDelete.map(t => t.id));
+
+        // Optimistic update
+        set(state => ({
+            transactions: state.transactions.filter(t => !idsToDelete.has(t.id))
+        }));
+
+        try {
+            const response = await fetch(`/api/transactions/bulk`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transactions: transactionsToDelete }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `Không thể xóa hàng loạt giao dịch. ${errorData.details || ''}`);
+            }
+            const result = await response.json();
+            toast({ title: "Thành công!", description: result.message || `Đã xóa ${result.deletedCount || transactionsToDelete.length} giao dịch.` });
+        } catch (error: any) {
+            console.error("Failed to bulk delete transactions:", error);
+            toast({ title: "Lỗi Xóa Hàng Loạt", description: error.message, variant: "destructive" });
+            set({ transactions: originalTransactions }); // Revert optimistic update on error
+        }
+      },
+
+
       fetchTransactionsByMonth: async (familyIdToFetch, monthYear) => {
         if (familyIdToFetch !== FAMILY_ACCOUNT_ID) {
             familyIdToFetch = FAMILY_ACCOUNT_ID;
@@ -188,25 +220,31 @@ export const useAuthStore = create<AuthState>()(
             throw new Error(errorData.message || 'Không thể tải giao dịch từ server.');
           }
           const fetchedTransactions: Transaction[] = await response.json();
-          console.log(`[useAuthStore] Fetched ${fetchedTransactions.length} transactions from API for ${monthYear}`);
-
+          
           set((state) => {
-            const existingTransactionMap = new Map(state.transactions.map(t => [t.id, t]));
-            fetchedTransactions.forEach(ft => existingTransactionMap.set(ft.id, ft));
+            const existingTransactionIdsForMonth = new Set(
+              state.transactions.filter(t => t.userId === familyIdToFetch && t.monthYear === monthYear).map(t => t.id)
+            );
+            const newTransactionsFromServer = fetchedTransactions.filter(ft => !existingTransactionIdsForMonth.has(ft.id));
+            
+            const allOtherTransactions = state.transactions.filter(t => !(t.userId === familyIdToFetch && t.monthYear === monthYear));
+            
+            const updatedTransactionsForMonth = state.transactions
+              .filter(t => t.userId === familyIdToFetch && t.monthYear === monthYear)
+              .map(existingT => {
+                const serverT = fetchedTransactions.find(ft => ft.id === existingT.id);
+                return serverT || existingT; // Prefer server version if exists
+              })
+              .concat(newTransactionsFromServer); // Add new ones not in local state for this month
 
-            const updatedTransactions = Array.from(existingTransactionMap.values())
-                                            .filter(t => {
-                                                if (t.userId === familyIdToFetch && t.monthYear === monthYear) {
-                                                    return fetchedTransactions.some(ft => ft.id === t.id);
-                                                }
-                                                return true;
-                                            })
-                                            .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            return { transactions: updatedTransactions };
+            const finalTransactions = [...allOtherTransactions, ...updatedTransactionsForMonth]
+                                      .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            
+            return { transactions: finalTransactions };
           });
         } catch (error: any) {
-          toast({ title: "Lỗi tải giao dịch", description: error.message, variant: "destructive" });
-          console.error("Error fetching transactions in useAuthStore:", error);
+          // toast({ title: "Lỗi tải giao dịch", description: error.message, variant: "destructive" });
+          console.error(`[useAuthStore fetchTransactionsByMonth] Error for ${monthYear}:`, error.message);
         }
       },
 
@@ -216,7 +254,7 @@ export const useAuthStore = create<AuthState>()(
         }
         const allTransactions = get().transactions;
         const filtered = allTransactions.filter(t => t.userId === familyIdToFilter && t.monthYear === monthYear);
-        console.log(`[useAuthStore] getTransactionsForFamilyByMonth for ${monthYear} (familyId: ${familyIdToFilter}): Found ${filtered.length} of ${allTransactions.length} total. Filters: categoryId, performedBy might apply later.`, {filteredTransactions: filtered.map(f=> ({id: f.id, date:f.date, monthYear: f.monthYear, desc: f.description}))});
+        // console.log(`[useAuthStore] getTransactionsForFamilyByMonth for ${monthYear} (familyId: ${familyIdToFilter}): Found ${filtered.length} of ${allTransactions.length} total.`, {filteredTransactionIds: filtered.map(f=>f.id)});
         return filtered.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       },
 
@@ -229,26 +267,17 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'auth-storage-v2', // Changed name to potentially reset storage if needed, or keep old one
+      name: 'auth-storage-v2', 
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         currentUser: state.currentUser,
         familyId: state.familyId,
         highValueExpenseAlerts: state.highValueExpenseAlerts,
-        // Do not persist transactions here if they are always fetched,
-        // or be careful about merging logic if they are.
-        // For now, not persisting transactions to simplify and rely on fetch.
       }),
        onRehydrateStorage: (state) => {
-        console.log("[useAuthStore] Hydration finished.");
-        // return (state, error) => {
-        //   if (error) {
-        //     console.error("[useAuthStore] An error happened during hydration", error);
-        //   } else {
-        //     console.log("[useAuthStore] Hydration finished.");
-        //   }
-        // };
+        // console.log("[useAuthStore] Hydration finished.");
       },
     }
   )
 );
+

@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox"; // Added Checkbox
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -41,9 +42,11 @@ interface TransactionListProps {
   transactions: Transaction[];
   onEdit: (transaction: Transaction) => void;
   onDelete: (transactionId: string, monthYear: string) => Promise<void>;
+  selectedIds: string[]; // Added selectedIds
+  onToggleSelect: (transactionId: string) => void; // Added onToggleSelect
 }
 
-export function TransactionList({ transactions, onEdit, onDelete }: TransactionListProps) {
+export function TransactionList({ transactions, onEdit, onDelete, selectedIds, onToggleSelect }: TransactionListProps) {
   const [itemToConfirmDelete, setItemToConfirmDelete] = React.useState<Transaction | null>(null);
 
   if (transactions.length === 0) {
@@ -67,6 +70,7 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
           {transactions.map((transaction) => {
             const category = getCategoryInfo(transaction.categoryId);
             const Icon = category?.icon;
+            const isSelected = selectedIds.includes(transaction.id);
 
             const handleDeleteRequest = (e: React.MouseEvent) => {
               e.stopPropagation();
@@ -80,7 +84,7 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
 
             const handleDeleteConfirmation = async (e: React.MouseEvent) => {
               e.stopPropagation();
-              if (itemToConfirmDelete) { // Ensure itemToConfirmDelete is not null
+              if (itemToConfirmDelete) { 
                 await onDelete(itemToConfirmDelete.id, itemToConfirmDelete.monthYear);
               }
               setItemToConfirmDelete(null); 
@@ -90,27 +94,36 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
               <AccordionItem value={transaction.id} key={transaction.id} className="border-b dark:border-gray-700">
                 <AccordionTrigger className="w-full hover:no-underline focus:no-underline py-0 group text-left">
                   {/* Mobile optimized view for trigger */}
-                  <div className="flex flex-col sm:hidden w-full p-3 space-y-1">
-                    <div className="flex justify-between items-start">
-                      <span className="font-medium truncate pr-2 flex-1">{transaction.description}</span>
-                      <span className={`font-semibold ${transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                        {transaction.type === 'income' ? '+' : '-'}
-                        {new Intl.NumberFormat('vi-VN').format(transaction.amount)} ₫
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs text-muted-foreground">
-                      <div className="flex items-center">
-                        {Icon && <Icon className="h-3.5 w-3.5 mr-1" />}
-                        <span>{category?.name || transaction.categoryId}</span>
+                  <div className="flex items-start sm:hidden w-full p-3 space-x-2">
+                     <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => onToggleSelect(transaction.id)}
+                        onClick={(e) => e.stopPropagation()} // Prevent accordion toggle
+                        aria-label={`Chọn giao dịch ${transaction.description}`}
+                        className="mt-1 flex-shrink-0"
+                      />
+                    <div className="flex flex-col w-full space-y-1 ml-1">
+                      <div className="flex justify-between items-start">
+                        <span className="font-medium truncate pr-2 flex-1">{transaction.description}</span>
+                        <span className={`font-semibold ${transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          {transaction.type === 'income' ? '+' : '-'}
+                          {new Intl.NumberFormat('vi-VN').format(transaction.amount)} ₫
+                        </span>
                       </div>
-                       <div className="flex items-center">
-                         <User className="h-3.5 w-3.5 mr-1" /> 
-                         {transaction.performedBy || 'Không rõ'}
-                       </div>
-                    </div>
-                     <div className="text-xs text-muted-foreground">
-                        {format(parseISO(transaction.date), "dd/MM/yyyy", { locale: vi })}
+                      <div className="flex justify-between items-center text-xs text-muted-foreground">
+                        <div className="flex items-center">
+                          {Icon && <Icon className="h-3.5 w-3.5 mr-1" />}
+                          <span>{category?.name || transaction.categoryId}</span>
+                        </div>
+                         <div className="flex items-center">
+                           <User className="h-3.5 w-3.5 mr-1" /> 
+                           {transaction.performedBy || 'Không rõ'}
+                         </div>
                       </div>
+                       <div className="text-xs text-muted-foreground">
+                          {format(parseISO(transaction.date), "dd/MM/yyyy", { locale: vi })}
+                        </div>
+                    </div>
                   </div>
 
                   {/* Desktop view for trigger */}
@@ -118,7 +131,15 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
                     <Table className="w-full">
                       <TableBody>
                         <TableRow className="hover:bg-muted/50 dark:hover:bg-muted/20 border-none">
-                          <TableCell className="font-medium w-[30%] truncate text-left py-3 pl-4 pr-2">
+                           <TableCell className="w-[5%] py-3 pl-4 pr-1">
+                             <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => onToggleSelect(transaction.id)}
+                                onClick={(e) => e.stopPropagation()} // Prevent accordion toggle
+                                aria-label={`Chọn giao dịch ${transaction.description}`}
+                              />
+                           </TableCell>
+                          <TableCell className="font-medium w-[28%] truncate text-left py-3 px-2">
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span>{transaction.description}</span>
@@ -128,7 +149,7 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
                                 </TooltipContent>
                               </Tooltip>
                           </TableCell>
-                          <TableCell className="w-[20%] text-left py-3 px-2">
+                          <TableCell className="w-[17%] text-left py-3 px-2">
                             {category && Icon ? (
                               <div className="flex items-center">
                                 <Icon className="h-4 w-4 mr-2 text-muted-foreground" />
@@ -177,18 +198,20 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
                                         </TooltipTrigger>
                                         <TooltipContent><p>Xóa</p></TooltipContent>
                                     </Tooltip>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                        <AlertDialogTitle>Xác nhận xóa giao dịch?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            Hành động này không thể hoàn tác. Giao dịch "{transaction.description}" trị giá {transaction.amount.toLocaleString('vi-VN')} VND sẽ bị xóa vĩnh viễn.
-                                        </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                        <AlertDialogCancel onClick={handleCancelDeleteDialog}>Hủy</AlertDialogCancel>
-                                        <AlertDialogAction onClick={handleDeleteConfirmation} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
+                                    {itemToConfirmDelete && itemToConfirmDelete.id === transaction.id && (
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                            <AlertDialogTitle>Xác nhận xóa giao dịch?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                Hành động này không thể hoàn tác. Giao dịch "{transaction.description}" trị giá {transaction.amount.toLocaleString('vi-VN')} VND sẽ bị xóa vĩnh viễn.
+                                            </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                            <AlertDialogCancel onClick={handleCancelDeleteDialog}>Hủy</AlertDialogCancel>
+                                            <AlertDialogAction onClick={handleDeleteConfirmation} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    )}
                                   </AlertDialog>
                               </div>
                           </TableCell>
@@ -206,7 +229,7 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
                             <p className="text-muted-foreground whitespace-pre-wrap">{transaction.description}</p>
                         </div>
                     </div>
-                     <div className="sm:hidden"> {/* Show these only if they were hidden in trigger on mobile */}
+                     <div className="sm:hidden"> 
                        <div className="flex items-start mt-1">
                           <Tag className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
                            <div>
@@ -232,7 +255,6 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
                         </div>
                     )}
                     <div className="text-xs text-muted-foreground/80 pt-1">ID giao dịch: {transaction.id}</div>
-                     {/* Action buttons visible on mobile in content area */}
                     <div className="sm:hidden flex items-center justify-end gap-2 mt-2">
                       <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(transaction);}}>
                           <Edit3 className="h-4 w-4 mr-1.5"/> Sửa
@@ -243,18 +265,20 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
                                   <Trash2 className="h-4 w-4 mr-1.5"/> Xóa
                               </Button>
                           </AlertDialogTrigger>
-                          <AlertDialogContent>
-                              <AlertDialogHeader>
-                              <AlertDialogTitle>Xác nhận xóa giao dịch?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                  Hành động này không thể hoàn tác. Giao dịch "{transaction.description}" trị giá {transaction.amount.toLocaleString('vi-VN')} VND sẽ bị xóa vĩnh viễn.
-                              </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                              <AlertDialogCancel onClick={handleCancelDeleteDialog}>Hủy</AlertDialogCancel>
-                              <AlertDialogAction onClick={handleDeleteConfirmation} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
-                              </AlertDialogFooter>
-                          </AlertDialogContent>
+                           {itemToConfirmDelete && itemToConfirmDelete.id === transaction.id && (
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Xác nhận xóa giao dịch?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Hành động này không thể hoàn tác. Giao dịch "{transaction.description}" trị giá {transaction.amount.toLocaleString('vi-VN')} VND sẽ bị xóa vĩnh viễn.
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel onClick={handleCancelDeleteDialog}>Hủy</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDeleteConfirmation} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                           )}
                         </AlertDialog>
                     </div>
                   </div>
@@ -267,3 +291,4 @@ export function TransactionList({ transactions, onEdit, onDelete }: TransactionL
     </TooltipProvider>
   );
 }
+

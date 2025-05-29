@@ -10,20 +10,32 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Checkbox } from '@/components/ui/checkbox'; // Added Checkbox
 import { useAuthStore, FAMILY_ACCOUNT_ID } from '@/hooks/useAuth';
 import type { Transaction, FamilyMember } from '@/types';
 import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS } from '@/lib/constants';
-import { PlusCircle, AlertTriangle, Loader2, Search, Filter, CalendarIcon, XCircle, Camera } from 'lucide-react';
+import { PlusCircle, AlertTriangle, Loader2, Search, Filter, CalendarIcon, XCircle, Camera, Trash2 } from 'lucide-react'; // Added Trash2
 import { format, subMonths, isValid, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"; // Added AlertDialog
 
 const ALL_CATEGORIES_VALUE = "all_categories";
 const ALL_MEMBERS_VALUE = "all_members";
 
 export default function TransactionsPage() {
-  const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth, addTransaction, updateTransaction, deleteTransaction } = useAuthStore();
+  const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth, addTransaction, updateTransaction, deleteTransaction, bulkDeleteTransactions } = useAuthStore(); // Added bulkDeleteTransactions
   const { toast } = useToast();
   
   const [isFormVisible, setIsFormVisible] = useState(false);
@@ -40,6 +52,10 @@ export default function TransactionsPage() {
   const [filterStartDate, setFilterStartDate] = useState<Date | undefined>(undefined);
   const [filterEndDate, setFilterEndDate] = useState<Date | undefined>(undefined);
   const [isDateFilterActive, setIsDateFilterActive] = useState(false);
+
+  // State for bulk selection
+  const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
 
   const monthOptions = useMemo(() => {
@@ -61,61 +77,49 @@ export default function TransactionsPage() {
     }
   }, [monthOptions, currentMonthYear, isDateFilterActive]);
 
-  useEffect(() => {
-    if (currentUser && familyId && currentMonthYear && !isDateFilterActive) { 
-      const loadTransactions = async () => {
-        setIsLoading(true);
-        await fetchTransactionsByMonth(familyId, currentMonthYear);
-        setIsLoading(false);
-      };
-      loadTransactions();
+  const loadDataForCurrentFilters = async () => {
+    if (!currentUser || !familyId) return;
+    setIsLoading(true);
+    if (isDateFilterActive && filterStartDate && filterEndDate) {
+      await fetchTransactionsForDateRange(filterStartDate, filterEndDate);
+    } else if (currentMonthYear && !isDateFilterActive) {
+      await fetchTransactionsByMonth(familyId, currentMonthYear);
+    } else if (monthOptions.length > 0 && !isDateFilterActive) {
+      await fetchTransactionsByMonth(familyId, monthOptions[0].value);
     }
-  }, [currentUser, familyId, currentMonthYear, fetchTransactionsByMonth, isDateFilterActive]);
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    loadDataForCurrentFilters();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, familyId, currentMonthYear, isDateFilterActive, filterStartDate, filterEndDate]); // Removed fetchTransactionsByMonth
+
 
   const fetchTransactionsForDateRange = async (start: Date, end: Date) => {
     if (!currentUser || !familyId) return;
-    setIsLoading(true);
+    // setIsLoading(true); //isLoading is handled by loadDataForCurrentFilters
     const monthsToFetch = new Set<string>();
-    let currentMonth = startOfMonth(new Date(start));
+    let currentFetchMonth = startOfMonth(new Date(start)); // Use a different var name
     const endMonthTarget = startOfMonth(new Date(end));
-    while (currentMonth <= endMonthTarget) {
-        monthsToFetch.add(format(currentMonth, 'yyyy-MM'));
-        const nextMonth = new Date(currentMonth);
+    while (currentFetchMonth <= endMonthTarget) {
+        monthsToFetch.add(format(currentFetchMonth, 'yyyy-MM'));
+        const nextMonth = new Date(currentFetchMonth);
         nextMonth.setMonth(nextMonth.getMonth() + 1);
-        currentMonth = nextMonth;
+        currentFetchMonth = nextMonth;
     }
     if (monthsToFetch.size > 0) {
       await Promise.all(Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m)));
     }
-    setIsLoading(false);
+    // setIsLoading(false);
   };
   
-  useEffect(() => {
-    if (currentUser && familyId && isDateFilterActive && filterStartDate && filterEndDate) {
-      fetchTransactionsForDateRange(filterStartDate, filterEndDate);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, familyId, isDateFilterActive, filterStartDate, filterEndDate, fetchTransactionsByMonth]);
-
 
   const handleFormSuccess = async () => {
     setIsFormVisible(false);
     setEditingTransaction(null);
     setIsBillModeActive(false); 
-    if (currentUser && familyId) {
-      if (isDateFilterActive && filterStartDate && filterEndDate) {
-        await fetchTransactionsForDateRange(filterStartDate, filterEndDate);
-      } else if (currentMonthYear && !isDateFilterActive) {
-        setIsLoading(true);
-        await fetchTransactionsByMonth(familyId, currentMonthYear);
-        setIsLoading(false);
-      } else if (monthOptions.length > 0 && !isDateFilterActive) {
-        // Fallback to default month if no specific range/month is active
-        setIsLoading(true);
-        await fetchTransactionsByMonth(familyId, monthOptions[0].value);
-        setIsLoading(false);
-      }
-    }
+    await loadDataForCurrentFilters(); // Reload data based on current filters
   };
 
   const handleEdit = (transaction: Transaction) => {
@@ -146,30 +150,22 @@ export default function TransactionsPage() {
   const displayTransactions = useMemo(() => {
     if (!currentUser || !familyId) return [];
     
-    let sourceTransactions = transactions; 
+    let sourceTransactions: Transaction[]; 
 
     if (isDateFilterActive && filterStartDate && filterEndDate) {
-        sourceTransactions = sourceTransactions.filter(t => {
-            const transactionDate = parseISO(t.date);
-            // Normalize start date to beginning of day, end date to end of day
-            const startDateNormalized = startOfMonth(new Date(filterStartDate)); // More precisely, startOfDay(filterStartDate)
-            startDateNormalized.setHours(0,0,0,0);
-
-            const endDateNormalized = endOfMonth(new Date(filterEndDate)); // More precisely, endOfDay(filterEndDate)
-            endDateNormalized.setHours(23,59,59,999);
-
-            return isValid(transactionDate) && transactionDate >= filterStartDate && transactionDate <= filterEndDate;
+        sourceTransactions = transactions.filter(t => {
+            try {
+                const transactionDate = parseISO(t.date);
+                return isValid(transactionDate) && transactionDate >= filterStartDate && transactionDate <= filterEndDate;
+            } catch (e) { return false; }
         });
     } else if (currentMonthYear && !isDateFilterActive) {
         sourceTransactions = getTransactionsForFamilyByMonth(familyId, currentMonthYear);
     } else {
-        // If no month filter and no date range, show nothing or all (depending on desired default)
-        // For now, let's assume it defaults to currentMonthYear or shows nothing if currentMonthYear isn't set
-        sourceTransactions = currentMonthYear ? getTransactionsForFamilyByMonth(familyId, currentMonthYear) : [];
+        sourceTransactions = [];
     }
 
-
-    let filtered = [...sourceTransactions]; // Create a mutable copy
+    let filtered = [...sourceTransactions]; 
 
     if (searchTerm) {
       filtered = filtered.filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -192,22 +188,61 @@ export default function TransactionsPage() {
     setFilterStartDate(undefined);
     setFilterEndDate(undefined);
     setIsDateFilterActive(false);
+    setSelectedTransactionIds([]); // Clear selection when filters reset
     if (monthOptions.length > 0) {
-        setCurrentMonthYear(monthOptions[0].value); // Reset to the default month
+        setCurrentMonthYear(monthOptions[0].value); 
     }
   };
   
-  const handleApplyDateFilter = () => {
+  const handleApplyDateFilter = async () => {
     if (filterStartDate && filterEndDate) {
         if (filterEndDate < filterStartDate) {
              toast({ title: "Lỗi", description: "Ngày kết thúc không thể trước ngày bắt đầu.", variant: "destructive"});
              return;
         }
         setIsDateFilterActive(true);
-        // Data fetching is handled by the useEffect hook dependent on isDateFilterActive, filterStartDate, filterEndDate
+        setSelectedTransactionIds([]); // Clear selection when date filter applied
+        await loadDataForCurrentFilters();
     } else {
         toast({ title: "Thiếu thông tin", description: "Vui lòng chọn cả ngày bắt đầu và ngày kết thúc.", variant: "default"});
     }
+  };
+
+  const handleToggleSelectTransaction = (transactionId: string) => {
+    setSelectedTransactionIds(prevSelected => 
+      prevSelected.includes(transactionId) 
+        ? prevSelected.filter(id => id !== transactionId)
+        : [...prevSelected, transactionId]
+    );
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedTransactionIds.length === displayTransactions.length) {
+      setSelectedTransactionIds([]); // Deselect all
+    } else {
+      setSelectedTransactionIds(displayTransactions.map(t => t.id)); // Select all displayed
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedTransactionIds.length === 0) {
+      toast({ title: "Chưa chọn mục", description: "Vui lòng chọn ít nhất một giao dịch để xóa.", variant: "default"});
+      return;
+    }
+    setIsBulkDeleting(true);
+    const transactionsToDelete = selectedTransactionIds.map(id => {
+      const transaction = transactions.find(t => t.id === id);
+      return transaction ? { id: transaction.id, monthYear: transaction.monthYear } : null;
+    }).filter(t => t !== null) as Array<{ id: string, monthYear: string }>;
+
+    if (transactionsToDelete.length > 0) {
+      await bulkDeleteTransactions(transactionsToDelete);
+      setSelectedTransactionIds([]); // Clear selection after deletion
+    } else {
+      toast({ title: "Lỗi", description: "Không tìm thấy thông tin giao dịch để xóa.", variant: "destructive"});
+    }
+    setIsBulkDeleting(false);
+    await loadDataForCurrentFilters(); // Refresh data
   };
 
 
@@ -296,11 +331,13 @@ export default function TransactionsPage() {
                                 setFilterEndDate(endOfMonth(today));
                             }
                             setIsDateFilterActive(true);
+                            setSelectedTransactionIds([]); // Clear selection
                         } else {
                             setIsDateFilterActive(false);
                             setCurrentMonthYear(value);
                             setFilterStartDate(undefined);
                             setFilterEndDate(undefined);
+                            setSelectedTransactionIds([]); // Clear selection
                         }
                     }}
                  >
@@ -381,6 +418,7 @@ export default function TransactionsPage() {
                         setIsDateFilterActive(false); 
                         setFilterStartDate(undefined);
                         setFilterEndDate(undefined);
+                        setSelectedTransactionIds([]); // Clear selection when month changes
                     }} 
                     disabled={isLoading}
                 >
@@ -398,6 +436,44 @@ export default function TransactionsPage() {
                 </div>
             )}
           </div>
+          {/* Bulk Actions Section */}
+          {displayTransactions.length > 0 && (
+             <div className="flex items-center gap-2 mt-4 border-t pt-4">
+                <Checkbox
+                    id="select-all-transactions"
+                    checked={selectedTransactionIds.length === displayTransactions.length && displayTransactions.length > 0}
+                    onCheckedChange={handleToggleSelectAll}
+                    aria-label="Chọn tất cả giao dịch đang hiển thị"
+                />
+                <label htmlFor="select-all-transactions" className="text-sm font-medium">
+                    Chọn tất cả ({selectedTransactionIds.length} / {displayTransactions.length})
+                </label>
+                {selectedTransactionIds.length > 0 && (
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm" className="ml-auto" disabled={isBulkDeleting}>
+                            {isBulkDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                            Xóa mục đã chọn ({selectedTransactionIds.length})
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Xác nhận xóa {selectedTransactionIds.length} giao dịch?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                        Hành động này không thể hoàn tác. Các giao dịch đã chọn sẽ bị xóa vĩnh viễn.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isBulkDeleting}>Hủy</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive hover:bg-destructive/90" disabled={isBulkDeleting}>
+                            {isBulkDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Xóa"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+                )}
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {isLoading && displayTransactions.length === 0 ? ( 
@@ -415,17 +491,13 @@ export default function TransactionsPage() {
                     setEditingTransaction(null); 
                     setIsFormVisible(false);
                     setIsBillModeActive(false);
+                    setSelectedTransactionIds(prev => prev.filter(id => id !== transactionId)); // Remove from selection if deleted individually
                     
                     await deleteTransaction(transactionId, monthYearToDelete); 
-                    // After delete, re-fetch based on current filter state
-                     if (isDateFilterActive && filterStartDate && filterEndDate) {
-                        await fetchTransactionsForDateRange(filterStartDate, filterEndDate);
-                    } else if (currentMonthYear && !isDateFilterActive) {
-                        await fetchTransactionsByMonth(familyId, currentMonthYear);
-                    } else if (monthOptions.length > 0 && !isDateFilterActive) {
-                         await fetchTransactionsByMonth(familyId, monthOptions[0].value);
-                    }
+                    await loadDataForCurrentFilters();
                 }}
+                selectedIds={selectedTransactionIds}
+                onToggleSelect={handleToggleSelectTransaction}
             />
           )}
         </CardContent>
@@ -433,3 +505,4 @@ export default function TransactionsPage() {
     </div>
   );
 }
+

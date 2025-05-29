@@ -103,7 +103,7 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
                   <div className="flex flex-col w-full space-y-1 ml-1">
                     <div className="flex justify-between items-start">
                       <span className="font-medium truncate pr-2 flex-1">{transaction.description}</span>
-                      <span className={`font-semibold ${transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      <span className={`font-semibold whitespace-nowrap ${transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                         {transaction.type === 'income' ? '+' : '-'}
                         {new Intl.NumberFormat('vi-VN').format(transaction.amount)} ₫
                       </span>
@@ -228,23 +228,23 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
                     />
                   </div>
                   <AccordionPrimitive.Header className="flex flex-1 min-w-0">
-                    <AccordionPrimitive.Trigger asChild className="w-full p-0 rounded-none border-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none">
-                      <div
-                        className={cn(
-                          "flex flex-1 items-center justify-between py-3 pl-0 pr-2 text-left font-medium cursor-pointer hover:no-underline focus:outline-none w-full",
-                        )}
-                      >
-                        <div className="flex-grow min-w-0">
-                          {triggerContent}
-                        </div>
-                        <ChevronDown
+                     <AccordionPrimitive.Trigger asChild className="w-full p-0 rounded-none border-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none">
+                        <div
                           className={cn(
-                            "h-4 w-4 shrink-0 transition-transform duration-200",
-                            "group-data-[state=open]/accordionitem:rotate-180"
+                            "flex flex-1 items-center justify-between py-3 pl-0 pr-2 text-left font-medium cursor-pointer hover:no-underline focus:outline-none w-full group-data-[state=open]/accordionitem:pb-2"
                           )}
-                        />
-                      </div>
-                    </AccordionPrimitive.Trigger>
+                        >
+                          <div className="flex-grow min-w-0">
+                            {triggerContent}
+                          </div>
+                          <ChevronDown
+                            className={cn(
+                              "h-4 w-4 shrink-0 transition-transform duration-200",
+                              "group-data-[state=open]/accordionitem:rotate-180"
+                            )}
+                          />
+                        </div>
+                      </AccordionPrimitive.Trigger>
                   </AccordionPrimitive.Header>
                 </div>
                 {itemToConfirmDelete && itemToConfirmDelete.id === transaction.id && (
@@ -288,7 +288,7 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
                     </div>
                     {paymentSourceInfo && (
                          <div className="flex items-start">
-                            <PaymentSourceIcon className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
+                            {PaymentSourceIcon && <PaymentSourceIcon className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />}
                             <div>
                                 <span className="font-semibold">Nguồn tiền:</span>
                                 <p className="text-muted-foreground">{paymentSourceInfo.label}</p>

@@ -42,7 +42,7 @@ export const useAuthStore = create<AuthState>()(
         if (pass === SHARED_PASSWORD && FAMILY_MEMBERS.includes(user as FamilyMember)) {
           set({
             currentUser: user,
-            familyId: FAMILY_ACCOUNT_ID, // Always set familyId to the shared ID
+            familyId: FAMILY_ACCOUNT_ID, 
           });
           return true;
         }
@@ -57,8 +57,8 @@ export const useAuthStore = create<AuthState>()(
         set({
           currentUser: null,
           familyId: null,
-          transactions: [], // Clear transactions on logout
-          highValueExpenseAlerts: [], // Clear alerts on logout
+          transactions: [], 
+          highValueExpenseAlerts: [], 
         });
       },
 
@@ -120,7 +120,7 @@ export const useAuthStore = create<AuthState>()(
           showAppToast({ title: "Thành công!", description: "Đã thêm giao dịch mới." });
 
           if (newTransaction.type === 'expense' &&
-              newTransaction.categoryId !== RUT_TIEN_MAT_CATEGORY_ID && // Exclude cash withdrawal
+              newTransaction.categoryId !== RUT_TIEN_MAT_CATEGORY_ID && 
               newTransaction.amount > HIGH_EXPENSE_THRESHOLD
              ) {
             const alert: HighValueExpenseAlert = {
@@ -245,11 +245,7 @@ export const useAuthStore = create<AuthState>()(
             familyIdToFetch = FAMILY_ACCOUNT_ID;
         }
         
-        // Use NEXT_PUBLIC_APP_URL for deployed environments, otherwise default to localhost:9003
-        // IMPORTANT: Ensure NEXT_PUBLIC_APP_URL is set correctly in your .env file for production/staging.
-        const defaultPort = '9003'; // This should match your package.json dev script port
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${defaultPort}`;
-        const apiUrl = `${baseUrl}/api/transactions?userId=${encodeURIComponent(familyIdToFetch)}&monthYear=${encodeURIComponent(monthYear)}`;
+        const apiUrl = `/api/transactions?userId=${encodeURIComponent(familyIdToFetch)}&monthYear=${encodeURIComponent(monthYear)}`;
         
         console.log(`[useAuthStore fetchTransactionsByMonth] Attempting to fetch from: ${apiUrl}`); 
 
@@ -317,7 +313,6 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: any) {
           console.error(`[useAuthStore fetchTransactionsByMonth] CATCH_ALL Error for ${monthYear}:`, error.message, error.stack);
           showAppToast({ title: `Lỗi tải giao dịch (${monthYear})`, description: error.message, variant: "destructive" });
-          // Do not throw error here to prevent app crash, just log and toast
         }
       },
 
@@ -384,7 +379,6 @@ export const useAuthStore = create<AuthState>()(
         const incomeResult = await get().addTransaction(incomeTransactionData);
         if (!incomeResult) {
           showAppToast({ title: "Lỗi Rút Tiền", description: "Đã tạo giao dịch chi, nhưng không thể tạo giao dịch thu tiền mặt. Vui lòng kiểm tra lại.", variant: "destructive" });
-          // Consider if we need to "rollback" the expenseResult. For now, just inform the user.
           return false; 
         }
         
@@ -393,15 +387,14 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'auth-storage-v2', // Updated store name to potentially reset if old structure exists
+      name: 'auth-storage-v2', 
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         currentUser: state.currentUser,
         familyId: state.familyId,
         highValueExpenseAlerts: state.highValueExpenseAlerts,
-        // transactions: state.transactions, // Optionally persist transactions if needed for offline, but can lead to large localStorage
       }),
     }
   )
 );
-
+// export { FAMILY_ACCOUNT_ID }; // Ensure FAMILY_ACCOUNT_ID is exported if needed elsewhere from this module, though it's better from constants.ts

@@ -1,20 +1,27 @@
 
 "use client";
 
-import React, { useEffect, useState } from 'react'; // Added React
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/hooks/useAuth';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { SpendingChatbot } from '@/components/dashboard/SpendingChatbot';
-import { WithdrawCashModal } from '@/components/dashboard/WithdrawCashModal'; // Added
-import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera, PlusCircle, Landmark, Wallet, ArrowRightLeft } from 'lucide-react'; // Added Landmark, Wallet, ArrowRightLeft
+import { WithdrawCashModal } from '@/components/dashboard/WithdrawCashModal';
+import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera, PlusCircle, Landmark, Wallet, ArrowRightLeft, ChevronDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import type { Transaction } from '@/types'; // MonthlySummary removed, will calculate directly
+import type { Transaction } from '@/types';
 import { MONTH_NAMES, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID } from '@/lib/constants';
 import { format, subMonths } from 'date-fns';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { cn } from '@/lib/utils';
 
 interface DashboardSummary {
   totalIncome: number;
@@ -33,7 +40,7 @@ const initialSummary: DashboardSummary = {
 };
 
 export default function DashboardPage() {
-  const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth, processCashWithdrawal } = useAuthStore();
+  const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth } = useAuthStore();
   const [summary, setSummary] = useState<DashboardSummary>(initialSummary);
   const [monthlyChartData, setMonthlyChartData] = useState<any[]>([]);
   const [currentMonthYear, setCurrentMonthYear] = useState<string>('');
@@ -58,6 +65,10 @@ export default function DashboardPage() {
           const date = subMonths(currentDate, i);
           monthsToFetch.add(format(date, 'yyyy-MM'));
         }
+
+        // Fetch data for the previous month as well for chatbot context if needed, though chatbot fetches its own
+        monthsToFetch.add(format(subMonths(new Date(currentMonthYear + '-01'), 1), 'yyyy-MM'));
+
 
         await Promise.all(
           Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m))
@@ -167,30 +178,64 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <SummaryCard title={`Tổng Thu Thực (${currentMonthName})`} value={summary.totalIncome} icon={TrendingUp} colorClass="text-green-500" />
             <SummaryCard title={`Tổng Chi Thực (${currentMonthName})`} value={summary.totalExpense} icon={TrendingDown} colorClass="text-red-500" />
-            <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 col-span-1 relative">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Số Dư NH ({currentMonthName})</CardTitle>
-                    <Landmark className={`h-6 w-6 text-blue-500`} />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">
-                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(summary.balanceBank)}
+            
+            <Accordion type="single" collapsible className="w-full col-span-1 md:col-span-2 lg:col-span-1">
+              <AccordionItem value="balances" className="border-none">
+                <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+                  <AccordionTrigger className="p-0 hover:no-underline focus:outline-none">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 w-full pr-4"> {/* Added pr-4 for chevron */}
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Tổng Số Dư ({currentMonthName})</CardTitle>
+                       <div className="flex items-center">
+                        <Banknote className={`h-6 w-6 mr-2 ${summary.totalBalance >= 0 ? "text-indigo-500" : "text-orange-500"}`} />
+                        {/* Chevron will be rendered by AccordionTrigger, ensure no duplicate if AccordionTrigger has its own */}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pb-3 pt-0 w-full">
+                      <div className="text-2xl font-bold text-left">
+                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(summary.totalBalance)}
+                      </div>
+                    </CardContent>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-6 pb-4 pt-0">
+                    <div className="space-y-3 border-t pt-3">
+                      <Card className="shadow-md bg-background/70">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3">
+                          <CardTitle className="text-xs font-medium text-muted-foreground">Số Dư Ngân Hàng</CardTitle>
+                          <Landmark className={`h-5 w-5 text-blue-500`} />
+                        </CardHeader>
+                        <CardContent className="pb-3 pt-0">
+                          <div className="text-lg font-semibold">
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(summary.balanceBank)}
+                          </div>
+                           <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="mt-1 h-7 text-xs"
+                              onClick={(e) => { e.stopPropagation(); setIsWithdrawModalOpen(true);}} // Stop propagation to prevent accordion toggle
+                          >
+                              <ArrowRightLeft className="mr-1 h-3 w-3"/> Rút tiền
+                          </Button>
+                        </CardContent>
+                      </Card>
+                       <Card className="shadow-md bg-background/70">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3">
+                          <CardTitle className="text-xs font-medium text-muted-foreground">Số Dư Tiền Mặt</CardTitle>
+                          <Wallet className={`h-5 w-5 text-purple-500`} />
+                        </CardHeader>
+                        <CardContent className="pb-3 pt-0">
+                           <div className="text-lg font-semibold">
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(summary.balanceCash)}
+                          </div>
+                        </CardContent>
+                      </Card>
                     </div>
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="absolute top-2 right-2 h-7 text-xs"
-                        onClick={() => setIsWithdrawModalOpen(true)}
-                    >
-                        <ArrowRightLeft className="mr-1 h-3 w-3"/> Rút tiền
-                    </Button>
-                </CardContent>
-            </Card>
-            <SummaryCard title={`Số Dư Tiền Mặt (${currentMonthName})`} value={summary.balanceCash} icon={Wallet} colorClass="text-purple-500" />
-            <SummaryCard title={`Tổng Số Dư (${currentMonthName})`} value={summary.totalBalance} icon={Banknote} colorClass={summary.totalBalance >= 0 ? "text-indigo-500" : "text-orange-500"} />
+                  </AccordionContent>
+                </Card>
+              </AccordionItem>
+            </Accordion>
           </div>
           <WithdrawCashModal 
             isOpen={isWithdrawModalOpen} 
@@ -263,5 +308,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

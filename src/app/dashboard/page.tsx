@@ -182,25 +182,26 @@ export default function DashboardPage() {
             <SummaryCard title={`Tổng Thu Thực (${currentMonthName})`} value={summary.totalIncome} icon={TrendingUp} colorClass="text-green-500" />
             <SummaryCard title={`Tổng Chi Thực (${currentMonthName})`} value={summary.totalExpense} icon={TrendingDown} colorClass="text-red-500" />
             
-            <Accordion type="single" collapsible className="w-full col-span-1 md:col-span-2 lg:col-span-1">
-              <AccordionItem value="balances" className="border-none">
-                <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-                  <AccordionTrigger className="p-0 hover:no-underline focus:outline-none">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 w-full pr-4"> {/* Added pr-4 for chevron */}
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Tổng Số Dư ({currentMonthName})</CardTitle>
-                       <div className="flex items-center">
-                        <Banknote className={`h-6 w-6 mr-2 ${summary.totalBalance >= 0 ? "text-indigo-500" : "text-orange-500"}`} />
-                        {/* Chevron will be rendered by AccordionTrigger, ensure no duplicate if AccordionTrigger has its own */}
+            <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 col-span-1 md:col-span-2 lg:col-span-1">
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="balances" className="border-b-0"> {/* Remove border from item if Card handles it */}
+                  <AccordionTrigger className="hover:no-underline focus:outline-none w-full text-left p-6 data-[state=open]:pb-2 data-[state=closed]:pb-6 rounded-lg">
+                    {/* This div ensures content within trigger is structured before the chevron */}
+                    <div className="w-full">
+                      <div className="flex flex-row items-center justify-between space-y-0 mb-2"> {/* Simulates CardHeader */}
+                        <p className="text-sm font-medium text-muted-foreground">Tổng Số Dư ({currentMonthName})</p>
+                        <Banknote className={`h-6 w-6 ${summary.totalBalance >= 0 ? "text-indigo-500" : "text-orange-500"}`} />
                       </div>
-                    </CardHeader>
-                    <CardContent className="pb-3 pt-0 w-full">
-                      <div className="text-2xl font-bold text-left">
-                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(summary.totalBalance)}
+                      <div> {/* Simulates CardContent */}
+                        <div className="text-2xl font-bold">
+                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(summary.totalBalance)}
+                        </div>
                       </div>
-                    </CardContent>
+                    </div>
+                    {/* Default ChevronDown from AccordionTrigger will be placed by its internal flex justify-between */}
                   </AccordionTrigger>
-                  <AccordionContent className="px-6 pb-4 pt-0">
-                    <div className="space-y-3 border-t pt-3">
+                  <AccordionContent className="px-6 pb-4 pt-0"> {/* pt-0 because trigger has pb-2 when open */}
+                    <div className="space-y-3 border-t pt-4 mt-2"> {/* Added mt-2 for slight separation and border-t */}
                       <Card className="shadow-md bg-background/70">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3">
                           <CardTitle className="text-xs font-medium text-muted-foreground">Số Dư Ngân Hàng</CardTitle>
@@ -214,7 +215,7 @@ export default function DashboardPage() {
                               variant="outline" 
                               size="sm" 
                               className="mt-1 h-7 text-xs"
-                              onClick={(e) => { e.stopPropagation(); setIsWithdrawModalOpen(true);}} // Stop propagation to prevent accordion toggle
+                              onClick={(e) => { e.stopPropagation(); setIsWithdrawModalOpen(true);}}
                           >
                               <ArrowRightLeft className="mr-1 h-3 w-3"/> Rút tiền
                           </Button>
@@ -233,9 +234,9 @@ export default function DashboardPage() {
                       </Card>
                     </div>
                   </AccordionContent>
-                </Card>
-              </AccordionItem>
-            </Accordion>
+                </AccordionItem>
+              </Accordion>
+            </Card>
           </div>
           <WithdrawCashModal 
             isOpen={isWithdrawModalOpen} 

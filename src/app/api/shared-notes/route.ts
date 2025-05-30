@@ -35,12 +35,14 @@ async function ensureSheetExists(spreadsheetId: string, sheetName: string) {
     }
   } catch (error: any) {
     console.error(`[API /shared-notes] Error in ensureSheetExists for sheet "${sheetName}":`, error.message, error.stack);
-    throw new Error(`Failed to ensure sheet "${sheetName}" exists: ${error.message}`);
+    const message = error.errors?.[0]?.message || error.message || `Failed to ensure sheet "${sheetName}" exists.`;
+    throw Object.assign(new Error(message), { code: error.code, details: error.stack });
   }
 }
 
 export async function GET(request: NextRequest) {
   if (!SPREADSHEET_ID) {
+    console.error("[API /shared-notes GET] Google Sheet ID not configured.");
     return NextResponse.json({ message: 'Google Sheet ID not configured.' }, { status: 500 });
   }
   console.log('[API /shared-notes] GET request received');
@@ -61,14 +63,12 @@ export async function GET(request: NextRequest) {
     let modifiedInfo: NoteModifiedInfo | null = null;
 
     if (values && values[0]) {
-      note = values[0][0] || ""; // Note content from A1
-      if (values[0][1]) { // Modified info from B1
+      note = values[0][0] || ""; 
+      if (values[0][1]) { 
         try {
           modifiedInfo = JSON.parse(values[0][1]);
         } catch (e) {
           console.warn(`[API /shared-notes] Could not parse modifiedInfo JSON: ${values[0][1]}`, e);
-          // If B1 is not valid JSON, we ignore it but still return the note.
-          // We could also try to save a default value here or clear B1.
         }
       }
     }
@@ -77,18 +77,23 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
     console.error('[API /shared-notes GET] Error:', error.message, error.stack);
-    const message = error.message?.includes("No sheet with the name") || error.message?.includes("Unable to parse range")
-      ? `Sheet "${SHARED_NOTES_SHEET_NAME}" not found or range invalid. It will be created on next save.`
-      : error.message || 'Failed to fetch shared note.';
-    if (error.message?.includes("No sheet with the name") || error.message?.includes("Unable to parse range")){
-         return NextResponse.json({ note: "", modifiedBy: undefined, modifiedAt: undefined }); // Return empty if sheet not found by GET
+    // Check if it's a "sheet not found" type of error specifically from ensureSheetExists or a general Google API error
+    const message = error.errors?.[0]?.message || error.message || 'Failed to fetch shared note.';
+    const statusCode = error.code || 500;
+
+    if (message.includes(`Failed to ensure sheet "${SHARED_NOTES_SHEET_NAME}" exists`) || message.includes("No sheet with the name") || message.includes("Unable to parse range")) {
+         // If ensureSheetExists failed (e.g. sheet doesn't exist and couldn't be created due to permissions)
+         // or if the range is invalid because sheet doesn't exist at all after a failed creation.
+         // Still return a 200 with empty data for the client to handle gracefully on first load.
+         return NextResponse.json({ note: "", modifiedBy: undefined, modifiedAt: undefined });
     }
-    return NextResponse.json({ message, details: error.stack }, { status: error.code || 500 });
+    return NextResponse.json({ message, details: error.stack }, { status: statusCode });
   }
 }
 
 export async function POST(request: NextRequest) {
   if (!SPREADSHEET_ID) {
+     console.error("[API /shared-notes POST] Google Sheet ID not configured.");
     return NextResponse.json({ message: 'Google Sheet ID not configured.' }, { status: 500 });
   }
   console.log('[API /shared-notes] POST request received');
@@ -107,7 +112,7 @@ export async function POST(request: NextRequest) {
     const modifiedInfo: NoteModifiedInfo = { modifiedBy, modifiedAt };
 
     const valuesToWrite = [
-      [note, JSON.stringify(modifiedInfo)] // Note in A1, JSON info in B1
+      [note, JSON.stringify(modifiedInfo)] 
     ];
 
     const rangeToWrite = `${SHARED_NOTES_SHEET_NAME}!${SHARED_NOTE_CELL}:${SHARED_NOTE_MODIFIED_INFO_CELL}`;
@@ -126,6 +131,8 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('[API /shared-notes POST] Error:', error.message, error.stack);
-    return NextResponse.json({ message: error.message || 'Failed to save shared note.', details: error.stack }, { status: error.code || 500 });
+    const message = error.errors?.[0]?.message || error.message || 'Failed to save shared note.';
+    const statusCode = error.code || 500;
+    return NextResponse.json({ message, details: error.stack }, { status: statusCode });
   }
 }

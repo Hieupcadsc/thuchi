@@ -10,7 +10,6 @@ const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
 // --- Authentication ---
 const auth = new google.auth.GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  // credentials an SPREADSHEET_ID should be loaded from env variables
 });
 const sheets = google.sheets({ version: 'v4', auth });
 
@@ -106,7 +105,9 @@ async function ensureSheetExistsAndHeader(spreadsheetId: string, sheetName: stri
     console.log(`[API /transactions] ensureSheetExistsAndHeader completed for sheet: ${sheetName}`);
   } catch (error: any) {
     console.error(`[API /transactions] Error in ensureSheetExistsAndHeader for sheet "${sheetName}":`, error.message, error.stack);
-    throw new Error(`Failed to ensure sheet "${sheetName}" exists with header: ${error.message}`);
+    const message = error.errors?.[0]?.message || error.message || `Failed to ensure sheet "${sheetName}" exists with header.`;
+    // Rethrow with specific code if available
+    throw Object.assign(new Error(message), { code: error.code, details: error.stack });
   }
 }
 
@@ -114,7 +115,7 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
   console.log(`[API /transactions] getTransactionsFromSheet called for userId: ${userIdToFetch}, monthYear: ${monthYear}`);
   if (!SPREADSHEET_ID) {
     console.error("[API /transactions] Google Sheet ID not configured in environment variables for getTransactionsFromSheet.");
-    throw new Error("Google Sheet ID not configured on the server.");
+    throw Object.assign(new Error("Google Sheet ID not configured on the server."), { code: 500 });
   }
 
   const sheetName = monthYear;
@@ -136,18 +137,21 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
       const transactions = rows
         .slice(1) 
         .map((row, index): Transaction | null => {
-          if (row.length < HEADER_ROW.length) { // Check against the full header length
+          if (row.length < HEADER_ROW.length) { 
             console.warn(`[API /transactions] Skipping malformed row ${index + 2} in sheet "${sheetName}": Expected ${HEADER_ROW.length} columns, got ${row.length}. Data:`, row);
             return null;
           }
 
           const transactionUserId = row[1];
-          // Filter based on the family ID, transactions are family-wide but attributed to a performer
-          if (userIdToFetch !== FAMILY_ACCOUNT_ID || transactionUserId !== FAMILY_ACCOUNT_ID) {
-            // This check might be too restrictive if userIdToFetch is ever different from FAMILY_ACCOUNT_ID
-            // For now, assuming we always fetch for the family account
+          if (userIdToFetch === FAMILY_ACCOUNT_ID && transactionUserId !== FAMILY_ACCOUNT_ID) {
+            console.warn(`[API /transactions] Skipping row ${index + 2} for user ${transactionUserId} as we are fetching for family account ${FAMILY_ACCOUNT_ID}`);
             return null;
           }
+          if (userIdToFetch !== FAMILY_ACCOUNT_ID && transactionUserId !== userIdToFetch) {
+             console.warn(`[API /transactions] Skipping row ${index + 2} for user ${transactionUserId} as we are fetching for specific user ${userIdToFetch}`);
+            return null;
+          }
+
 
           let dateValue = row[4];
           if (typeof dateValue === 'number') {
@@ -167,8 +171,8 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
           const finalPaymentSource = isValidPaymentSource ? paymentSourceValue : 'bank';
 
           return {
-            id: row[0] || `row-${index + 2}-${sheetName}`, // Fallback ID if first column is empty
-            userId: transactionUserId as UserType, // Should be FAMILY_ACCOUNT_ID
+            id: row[0] || `row-${index + 2}-${sheetName}`,
+            userId: transactionUserId as UserType,
             description: row[2] || 'Không có mô tả',
             amount: parseFloat(row[3]) || 0,
             date: dateValue as string, 
@@ -190,9 +194,10 @@ async function getTransactionsFromSheet(userIdToFetch: UserType, monthYear: stri
     console.error(`[API /transactions] Error in getTransactionsFromSheet for sheet "${sheetName}":`, err.message, err.stack);
     if (err.message && (err.message.includes("No sheet with the name") || err.message.includes("Unable to parse range") || err.message.includes("Requested entity was not found."))) {
         console.warn(`[API /transactions] Sheet "${sheetName}" not found or range invalid during get, returning empty array. Error: ${err.message}`);
-        return [];
+        return []; // Return empty if sheet doesn't exist, it will be created on next POST
     }
-    throw new Error(`Failed to get transactions from sheet "${sheetName}": ${err.message}`);
+    const message = err.errors?.[0]?.message || err.message || `Failed to get transactions from sheet "${sheetName}".`;
+    throw Object.assign(new Error(message), { code: err.code, details: err.stack });
   }
 }
 
@@ -200,7 +205,7 @@ async function addTransactionToSheet(transaction: Transaction): Promise<Transact
   console.log(`[API /transactions] addTransactionToSheet called for transaction ID: ${transaction.id}, monthYear: ${transaction.monthYear}`);
   if (!SPREADSHEET_ID) {
     console.error("[API /transactions] Google Sheet ID not configured in environment variables for addTransactionToSheet.");
-    throw new Error("Google Sheet ID not configured on the server.");
+    throw Object.assign(new Error("Google Sheet ID not configured on the server."), { code: 500 });
   }
 
   const sheetName = transaction.monthYear;
@@ -234,7 +239,8 @@ async function addTransactionToSheet(transaction: Transaction): Promise<Transact
     return transaction;
   } catch (err: any) {
     console.error(`[API /transactions] Error in addTransactionToSheet for sheet "${sheetName}", transaction ID ${transaction.id}:`, err.message, err.stack);
-    throw new Error(`Failed to add transaction to sheet "${sheetName}": ${err.message}`);
+    const message = err.errors?.[0]?.message || err.message || `Failed to add transaction to sheet "${sheetName}".`;
+    throw Object.assign(new Error(message), { code: err.code, details: err.stack });
   }
 }
 
@@ -288,7 +294,6 @@ export async function POST(request: NextRequest) {
         console.error("[API /transactions POST] Missing required fields in transaction data. Data:", transaction);
         return NextResponse.json({ message: 'Missing required fields in transaction data (ensure id, userId, description, amount, date, type, categoryId, monthYear, performedBy, paymentSource are included)' }, { status: 400 });
     }
-    // Ensure userId from client is always FAMILY_ACCOUNT_ID for POST requests to maintain consistency
     if (transaction.userId !== FAMILY_ACCOUNT_ID) {
       console.warn(`[API /transactions POST] Incoming transaction userId "${transaction.userId}" does not match FAMILY_ACCOUNT_ID "${FAMILY_ACCOUNT_ID}". Overwriting userId to ${FAMILY_ACCOUNT_ID}.`);
       transaction.userId = FAMILY_ACCOUNT_ID;
@@ -302,7 +307,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ message: 'Invalid monthYear format. Expected YYYY-MM.' }, { status: 400 });
     }
 
-
     console.log(`[API /transactions POST] Adding transaction ID ${transaction.id} to sheet.`);
     const savedTransaction = await addTransactionToSheet(transaction);
     console.log(`[API /transactions POST] Successfully added transaction ID ${transaction.id}.`);
@@ -310,7 +314,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('[API /transactions POST] Error processing POST request:', error.message, error.stack);
-    if (error instanceof SyntaxError) {
+    if (error instanceof SyntaxError) { // Catch JSON parsing errors for request body
         console.error("[API /transactions POST] Invalid JSON in request body.");
         return NextResponse.json({ message: 'Invalid JSON in request body' }, { status: 400 });
     }

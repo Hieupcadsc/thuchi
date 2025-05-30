@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TransactionForm } from '@/components/transactions/TransactionForm';
 import { TransactionList } from '@/components/transactions/TransactionList';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -10,11 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Checkbox } from '@/components/ui/checkbox'; // Added Checkbox
-import { useAuthStore, FAMILY_ACCOUNT_ID } from '@/hooks/useAuth';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useAuthStore } from '@/hooks/useAuth';
 import type { Transaction, FamilyMember } from '@/types';
-import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS } from '@/lib/constants';
-import { PlusCircle, AlertTriangle, Loader2, Search, Filter, CalendarIcon, XCircle, Camera, Trash2 } from 'lucide-react'; // Added Trash2
+import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS, FAMILY_ACCOUNT_ID } from '@/lib/constants';
+import { PlusCircle, AlertTriangle, Loader2, Search, Filter, CalendarIcon, XCircle, Camera, Trash2, RefreshCw } from 'lucide-react';
 import { format, subMonths, isValid, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -28,14 +28,13 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"; // Added AlertDialog
+} from "@/components/ui/alert-dialog";
 
 const ALL_CATEGORIES_VALUE = "all_categories";
 const ALL_MEMBERS_VALUE = "all_members";
 
 export default function TransactionsPage() {
-  const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth, addTransaction, updateTransaction, deleteTransaction, bulkDeleteTransactions } = useAuthStore(); // Added bulkDeleteTransactions
+  const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth, addTransaction, updateTransaction, deleteTransaction, bulkDeleteTransactions } = useAuthStore();
   const { toast } = useToast();
   
   const [isFormVisible, setIsFormVisible] = useState(false);
@@ -44,8 +43,8 @@ export default function TransactionsPage() {
   
   const [currentMonthYear, setCurrentMonthYear] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Filters state
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>(ALL_CATEGORIES_VALUE);
   const [filterPerformedBy, setFilterPerformedBy] = useState<string>(ALL_MEMBERS_VALUE);
@@ -53,10 +52,8 @@ export default function TransactionsPage() {
   const [filterEndDate, setFilterEndDate] = useState<Date | undefined>(undefined);
   const [isDateFilterActive, setIsDateFilterActive] = useState(false);
 
-  // State for bulk selection
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-
 
   const monthOptions = useMemo(() => {
     const options = [];
@@ -77,53 +74,50 @@ export default function TransactionsPage() {
     }
   }, [monthOptions, currentMonthYear, isDateFilterActive]);
 
-  const loadDataForCurrentFilters = async () => {
+  const loadDataForCurrentFilters = useCallback(async () => {
     if (!currentUser || !familyId) return;
     setIsLoading(true);
     if (isDateFilterActive && filterStartDate && filterEndDate) {
-      await fetchTransactionsForDateRange(filterStartDate, filterEndDate);
+      const monthsToFetch = new Set<string>();
+      let currentFetchMonth = startOfMonth(new Date(filterStartDate));
+      const endMonthTarget = startOfMonth(new Date(filterEndDate));
+      while (currentFetchMonth <= endMonthTarget) {
+          monthsToFetch.add(format(currentFetchMonth, 'yyyy-MM'));
+          const nextMonth = new Date(currentFetchMonth);
+          nextMonth.setMonth(nextMonth.getMonth() + 1);
+          currentFetchMonth = nextMonth;
+      }
+      if (monthsToFetch.size > 0) {
+        for (const monthStr of Array.from(monthsToFetch)) {
+            await fetchTransactionsByMonth(familyId, monthStr);
+        }
+      }
     } else if (currentMonthYear && !isDateFilterActive) {
       await fetchTransactionsByMonth(familyId, currentMonthYear);
     } else if (monthOptions.length > 0 && !isDateFilterActive) {
-      // Fallback to the first month in options if currentMonthYear is somehow not set
       const defaultMonth = monthOptions[0].value;
-      setCurrentMonthYear(defaultMonth); // Ensure currentMonthYear is set before fetching
+      if (currentMonthYear !== defaultMonth) setCurrentMonthYear(defaultMonth);
       await fetchTransactionsByMonth(familyId, defaultMonth);
     }
     setIsLoading(false);
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, familyId, currentMonthYear, isDateFilterActive, filterStartDate, filterEndDate, fetchTransactionsByMonth, monthOptions]);
   
   useEffect(() => {
-    // Initial load and when specific dependencies change
     loadDataForCurrentFilters();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, familyId, currentMonthYear, isDateFilterActive]); // Removed filterStartDate, filterEndDate to rely on loadDataForCurrentFilters
+  }, [loadDataForCurrentFilters]);
 
-
-  const fetchTransactionsForDateRange = async (start: Date, end: Date) => {
-    if (!currentUser || !familyId) return;
-    // setIsLoading(true); //isLoading is handled by loadDataForCurrentFilters
-    const monthsToFetch = new Set<string>();
-    let currentFetchMonth = startOfMonth(new Date(start)); // Use a different var name
-    const endMonthTarget = startOfMonth(new Date(end));
-    while (currentFetchMonth <= endMonthTarget) {
-        monthsToFetch.add(format(currentFetchMonth, 'yyyy-MM'));
-        const nextMonth = new Date(currentFetchMonth);
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        currentFetchMonth = nextMonth;
-    }
-    if (monthsToFetch.size > 0) {
-      await Promise.all(Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m)));
-    }
-    // setIsLoading(false);
+  const handleRefreshTransactions = async () => {
+    setIsRefreshing(true);
+    await loadDataForCurrentFilters();
+    setIsRefreshing(false);
   };
-  
 
   const handleFormSuccess = async () => {
     setIsFormVisible(false);
     setEditingTransaction(null);
     setIsBillModeActive(false); 
-    await loadDataForCurrentFilters(); // Reload data based on current filters
+    await loadDataForCurrentFilters();
   };
 
   const handleEdit = (transaction: Transaction) => {
@@ -149,7 +143,6 @@ export default function TransactionsPage() {
     setEditingTransaction(null);
     setIsBillModeActive(false);
   };
-
 
   const displayTransactions = useMemo(() => {
     if (!currentUser || !familyId) return [];
@@ -192,11 +185,10 @@ export default function TransactionsPage() {
     setFilterStartDate(undefined);
     setFilterEndDate(undefined);
     setIsDateFilterActive(false);
-    setSelectedTransactionIds([]); // Clear selection when filters reset
+    setSelectedTransactionIds([]);
     if (monthOptions.length > 0 && currentMonthYear !== monthOptions[0].value) {
         setCurrentMonthYear(monthOptions[0].value); 
     } else {
-        // If already on the default month, or no month options, force a reload
         await loadDataForCurrentFilters();
     }
   };
@@ -208,7 +200,7 @@ export default function TransactionsPage() {
              return;
         }
         setIsDateFilterActive(true);
-        setSelectedTransactionIds([]); // Clear selection when date filter applied
+        setSelectedTransactionIds([]);
         await loadDataForCurrentFilters();
     } else {
         toast({ title: "Thiếu thông tin", description: "Vui lòng chọn cả ngày bắt đầu và ngày kết thúc.", variant: "default"});
@@ -225,9 +217,9 @@ export default function TransactionsPage() {
 
   const handleToggleSelectAll = () => {
     if (selectedTransactionIds.length === displayTransactions.length) {
-      setSelectedTransactionIds([]); // Deselect all
+      setSelectedTransactionIds([]);
     } else {
-      setSelectedTransactionIds(displayTransactions.map(t => t.id)); // Select all displayed
+      setSelectedTransactionIds(displayTransactions.map(t => t.id));
     }
   };
 
@@ -244,14 +236,13 @@ export default function TransactionsPage() {
 
     if (transactionsToDelete.length > 0) {
       await bulkDeleteTransactions(transactionsToDelete);
-      setSelectedTransactionIds([]); // Clear selection after deletion
+      setSelectedTransactionIds([]);
     } else {
       toast({ title: "Lỗi", description: "Không tìm thấy thông tin giao dịch để xóa.", variant: "destructive"});
     }
     setIsBulkDeleting(false);
-    await loadDataForCurrentFilters(); // Refresh data
+    await loadDataForCurrentFilters();
   };
-
 
   if (!currentUser) {
     return (
@@ -301,10 +292,15 @@ export default function TransactionsPage() {
         </Card>
       )}
 
-      {/* Filter Section */}
       <Card className="shadow-md">
         <CardHeader>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
             <CardTitle className="flex items-center gap-2"><Filter className="h-5 w-5"/> Bộ Lọc Giao Dịch</CardTitle>
+            <Button onClick={handleRefreshTransactions} disabled={isLoading || isRefreshing} variant="outline" size="sm" className="mt-2 sm:mt-0">
+              {isRefreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              Làm mới
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -338,13 +334,13 @@ export default function TransactionsPage() {
                                 setFilterEndDate(endOfMonth(today));
                             }
                             setIsDateFilterActive(true);
-                            setSelectedTransactionIds([]); // Clear selection
+                            setSelectedTransactionIds([]);
                         } else {
                             setIsDateFilterActive(false);
                             setCurrentMonthYear(value);
                             setFilterStartDate(undefined);
                             setFilterEndDate(undefined);
-                            setSelectedTransactionIds([]); // Clear selection
+                            setSelectedTransactionIds([]);
                         }
                     }}
                  >
@@ -389,8 +385,8 @@ export default function TransactionsPage() {
                             </PopoverContent>
                         </Popover>
                     </div>
-                    <Button onClick={handleApplyDateFilter} className="h-10 w-full md:w-auto" disabled={!filterStartDate || !filterEndDate || isLoading}>
-                        {isLoading && isDateFilterActive ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    <Button onClick={handleApplyDateFilter} className="h-10 w-full md:w-auto" disabled={!filterStartDate || !filterEndDate || isLoading || isRefreshing}>
+                        {(isLoading || isRefreshing) && isDateFilterActive ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Áp dụng khoảng ngày
                     </Button>
                 </div>
@@ -402,7 +398,6 @@ export default function TransactionsPage() {
             )}
         </CardContent>
       </Card>
-
 
       <Card className="shadow-lg">
         <CardHeader>
@@ -425,9 +420,9 @@ export default function TransactionsPage() {
                         setIsDateFilterActive(false); 
                         setFilterStartDate(undefined);
                         setFilterEndDate(undefined);
-                        setSelectedTransactionIds([]); // Clear selection when month changes
+                        setSelectedTransactionIds([]);
                     }} 
-                    disabled={isLoading}
+                    disabled={isLoading || isRefreshing}
                 >
                     <SelectTrigger>
                     <SelectValue placeholder="Chọn tháng" />
@@ -443,7 +438,6 @@ export default function TransactionsPage() {
                 </div>
             )}
           </div>
-          {/* Bulk Actions Section */}
           {displayTransactions.length > 0 && (
              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mt-4 border-t pt-4">
                 <div className="flex items-center gap-2">
@@ -485,7 +479,7 @@ export default function TransactionsPage() {
           )}
         </CardHeader>
         <CardContent>
-          {isLoading && displayTransactions.length === 0 ? ( 
+          {(isLoading || isRefreshing) && displayTransactions.length === 0 ? ( 
             <div className="flex justify-center items-center h-[200px]">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2">Đang tải giao dịch...</p>
@@ -500,7 +494,7 @@ export default function TransactionsPage() {
                     setEditingTransaction(null); 
                     setIsFormVisible(false);
                     setIsBillModeActive(false);
-                    setSelectedTransactionIds(prev => prev.filter(id => id !== transactionId)); // Remove from selection if deleted individually
+                    setSelectedTransactionIds(prev => prev.filter(id => id !== transactionId));
                     
                     await deleteTransaction(transactionId, monthYearToDelete); 
                     await loadDataForCurrentFilters();
@@ -514,4 +508,3 @@ export default function TransactionsPage() {
     </div>
   );
 }
-

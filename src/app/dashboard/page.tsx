@@ -1,14 +1,14 @@
 
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/hooks/useAuth';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { SpendingChatbot } from '@/components/dashboard/SpendingChatbot';
 import { WithdrawCashModal } from '@/components/dashboard/WithdrawCashModal';
-import { SharedNotes } from '@/components/dashboard/SharedNotes'; // Import SharedNotes
-import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera, PlusCircle, Landmark, Wallet, ArrowRightLeft, ChevronDown } from 'lucide-react';
+import { SharedNotes } from '@/components/dashboard/SharedNotes';
+import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera, PlusCircle, Landmark, Wallet, ArrowRightLeft, ChevronDown, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
@@ -46,6 +46,7 @@ export default function DashboardPage() {
   const [monthlyChartData, setMonthlyChartData] = useState<any[]>([]);
   const [currentMonthYear, setCurrentMonthYear] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
 
   useEffect(() => {
@@ -53,32 +54,33 @@ export default function DashboardPage() {
     setCurrentMonthYear(format(now, 'yyyy-MM'));
   }, []);
 
-  useEffect(() => {
-    if (currentUser && familyId && currentMonthYear) {
-      const loadDashboardData = async () => {
-        setIsLoading(true);
-        
-        // Fetch current month data first
-        await fetchTransactionsByMonth(familyId, currentMonthYear);
+  const loadAllDashboardData = useCallback(async () => {
+    if (!currentUser || !familyId || !currentMonthYear) return;
+    
+    setIsLoading(true);
+    
+    // Fetch current month data first
+    await fetchTransactionsByMonth(familyId, currentMonthYear);
 
-        // Fetch data for the last 5 previous months for the chart, sequentially
-        const currentDateObj = new Date(currentMonthYear + '-01'); 
-        for (let i = 1; i <= 5; i++) { 
-          const dateToFetch = subMonths(currentDateObj, i);
-          const monthYearToFetch = format(dateToFetch, 'yyyy-MM');
-          await fetchTransactionsByMonth(familyId, monthYearToFetch);
-        }
-        
-        // Fetch data for the previous month for chatbot context if needed, sequentially
-        const prevMonthForChatbot = format(subMonths(new Date(currentMonthYear + '-01'), 1), 'yyyy-MM');
-        await fetchTransactionsByMonth(familyId, prevMonthForChatbot);
-
-        setIsLoading(false);
-      };
-      loadDashboardData();
+    // Fetch data for the last 5 previous months for the chart, sequentially
+    const currentDateObj = new Date(currentMonthYear + '-01'); 
+    for (let i = 1; i <= 5; i++) { 
+      const dateToFetch = subMonths(currentDateObj, i);
+      const monthYearToFetch = format(dateToFetch, 'yyyy-MM');
+      await fetchTransactionsByMonth(familyId, monthYearToFetch);
     }
+    
+    // Fetch data for the previous month for chatbot context if needed, sequentially
+    const prevMonthForChatbot = format(subMonths(new Date(currentMonthYear + '-01'), 1), 'yyyy-MM');
+    await fetchTransactionsByMonth(familyId, prevMonthForChatbot);
+
+    setIsLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, familyId, currentMonthYear]); 
+  }, [currentUser, familyId, currentMonthYear, fetchTransactionsByMonth]); // fetchTransactionsByMonth is stable
+
+  useEffect(() => {
+    loadAllDashboardData();
+  }, [loadAllDashboardData]); 
 
   useEffect(() => {
     if (currentUser && familyId && transactions.length > 0 && currentMonthYear) {
@@ -154,6 +156,12 @@ export default function DashboardPage() {
     }
   }, [currentUser, familyId, transactions, currentMonthYear, getTransactionsForFamilyByMonth, isLoading]);
 
+  const handleRefreshDashboard = async () => {
+    setIsRefreshing(true);
+    await loadAllDashboardData();
+    setIsRefreshing(false);
+  };
+
   if (!currentUser) {
     return <div className="text-center p-8"><AlertTriangle className="mx-auto h-12 w-12 text-destructive" /><p className="mt-4 text-lg">Vui lòng đăng nhập để xem dashboard.</p></div>;
   }
@@ -176,9 +184,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Chào mừng {currentUser}!</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+        <h1 className="text-3xl font-bold tracking-tight">Chào mừng {currentUser}!</h1>
+        <Button onClick={handleRefreshDashboard} disabled={isLoading || isRefreshing} variant="outline" size="sm">
+          {isRefreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+          Làm mới dữ liệu
+        </Button>
+      </div>
 
-      {isLoading && transactions.length === 0 ? (
+      {isLoading && transactions.length === 0 && !isRefreshing ? (
         <div className="flex justify-center items-center py-8">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="ml-2">Đang tải dữ liệu dashboard...</p>
@@ -250,7 +264,7 @@ export default function DashboardPage() {
             currentBankBalance={summary.balanceBank}
           />
 
-          <SharedNotes /> {/* Add SharedNotes component here */}
+          <SharedNotes />
 
           <Card className="shadow-lg">
             <CardHeader>
@@ -279,7 +293,7 @@ export default function DashboardPage() {
               <CardDescription>Biểu đồ cột so sánh tổng thu và tổng chi (không tính giao dịch rút/nạp tiền mặt nội bộ) của gia đình qua các tháng.</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading && monthlyChartData.length === 0 ? (
+              {(isLoading || isRefreshing) && monthlyChartData.length === 0 ? (
                  <div className="flex justify-center items-center h-[300px]">
                     <Loader2 className="h-10 w-10 animate-spin text-primary" />
                     <p className="ml-3">Đang tải dữ liệu biểu đồ...</p>

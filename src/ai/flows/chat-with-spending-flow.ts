@@ -64,6 +64,7 @@ Dữ liệu giao dịch của {{{familyName}}} trong tháng {{{currentMonthLabel
 
 Hãy phân tích kỹ các giao dịch trên để trả lời câu hỏi.
 Nếu thông tin không có trong danh sách giao dịch cho tháng {{{currentMonthLabel}}}, hãy trả lời một cách lịch sự rằng bạn không tìm thấy thông tin đó trong dữ liệu của tháng {{{currentMonthLabel}}}.
+Nếu không có giao dịch nào được cung cấp (danh sách giao dịch trống) cho tháng {{{currentMonthLabel}}}, hãy trả lời rằng "Tôi không có dữ liệu giao dịch nào cho tháng {{{currentMonthLabel}}} để trả lời câu hỏi của bạn."
 Trả lời bằng tiếng Việt.
 `,
 });

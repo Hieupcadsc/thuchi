@@ -7,7 +7,7 @@ import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS, FAMILY_ACCOUNT_ID } from '@/li
 import type { Transaction } from '@/types';
 
 const FALLBACK_HOST_CHATBOT = 'localhost';
-const FALLBACK_PORT_CHATBOT = '3000'; // IMPORTANT: Ensure this matches the port your Next.js server is running on in this environment if NEXT_PUBLIC_APP_URL is not set.
+const FALLBACK_PORT_CHATBOT = '9002'; // Reverted to 9002 as per user's server log
 
 // Helper to fetch transactions for a given monthYear and familyId
 async function fetchTransactionsForMonth(familyId: string, monthYear: string): Promise<Transaction[]> {
@@ -78,8 +78,9 @@ async function fetchTransactionsForMonth(familyId: string, monthYear: string): P
     console.log(`[ChatbotActions fetchTransactionsForMonth] Fetched ${transactions.length} transactions for ${monthYear} from ${requestUrlString}.`);
     return transactions;
   } catch (error: any) {
+    const errorCauseString = error.cause ? `Nguyên nhân: ${JSON.stringify(error.cause)}` : '';
     console.error(`[ChatbotActions fetchTransactionsForMonth] Fetch to "${requestUrlString}" FAILED. Error Name: ${error.name}, Message: ${error.message}, Cause:`, error.cause);
-    throw new Error(error.message || `Lỗi khi gọi API giao dịch cho ${monthYear}.`);
+    throw new Error(error.message || `Lỗi khi gọi API giao dịch cho ${monthYear}. ${errorCauseString}`);
   }
 }
 

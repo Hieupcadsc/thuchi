@@ -16,7 +16,7 @@ interface SaveNoteResult {
 }
 
 const FALLBACK_HOST = 'localhost';
-const FALLBACK_PORT = '3000'; // IMPORTANT: Ensure this matches the port your Next.js server is running on in this environment if NEXT_PUBLIC_APP_URL is not set.
+const FALLBACK_PORT = '9002'; // Reverted to 9002 as per user's server log
 
 export async function getSharedNote(): Promise<SharedNoteData | { error: string }> {
   const endpoint = '/api/shared-notes';
@@ -68,9 +68,9 @@ export async function getSharedNote(): Promise<SharedNoteData | { error: string 
     return data;
   } catch (error: any) {
     const errorMessage = error.message || 'Lỗi không xác định khi fetch.';
-    const errorCause = error.cause ? `Nguyên nhân: ${JSON.stringify(error.cause)}` : '';
-    console.error(`[notesActions getSharedNote] Network or fetch exception for URL ${absoluteApiUrl}:`, errorMessage, error.stack, errorCause);
-    return { error: `Lỗi kết nối khi tải ghi chú: ${errorMessage}. Hãy đảm bảo server API đang chạy và có thể truy cập tại ${absoluteApiUrl}. ${errorCause}` };
+    const errorCauseString = error.cause ? `Nguyên nhân: ${JSON.stringify(error.cause)}` : '';
+    console.error(`[notesActions getSharedNote] Network or fetch exception for URL ${absoluteApiUrl}:`, errorMessage, error.stack, errorCauseString);
+    return { error: `Lỗi kết nối khi tải ghi chú: ${errorMessage}. Hãy đảm bảo server API đang chạy và có thể truy cập tại ${absoluteApiUrl}. ${errorCauseString}` };
   }
 }
 
@@ -140,8 +140,8 @@ export async function saveSharedNote(noteContent: string, performingUser: Family
     }
   } catch (error: any) {
     const errorMessage = error.message || 'Lỗi không xác định khi fetch.';
-    const errorCause = error.cause ? `Nguyên nhân: ${JSON.stringify(error.cause)}` : '';
-    console.error(`[notesActions saveSharedNote] Network or fetch exception for URL ${absoluteApiUrl}:`, errorMessage, error.stack, errorCause);
-    return { success: false, error: `Lỗi kết nối khi lưu ghi chú: ${errorMessage}. Hãy đảm bảo server API đang chạy và có thể truy cập tại ${absoluteApiUrl}. ${errorCause}` };
+    const errorCauseString = error.cause ? `Nguyên nhân: ${JSON.stringify(error.cause)}` : '';
+    console.error(`[notesActions saveSharedNote] Network or fetch exception for URL ${absoluteApiUrl}:`, errorMessage, error.stack, errorCauseString);
+    return { success: false, error: `Lỗi kết nối khi lưu ghi chú: ${errorMessage}. Hãy đảm bảo server API đang chạy và có thể truy cập tại ${absoluteApiUrl}. ${errorCauseString}` };
   }
 }

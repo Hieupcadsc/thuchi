@@ -19,7 +19,7 @@ interface SaveNoteResult {
 // Prioritize NEXT_PUBLIC_APP_URL (useful for deployed environments).
 // Fallback to localhost with the specific port if not set.
 const FALLBACK_HOST = 'localhost';
-const FALLBACK_PORT = '3000'; // Adjusted to 3000 as per user's Linux host port
+const FALLBACK_PORT = '3000'; // << CHANGED TO 3000 based on user's Linux host info
 
 export async function getSharedNote(): Promise<SharedNoteData | { error: string }> {
   const endpoint = '/api/shared-notes';

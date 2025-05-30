@@ -7,7 +7,7 @@ import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS, FAMILY_ACCOUNT_ID } from '@/li
 import type { Transaction } from '@/types';
 
 const FALLBACK_HOST_CHATBOT = 'localhost';
-const FALLBACK_PORT_CHATBOT = '3000'; // Adjusted to 3000 as per user's Linux host port
+const FALLBACK_PORT_CHATBOT = '3000'; // << CHANGED TO 3000 based on user's Linux host info
 
 // Helper to fetch transactions for a given monthYear and familyId
 async function fetchTransactionsForMonth(familyId: string, monthYear: string): Promise<Transaction[]> {
@@ -30,8 +30,8 @@ async function fetchTransactionsForMonth(familyId: string, monthYear: string): P
           const baseUrlObj = new URL(appBaseUrlFromEnv); // Validate if it's a proper base
           requestUrlString = new URL(relativePath, baseUrlObj).toString();
           console.log(`[ChatbotActions fetchTransactionsForMonth] Using NEXT_PUBLIC_APP_URL as base: ${appBaseUrlFromEnv}. Full URL: ${requestUrlString}`);
-      } catch (e) {
-          console.error(`[ChatbotActions fetchTransactionsForMonth] Invalid NEXT_PUBLIC_APP_URL: ${appBaseUrlFromEnv}. Falling back. Error:`, e);
+      } catch (e: any) {
+          console.error(`[ChatbotActions fetchTransactionsForMonth] Invalid NEXT_PUBLIC_APP_URL: ${appBaseUrlFromEnv}. Falling back. Error: ${e.message}`);
           requestUrlString = `http://${FALLBACK_HOST_CHATBOT}:${FALLBACK_PORT_CHATBOT}${relativePath}`;
           console.log(`[ChatbotActions fetchTransactionsForMonth] NEXT_PUBLIC_APP_URL invalid, using fallback http://${FALLBACK_HOST_CHATBOT}:${FALLBACK_PORT_CHATBOT}. Full URL: ${requestUrlString}`);
       }
@@ -89,7 +89,7 @@ export async function askSpendingChatbot(userQuestion: string): Promise<ChatWith
     const familyId = FAMILY_ACCOUNT_ID; 
     
     if (!familyId || familyId === 'undefined') {
-        const criticalErrorMsg = `[ChatbotActions askSpendingChatbot] CRITICAL: familyId is invalid: ${familyId}. Check constants.ts.`;
+        const criticalErrorMsg = `[ChatbotActions askSpendingChatbot] CRITICAL: familyId is invalid: ${familyId}. Check constants.ts or import.`;
         console.error(criticalErrorMsg);
         return { error: "Lỗi cấu hình hệ thống: ID gia đình không hợp lệ." };
     }

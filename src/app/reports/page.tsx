@@ -35,9 +35,7 @@ const chartColors = [
 const initialMemberSummary: MonthlySummary = {
   totalIncome: 0,
   totalExpense: 0,
-  balance: 0, // Note: This balance might be confusing if it also excludes internal transfers. 
-                // For member-specific balance, it might be better to show Bank/Cash balances.
-                // For now, this balance will be totalIncome (excluding transfers) - totalExpense (excluding transfers)
+  balance: 0, 
 };
 
 // Helper to create initial state for member summaries and breakdowns
@@ -91,35 +89,39 @@ export default function ReportsPage() {
     if (currentUser && familyId) {
       const loadReportData = async () => {
         setIsLoading(true);
-        const monthsToFetch = new Set<string>();
+        const monthsToFetchSet = new Set<string>();
         
-        const currentDate = new Date();
+        // For MonthlyComparisonChart (last 6 months)
+        const currentDateObj = new Date();
         for (let i = 5; i >= 0; i--) { 
-          const date = subMonths(currentDate, i);
-          monthsToFetch.add(format(date, 'yyyy-MM'));
+          const date = subMonths(currentDateObj, i);
+          monthsToFetchSet.add(format(date, 'yyyy-MM'));
         }
+        // For detailed breakdown (selectedMonth)
         if (selectedMonth) { 
-          monthsToFetch.add(selectedMonth);
+          monthsToFetchSet.add(selectedMonth);
         }
 
-        if (monthsToFetch.size > 0 && familyId) { 
-            await Promise.all(
-              Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m))
-            );
+        if (monthsToFetchSet.size > 0 && familyId) { 
+            // Fetch months sequentially to avoid quota issues
+            for (const monthStr of Array.from(monthsToFetchSet)) {
+                 await fetchTransactionsByMonth(familyId, monthStr);
+            }
         }
         setIsLoading(false);
       };
       loadReportData();
     }
-  }, [currentUser, familyId, selectedMonth, fetchTransactionsByMonth]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, familyId, selectedMonth]); // fetchTransactionsByMonth is stable
 
   useEffect(() => {
     if (currentUser && familyId && transactions.length > 0) {
       // Monthly Comparison Chart Data (excluding internal transfers)
       const comparisonData: MonthlyChartData[] = [];
-      const currentDate = new Date();
+      const currentDate = new Date(); // Use actual current date for chart range
       for (let i = 5; i >= 0; i--) {
-        const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+        const date = subMonths(currentDate, i);
         const monthYearKey = format(date, 'yyyy-MM');
         const monthTransactions = getTransactionsForFamilyByMonth(familyId, monthYearKey); 
         
@@ -191,7 +193,8 @@ export default function ReportsPage() {
         setMemberCategoryBreakdown(newMemberCategoryBreakdown);
       }
     } else if (currentUser && familyId && !isLoading) {
-        setMonthlyComparisonData([]);
+        // If no transactions, set empty or default states
+        setMonthlyComparisonData([]); // Or initialize with 6 months of 0s if preferred for chart structure
         setCategoryBreakdownDataFamily([]);
         setFamilyMonthlySummary(initialMemberSummary);
         setMemberSummary(createInitialMemberData(initialMemberSummary));

@@ -56,28 +56,31 @@ export default function DashboardPage() {
     if (currentUser && familyId && currentMonthYear) {
       const loadDashboardData = async () => {
         setIsLoading(true);
-        const monthsToFetch = new Set<string>();
-        monthsToFetch.add(currentMonthYear); // Current month for summary
+        
+        // Fetch current month data first
+        await fetchTransactionsByMonth(familyId, currentMonthYear);
 
-        // Last 6 months for the chart (including current)
-        const currentDate = new Date();
-        for (let i = 5; i >= 0; i--) {
-          const date = subMonths(currentDate, i);
-          monthsToFetch.add(format(date, 'yyyy-MM'));
+        // Fetch data for the last 5 previous months for the chart, sequentially
+        const currentDateObj = new Date(currentMonthYear + '-01'); // Ensure we parse currentMonthYear correctly
+        for (let i = 1; i <= 5; i++) { // Fetch 5 previous months
+          const dateToFetch = subMonths(currentDateObj, i);
+          const monthYearToFetch = format(dateToFetch, 'yyyy-MM');
+          // Check if data for this month is already in transactions to avoid redundant fetches,
+          // though fetchTransactionsByMonth itself might handle this in its logic
+          // For simplicity, we just call it. The store logic should prevent re-fetching if data already exists.
+          await fetchTransactionsByMonth(familyId, monthYearToFetch);
         }
+        
+        // Fetch data for the previous month for chatbot context if needed, sequentially
+        const prevMonthForChatbot = format(subMonths(new Date(currentMonthYear + '-01'), 1), 'yyyy-MM');
+        await fetchTransactionsByMonth(familyId, prevMonthForChatbot);
 
-        // Fetch data for the previous month as well for chatbot context if needed, though chatbot fetches its own
-        monthsToFetch.add(format(subMonths(new Date(currentMonthYear + '-01'), 1), 'yyyy-MM'));
-
-
-        await Promise.all(
-          Array.from(monthsToFetch).map(m => fetchTransactionsByMonth(familyId, m))
-        );
         setIsLoading(false);
       };
       loadDashboardData();
     }
-  }, [currentUser, familyId, currentMonthYear, fetchTransactionsByMonth]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, familyId, currentMonthYear]); // fetchTransactionsByMonth is a stable function from Zustand
 
   useEffect(() => {
     if (currentUser && familyId && transactions.length > 0 && currentMonthYear) {
@@ -120,9 +123,9 @@ export default function DashboardPage() {
 
       // Chart data should also exclude internal transfers for a clearer picture of external income/expense
       const chartData = [];
-      const currentDate = new Date();
-      for (let i = 5; i >= 0; i--) {
-        const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const currentDate = new Date(currentMonthYear + "-01T00:00:00"); // Use currentMonthYear as the base for chart
+      for (let i = 5; i >= 0; i--) { // Last 6 months including current
+        const date = subMonths(currentDate, i);
         const monthYearKey = format(date, 'yyyy-MM');
         const monthTransactions = getTransactionsForFamilyByMonth(familyId, monthYearKey);
 
@@ -142,7 +145,18 @@ export default function DashboardPage() {
       setMonthlyChartData(chartData);
     } else if (currentUser && familyId && !isLoading) {
       setSummary(initialSummary);
-      setMonthlyChartData([]);
+      // If no transactions at all, initialize chart data for 6 months with 0 values
+        const chartData = [];
+        const currentDate = new Date(currentMonthYear + "-01T00:00:00");
+        for (let i = 5; i >= 0; i--) {
+            const date = subMonths(currentDate, i);
+            chartData.push({
+                month: MONTH_NAMES[date.getMonth()],
+                thu: 0,
+                chi: 0,
+            });
+        }
+        setMonthlyChartData(chartData);
     }
   }, [currentUser, familyId, transactions, currentMonthYear, getTransactionsForFamilyByMonth, isLoading]);
 
@@ -155,14 +169,14 @@ export default function DashboardPage() {
     chi: { label: "Chi", color: "hsl(var(--chart-1))" },
   } satisfies Parameters<typeof ChartContainer>[0]["config"];
 
-  const currentMonthName = currentMonthYear ? MONTH_NAMES[new Date(currentMonthYear + '-01').getMonth()] : '';
+  const currentMonthName = currentMonthYear ? MONTH_NAMES[new Date(currentMonthYear + '-01T00:00:00').getMonth()] : '';
 
   const handleWithdrawSuccess = async () => {
     setIsWithdrawModalOpen(false);
     // Re-fetch or re-calculate summary data
     if (currentUser && familyId && currentMonthYear) {
         setIsLoading(true);
-        await fetchTransactionsByMonth(familyId, currentMonthYear);
+        await fetchTransactionsByMonth(familyId, currentMonthYear); // Only fetch current month for summary update
         setIsLoading(false);
     }
   };
@@ -272,7 +286,12 @@ export default function DashboardPage() {
               <CardDescription>Biểu đồ cột so sánh tổng thu và tổng chi (không tính giao dịch rút/nạp tiền mặt nội bộ) của gia đình qua các tháng.</CardDescription>
             </CardHeader>
             <CardContent>
-              {monthlyChartData.length > 0 ? (
+              {isLoading && monthlyChartData.length === 0 ? (
+                 <div className="flex justify-center items-center h-[300px]">
+                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                    <p className="ml-3">Đang tải dữ liệu biểu đồ...</p>
+                 </div>
+              ) : monthlyChartData.length > 0 ? (
                 <ChartContainer config={chartConfig} className="h-[300px] w-full">
                   <RechartsBarChart accessibilityLayer data={monthlyChartData}>
                     <CartesianGrid vertical={false} />
@@ -309,3 +328,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

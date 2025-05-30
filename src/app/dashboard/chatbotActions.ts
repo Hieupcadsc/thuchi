@@ -3,25 +3,48 @@
 
 import { format } from 'date-fns';
 import { chatWithSpending, type ChatWithSpendingInput, type ChatWithSpendingOutput, type TransactionForChat } from '@/ai/flows/chat-with-spending-flow';
-// Đảm bảo import trực tiếp từ constants
 import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS, FAMILY_ACCOUNT_ID } from '@/lib/constants';
 import type { Transaction } from '@/types';
-// Không import FAMILY_ACCOUNT_ID từ useAuth ở đây nữa
 
 // Helper to fetch transactions for a given monthYear and familyId
 async function fetchTransactionsForMonth(familyId: string, monthYear: string): Promise<Transaction[]> {
-  try {
-    // Thêm kiểm tra familyId ở đây
-    if (!familyId || familyId === 'undefined') {
-      console.error('[ChatbotActions fetchTransactionsForMonth] familyId is undefined or the string "undefined". Aborting fetch.');
-      // Không throw error ở đây để hàm gọi chính có thể xử lý lỗi chung
-      return []; // Trả về mảng rỗng nếu familyId không hợp lệ
-    }
-    const apiUrl = `/api/transactions?userId=${encodeURIComponent(familyId)}&monthYear=${encodeURIComponent(monthYear)}`;
-    
-    console.log(`[ChatbotActions] Fetching transactions from: ${apiUrl}`);
+  if (!familyId || familyId === 'undefined') {
+    console.error('[ChatbotActions fetchTransactionsForMonth] familyId is invalid. Aborting fetch.');
+    return [];
+  }
+  if (!monthYear) {
+      console.error('[ChatbotActions fetchTransactionsForMonth] monthYear is undefined. Aborting fetch.');
+      return [];
+  }
 
-    const response = await fetch(apiUrl, { cache: 'no-store' });
+  const relativePath = `/api/transactions?userId=${encodeURIComponent(familyId)}&monthYear=${encodeURIComponent(monthYear)}`;
+  let requestUrlString: string;
+
+  const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+  if (appBaseUrl) {
+      try {
+          const baseUrlObj = new URL(appBaseUrl); // Validate if it's a proper base
+          requestUrlString = new URL(relativePath, baseUrlObj).toString();
+          console.log(`[ChatbotActions fetchTransactionsForMonth] Using NEXT_PUBLIC_APP_URL as base: ${appBaseUrl}. Full URL: ${requestUrlString}`);
+      } catch (e) {
+          console.error(`[ChatbotActions fetchTransactionsForMonth] Invalid NEXT_PUBLIC_APP_URL: ${appBaseUrl}. Falling back. Error:`, e);
+          const defaultHost = 'localhost';
+          const defaultPort = process.env.PORT || '9002'; // Matching package.json default
+          requestUrlString = `http://${defaultHost}:${defaultPort}${relativePath}`;
+          console.log(`[ChatbotActions fetchTransactionsForMonth] NEXT_PUBLIC_APP_URL invalid, using fallback http://${defaultHost}:${defaultPort}. Full URL: ${requestUrlString}`);
+      }
+  } else {
+      const defaultHost = 'localhost';
+      const defaultPort = process.env.PORT || '9002'; // Matching package.json default
+      requestUrlString = `http://${defaultHost}:${defaultPort}${relativePath}`;
+      console.log(`[ChatbotActions fetchTransactionsForMonth] NEXT_PUBLIC_APP_URL not set, using fallback http://${defaultHost}:${defaultPort}. Full URL: ${requestUrlString}`);
+  }
+  
+  console.log(`[ChatbotActions fetchTransactionsForMonth] Final URL for fetch: "${requestUrlString}"`);
+
+  try {
+    const response = await fetch(requestUrlString, { cache: 'no-store' });
 
     if (!response.ok) {
       let errorData: any = {};
@@ -37,12 +60,12 @@ async function fetchTransactionsForMonth(familyId: string, monthYear: string): P
         console.error("[ChatbotActions fetchTransactionsForMonth] Failed to read API error response text:", textErr);
       }
       console.error(
-        `[ChatbotActions fetchTransactionsForMonth] Error response from API (status: ${response.status}, statusText: ${response.statusText}) when fetching transactions. Parsed JSON:`,
+        `[ChatbotActions fetchTransactionsForMonth] Error response from API (status: ${response.status}, statusText: ${response.statusText}) when fetching from ${requestUrlString}. Parsed JSON:`,
         errorData,
         responseBodyText ? `Raw Body: "${responseBodyText}"` : "Raw body could not be read."
       );
       
-      let finalErrorMessage = 'Không thể tải giao dịch từ server.';
+      let finalErrorMessage = `Không thể tải giao dịch từ server (${response.status}).`;
       if (errorData?.message) {
         finalErrorMessage = errorData.message;
       } else if (responseBodyText && responseBodyText.trim() !== '' && !responseBodyText.trim().startsWith('<') && responseBodyText.trim() !== '{}' ) { 
@@ -53,56 +76,45 @@ async function fetchTransactionsForMonth(familyId: string, monthYear: string): P
       throw new Error(finalErrorMessage);
     }
     const transactions: Transaction[] = await response.json();
-    console.log(`[ChatbotActions] Fetched ${transactions.length} transactions for ${monthYear}.`);
+    console.log(`[ChatbotActions fetchTransactionsForMonth] Fetched ${transactions.length} transactions for ${monthYear} from ${requestUrlString}.`);
     return transactions;
   } catch (error: any) {
-    console.error(`[ChatbotActions] Error in fetchTransactionsForMonth for ${monthYear}:`, error.message, error.stack);
-    // Ném lại lỗi để hàm gọi chính xử lý
-    throw error;
+    console.error(`[ChatbotActions fetchTransactionsForMonth] Fetch to "${requestUrlString}" FAILED. Error Name: ${error.name}, Message: ${error.message}`);
+    // If error.message already contains "Failed to parse URL", it means 'requestUrlString' itself was the problem for fetch.
+    throw new Error(error.message || `Lỗi khi gọi API giao dịch cho ${monthYear}.`);
   }
 }
 
 export async function askSpendingChatbot(userQuestion: string): Promise<ChatWithSpendingOutput | { error: string }> {
   console.log(`[ChatbotActions] askSpendingChatbot called with question: "${userQuestion}"`);
   try {
-    // Sử dụng FAMILY_ACCOUNT_ID được import trực tiếp từ constants
     const familyId = FAMILY_ACCOUNT_ID; 
     
-    // Kiểm tra sớm nếu FAMILY_ACCOUNT_ID không được import đúng
-    if (!familyId) {
-        const criticalErrorMsg = "[ChatbotActions askSpendingChatbot] CRITICAL: FAMILY_ACCOUNT_ID is undefined. Check constants.ts and import.";
-        console.error(criticalErrorMsg);
-        return { error: "Lỗi cấu hình hệ thống: Không thể xác định ID gia đình." };
-    }
-    if (familyId === 'undefined') { // Kiểm tra trường hợp nó là chuỗi 'undefined'
-        const criticalErrorMsg = "[ChatbotActions askSpendingChatbot] CRITICAL: familyId is the string 'undefined'.";
+    if (!familyId || familyId === 'undefined') {
+        const criticalErrorMsg = `[ChatbotActions askSpendingChatbot] CRITICAL: familyId is invalid: ${familyId}. Check constants.ts.`;
         console.error(criticalErrorMsg);
         return { error: "Lỗi cấu hình hệ thống: ID gia đình không hợp lệ." };
     }
+    console.log(`[ChatbotActions] Using familyId: ${familyId}`);
 
-
-    const currentDate = new Date();
-    const currentMonthYear = format(currentDate, 'yyyy-MM');
+    const currentDate = new Date(); 
+    const currentMonthYear = format(currentDate, 'yyyy-MM'); 
     
-    const currentMonthIndex = currentDate.getMonth();
-    const currentYear = currentDate.getFullYear();
-    const currentMonthLabel = `${MONTH_NAMES[currentMonthIndex]} ${currentYear}`;
+    const currentMonthIndex = currentDate.getMonth(); 
+    const currentYear = currentDate.getFullYear(); 
+    const currentMonthLabel = `${MONTH_NAMES[currentMonthIndex]} ${currentYear}`; 
 
     console.log(`[ChatbotActions] Server current date: ${currentDate.toISOString()}`);
     console.log(`[ChatbotActions] Determined monthYear for query: ${currentMonthYear}`);
     console.log(`[ChatbotActions] Determined currentMonthLabel for AI: ${currentMonthLabel}`);
-    console.log(`[ChatbotActions] Using familyId: ${familyId}`);
-
 
     let rawTransactions: Transaction[];
     try {
         rawTransactions = await fetchTransactionsForMonth(familyId, currentMonthYear);
     } catch (fetchError: any) {
         console.error(`[ChatbotActions askSpendingChatbot] Failed to fetch transactions for ${currentMonthYear}:`, fetchError.message);
-        // Trả về lỗi cho client thay vì để flow AI chạy với mảng rỗng nếu không có ý định
         return { error: `Không thể lấy dữ liệu giao dịch: ${fetchError.message}` };
     }
-
 
     const mapTransactionToChatFormat = (t: Transaction): TransactionForChat => {
       const category = CATEGORIES.find(c => c.id === t.categoryId);

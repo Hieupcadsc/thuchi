@@ -7,7 +7,7 @@ import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS, FAMILY_ACCOUNT_ID } from '@/li
 import type { Transaction } from '@/types';
 
 const FALLBACK_HOST_CHATBOT = 'localhost';
-const FALLBACK_PORT_CHATBOT = '3000'; // << CHANGED TO 3000 based on user's Linux host info
+const FALLBACK_PORT_CHATBOT = '3000'; // IMPORTANT: Ensure this matches the port your Next.js server is running on in this environment if NEXT_PUBLIC_APP_URL is not set.
 
 // Helper to fetch transactions for a given monthYear and familyId
 async function fetchTransactionsForMonth(familyId: string, monthYear: string): Promise<Transaction[]> {

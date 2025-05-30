@@ -15,11 +15,8 @@ interface SaveNoteResult {
   error?: string;
 }
 
-// Determine the base URL for API calls.
-// Prioritize NEXT_PUBLIC_APP_URL (useful for deployed environments).
-// Fallback to localhost with the specific port if not set.
 const FALLBACK_HOST = 'localhost';
-const FALLBACK_PORT = '3000'; // << CHANGED TO 3000 based on user's Linux host info
+const FALLBACK_PORT = '3000'; // IMPORTANT: Ensure this matches the port your Next.js server is running on in this environment if NEXT_PUBLIC_APP_URL is not set.
 
 export async function getSharedNote(): Promise<SharedNoteData | { error: string }> {
   const endpoint = '/api/shared-notes';
@@ -70,7 +67,6 @@ export async function getSharedNote(): Promise<SharedNoteData | { error: string 
     console.log('[notesActions getSharedNote] Fetched data successfully from API.');
     return data;
   } catch (error: any) {
-    // This catch block is for network errors (e.g., DNS, connection refused) or if fetch itself fails
     const errorMessage = error.message || 'Lỗi không xác định khi fetch.';
     const errorCause = error.cause ? `Nguyên nhân: ${JSON.stringify(error.cause)}` : '';
     console.error(`[notesActions getSharedNote] Network or fetch exception for URL ${absoluteApiUrl}:`, errorMessage, error.stack, errorCause);

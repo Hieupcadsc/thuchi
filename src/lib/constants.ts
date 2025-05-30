@@ -50,3 +50,8 @@ export const THEME_TOGGLE_ICONS = {
 
 export const RUT_TIEN_MAT_CATEGORY_ID = 'rut_tien_mat';
 export const NAP_TIEN_MAT_CATEGORY_ID = 'nap_tien_mat_tu_nh';
+
+// For Shared Notes feature
+export const SHARED_NOTES_SHEET_NAME = "SharedNotes";
+export const SHARED_NOTE_CELL = "A1";
+export const SHARED_NOTE_MODIFIED_INFO_CELL = "B1";

@@ -7,6 +7,7 @@ import { useAuthStore } from '@/hooks/useAuth';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { SpendingChatbot } from '@/components/dashboard/SpendingChatbot';
 import { WithdrawCashModal } from '@/components/dashboard/WithdrawCashModal';
+import { SharedNotes } from '@/components/dashboard/SharedNotes'; // Import SharedNotes
 import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera, PlusCircle, Landmark, Wallet, ArrowRightLeft, ChevronDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,13 +62,10 @@ export default function DashboardPage() {
         await fetchTransactionsByMonth(familyId, currentMonthYear);
 
         // Fetch data for the last 5 previous months for the chart, sequentially
-        const currentDateObj = new Date(currentMonthYear + '-01'); // Ensure we parse currentMonthYear correctly
-        for (let i = 1; i <= 5; i++) { // Fetch 5 previous months
+        const currentDateObj = new Date(currentMonthYear + '-01'); 
+        for (let i = 1; i <= 5; i++) { 
           const dateToFetch = subMonths(currentDateObj, i);
           const monthYearToFetch = format(dateToFetch, 'yyyy-MM');
-          // Check if data for this month is already in transactions to avoid redundant fetches,
-          // though fetchTransactionsByMonth itself might handle this in its logic
-          // For simplicity, we just call it. The store logic should prevent re-fetching if data already exists.
           await fetchTransactionsByMonth(familyId, monthYearToFetch);
         }
         
@@ -80,7 +78,7 @@ export default function DashboardPage() {
       loadDashboardData();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, familyId, currentMonthYear]); // fetchTransactionsByMonth is a stable function from Zustand
+  }, [currentUser, familyId, currentMonthYear]); 
 
   useEffect(() => {
     if (currentUser && familyId && transactions.length > 0 && currentMonthYear) {
@@ -93,7 +91,6 @@ export default function DashboardPage() {
       let expenseCash = 0;
 
       currentMonthTransactions.forEach(t => {
-        // For Bank/Cash balances, include all transactions affecting them
         if (t.type === 'income') {
           if (t.paymentSource === 'bank') incomeBank += t.amount;
           else if (t.paymentSource === 'cash') incomeCash += t.amount;
@@ -102,7 +99,6 @@ export default function DashboardPage() {
           else if (t.paymentSource === 'cash') expenseCash += t.amount;
         }
 
-        // For Total Income/Expense, exclude internal transfers
         if (t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID) {
           if (t.type === 'income') {
             totalIncome += t.amount;
@@ -121,10 +117,9 @@ export default function DashboardPage() {
         totalBalance: balanceBank + balanceCash
       });
 
-      // Chart data should also exclude internal transfers for a clearer picture of external income/expense
       const chartData = [];
-      const currentDate = new Date(currentMonthYear + "-01T00:00:00"); // Use currentMonthYear as the base for chart
-      for (let i = 5; i >= 0; i--) { // Last 6 months including current
+      const currentDate = new Date(currentMonthYear + "-01T00:00:00"); 
+      for (let i = 5; i >= 0; i--) { 
         const date = subMonths(currentDate, i);
         const monthYearKey = format(date, 'yyyy-MM');
         const monthTransactions = getTransactionsForFamilyByMonth(familyId, monthYearKey);
@@ -145,9 +140,8 @@ export default function DashboardPage() {
       setMonthlyChartData(chartData);
     } else if (currentUser && familyId && !isLoading) {
       setSummary(initialSummary);
-      // If no transactions at all, initialize chart data for 6 months with 0 values
         const chartData = [];
-        const currentDate = new Date(currentMonthYear + "-01T00:00:00");
+        const currentDate = new Date(currentMonthYear ? currentMonthYear + "-01T00:00:00" : new Date());
         for (let i = 5; i >= 0; i--) {
             const date = subMonths(currentDate, i);
             chartData.push({
@@ -173,10 +167,9 @@ export default function DashboardPage() {
 
   const handleWithdrawSuccess = async () => {
     setIsWithdrawModalOpen(false);
-    // Re-fetch or re-calculate summary data
     if (currentUser && familyId && currentMonthYear) {
         setIsLoading(true);
-        await fetchTransactionsByMonth(familyId, currentMonthYear); // Only fetch current month for summary update
+        await fetchTransactionsByMonth(familyId, currentMonthYear); 
         setIsLoading(false);
     }
   };
@@ -198,24 +191,22 @@ export default function DashboardPage() {
             
             <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 col-span-1 sm:col-span-2 lg:col-span-1">
               <Accordion type="single" collapsible className="w-full">
-                <AccordionItem value="balances" className="border-b-0"> {/* Remove border from item if Card handles it */}
+                <AccordionItem value="balances" className="border-b-0"> 
                   <AccordionTrigger className="hover:no-underline focus:outline-none w-full text-left p-6 data-[state=open]:pb-2 data-[state=closed]:pb-6 rounded-lg">
-                    {/* This div ensures content within trigger is structured before the chevron */}
                     <div className="w-full">
-                      <div className="flex flex-row items-center justify-between space-y-0 mb-2"> {/* Simulates CardHeader */}
+                      <div className="flex flex-row items-center justify-between space-y-0 mb-2"> 
                         <p className="text-sm font-medium text-muted-foreground">Tổng Số Dư ({currentMonthName})</p>
                         <Banknote className={`h-6 w-6 ${summary.totalBalance >= 0 ? "text-indigo-500" : "text-orange-500"}`} />
                       </div>
-                      <div> {/* Simulates CardContent */}
+                      <div> 
                         <div className="text-2xl font-bold">
                           {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(summary.totalBalance)}
                         </div>
                       </div>
                     </div>
-                    {/* Default ChevronDown from AccordionTrigger will be placed by its internal flex justify-between */}
                   </AccordionTrigger>
-                  <AccordionContent className="px-6 pb-4 pt-0"> {/* pt-0 because trigger has pb-2 when open */}
-                    <div className="space-y-3 border-t pt-4 mt-2"> {/* Added mt-2 for slight separation and border-t */}
+                  <AccordionContent className="px-6 pb-4 pt-0"> 
+                    <div className="space-y-3 border-t pt-4 mt-2"> 
                       <Card className="shadow-md bg-background/70">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3">
                           <CardTitle className="text-xs font-medium text-muted-foreground">Số Dư Ngân Hàng</CardTitle>
@@ -258,6 +249,8 @@ export default function DashboardPage() {
             onSuccess={handleWithdrawSuccess}
             currentBankBalance={summary.balanceBank}
           />
+
+          <SharedNotes /> {/* Add SharedNotes component here */}
 
           <Card className="shadow-lg">
             <CardHeader>
@@ -328,5 +321,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

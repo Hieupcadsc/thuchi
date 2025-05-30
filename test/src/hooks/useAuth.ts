@@ -4,16 +4,19 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Transaction, UserType, FamilyMember, HighValueExpenseAlert, PaymentSource } from '@/types';
-import { toast as showAppToast } from './use-toast';
+import { toast as showAppToast } from './use-toast'; // Renamed import for clarity
 import { FAMILY_MEMBERS, APP_NAME, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, FAMILY_ACCOUNT_ID } from '@/lib/constants';
 import { format } from 'date-fns';
+
+// Use the standalone toast function
+// Do not try to call useToast() hook here as this is not a React component
 
 const HIGH_EXPENSE_THRESHOLD = 1000000;
 const SHARED_PASSWORD = "123456";
 
 interface AuthState {
   currentUser: FamilyMember | null;
-  familyId: UserType | null;
+  familyId: UserType | null; // Will always be FAMILY_ACCOUNT_ID when logged in
   transactions: Transaction[];
   highValueExpenseAlerts: HighValueExpenseAlert[];
   login: (user: FamilyMember, pass: string) => boolean;
@@ -39,7 +42,7 @@ export const useAuthStore = create<AuthState>()(
         if (pass === SHARED_PASSWORD && FAMILY_MEMBERS.includes(user as FamilyMember)) {
           set({
             currentUser: user,
-            familyId: FAMILY_ACCOUNT_ID,
+            familyId: FAMILY_ACCOUNT_ID, 
           });
           return true;
         }
@@ -54,8 +57,8 @@ export const useAuthStore = create<AuthState>()(
         set({
           currentUser: null,
           familyId: null,
-          transactions: [],
-          highValueExpenseAlerts: [],
+          transactions: [], 
+          highValueExpenseAlerts: [], 
         });
       },
 
@@ -70,20 +73,8 @@ export const useAuthStore = create<AuthState>()(
         
         const monthYear = transactionData.date.substring(0, 7);
 
-        let transactionId: string;
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-          transactionId = crypto.randomUUID();
-        } else {
-          // Fallback for insecure contexts or older environments
-          console.warn('[useAuthStore] crypto.randomUUID not available, using fallback ID generator.');
-          transactionId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-          });
-        }
-
         const newTransaction: Transaction = {
-          id: transactionId,
+          id: crypto.randomUUID(),
           userId: currentFamilyId, 
           description: transactionData.description,
           amount: transactionData.amount,
@@ -130,7 +121,6 @@ export const useAuthStore = create<AuthState>()(
 
           if (newTransaction.type === 'expense' &&
               newTransaction.categoryId !== RUT_TIEN_MAT_CATEGORY_ID && 
-              newTransaction.categoryId !== NAP_TIEN_MAT_CATEGORY_ID && // Also exclude deposit to cash
               newTransaction.amount > HIGH_EXPENSE_THRESHOLD
              ) {
             const alert: HighValueExpenseAlert = {
@@ -296,10 +286,15 @@ export const useAuthStore = create<AuthState>()(
           console.log(`[useAuthStore fetchTransactionsByMonth] Successfully fetched ${fetchedTransactions.length} transactions for ${monthYear} from ${apiUrl}`);
 
           set((state) => {
+            
             const existingTransactionsMap = new Map(state.transactions.map(t => [t.id, t]));
+            
+            
             fetchedTransactions.forEach(ft => {
                 existingTransactionsMap.set(ft.id, ft);
             });
+
+            
             const currentMonthTransactionsFromServerIds = new Set(fetchedTransactions.map(ft => ft.id));
             const transactionsToKeepForCurrentMonth = state.transactions.filter(t => 
                 !(t.monthYear === monthYear && t.userId === familyIdToFetch && !currentMonthTransactionsFromServerIds.has(t.id))
@@ -384,7 +379,6 @@ export const useAuthStore = create<AuthState>()(
         const incomeResult = await get().addTransaction(incomeTransactionData);
         if (!incomeResult) {
           showAppToast({ title: "Lỗi Rút Tiền", description: "Đã tạo giao dịch chi, nhưng không thể tạo giao dịch thu tiền mặt. Vui lòng kiểm tra lại.", variant: "destructive" });
-          // Consider if we need to rollback the expense transaction here in a real app
           return false; 
         }
         
@@ -399,8 +393,8 @@ export const useAuthStore = create<AuthState>()(
         currentUser: state.currentUser,
         familyId: state.familyId,
         highValueExpenseAlerts: state.highValueExpenseAlerts,
-        // transactions: state.transactions, // Consider if transactions should be persisted if they grow very large
       }),
     }
   )
 );
+// export { FAMILY_ACCOUNT_ID }; // Ensure FAMILY_ACCOUNT_ID is exported if needed elsewhere from this module, though it's better from constants.ts

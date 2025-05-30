@@ -28,6 +28,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger, // Added AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
 
 const ALL_CATEGORIES_VALUE = "all_categories";
@@ -77,8 +78,9 @@ export default function TransactionsPage() {
   const loadDataForCurrentFilters = useCallback(async () => {
     if (!currentUser || !familyId) return;
     setIsLoading(true);
+    const monthsToFetch = new Set<string>();
+
     if (isDateFilterActive && filterStartDate && filterEndDate) {
-      const monthsToFetch = new Set<string>();
       let currentFetchMonth = startOfMonth(new Date(filterStartDate));
       const endMonthTarget = startOfMonth(new Date(filterEndDate));
       while (currentFetchMonth <= endMonthTarget) {
@@ -87,21 +89,22 @@ export default function TransactionsPage() {
           nextMonth.setMonth(nextMonth.getMonth() + 1);
           currentFetchMonth = nextMonth;
       }
-      if (monthsToFetch.size > 0) {
-        for (const monthStr of Array.from(monthsToFetch)) {
-            await fetchTransactionsByMonth(familyId, monthStr);
-        }
-      }
     } else if (currentMonthYear && !isDateFilterActive) {
-      await fetchTransactionsByMonth(familyId, currentMonthYear);
-    } else if (monthOptions.length > 0 && !isDateFilterActive) {
+      monthsToFetch.add(currentMonthYear);
+    } else if (monthOptions.length > 0 && !isDateFilterActive && monthOptions[0]?.value) {
       const defaultMonth = monthOptions[0].value;
       if (currentMonthYear !== defaultMonth) setCurrentMonthYear(defaultMonth);
-      await fetchTransactionsByMonth(familyId, defaultMonth);
+      monthsToFetch.add(defaultMonth);
+    }
+    
+    if (monthsToFetch.size > 0) {
+      for (const monthStr of Array.from(monthsToFetch)) {
+          await fetchTransactionsByMonth(familyId, monthStr);
+      }
     }
     setIsLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, familyId, currentMonthYear, isDateFilterActive, filterStartDate, filterEndDate, fetchTransactionsByMonth, monthOptions]);
+  }, [currentUser, familyId, currentMonthYear, isDateFilterActive, filterStartDate, filterEndDate, monthOptions]); // Removed fetchTransactionsByMonth from deps as it's stable
   
   useEffect(() => {
     loadDataForCurrentFilters();
@@ -109,6 +112,7 @@ export default function TransactionsPage() {
 
   const handleRefreshTransactions = async () => {
     setIsRefreshing(true);
+    setSelectedTransactionIds([]); // Clear selection on refresh
     await loadDataForCurrentFilters();
     setIsRefreshing(false);
   };
@@ -152,8 +156,10 @@ export default function TransactionsPage() {
     if (isDateFilterActive && filterStartDate && filterEndDate) {
         sourceTransactions = transactions.filter(t => {
             try {
-                const transactionDate = parseISO(t.date);
-                return isValid(transactionDate) && transactionDate >= filterStartDate && transactionDate <= filterEndDate;
+                const transactionDate = parseISO(t.date); // Ensure date is parsed correctly
+                return isValid(transactionDate) && 
+                       transactionDate >= startOfMonth(filterStartDate) && // Compare with start/end of day for inclusivity
+                       transactionDate <= endOfMonth(filterEndDate);
             } catch (e) { return false; }
         });
     } else if (currentMonthYear && !isDateFilterActive) {
@@ -188,8 +194,9 @@ export default function TransactionsPage() {
     setSelectedTransactionIds([]);
     if (monthOptions.length > 0 && currentMonthYear !== monthOptions[0].value) {
         setCurrentMonthYear(monthOptions[0].value); 
+        // loadDataForCurrentFilters will be called by useEffect on currentMonthYear change
     } else {
-        await loadDataForCurrentFilters();
+        await loadDataForCurrentFilters(); // Explicitly call if month isn't changing
     }
   };
   
@@ -200,6 +207,7 @@ export default function TransactionsPage() {
              return;
         }
         setIsDateFilterActive(true);
+        setCurrentMonthYear(''); // Clear month selection when date range is active
         setSelectedTransactionIds([]);
         await loadDataForCurrentFilters();
     } else {
@@ -216,7 +224,7 @@ export default function TransactionsPage() {
   };
 
   const handleToggleSelectAll = () => {
-    if (selectedTransactionIds.length === displayTransactions.length) {
+    if (selectedTransactionIds.length === displayTransactions.length && displayTransactions.length > 0) {
       setSelectedTransactionIds([]);
     } else {
       setSelectedTransactionIds(displayTransactions.map(t => t.id));
@@ -230,7 +238,7 @@ export default function TransactionsPage() {
     }
     setIsBulkDeleting(true);
     const transactionsToDelete = selectedTransactionIds.map(id => {
-      const transaction = transactions.find(t => t.id === id);
+      const transaction = transactions.find(t => t.id === id); // Search in global transactions state
       return transaction ? { id: transaction.id, monthYear: transaction.monthYear } : null;
     }).filter(t => t !== null) as Array<{ id: string, monthYear: string }>;
 
@@ -241,7 +249,7 @@ export default function TransactionsPage() {
       toast({ title: "Lỗi", description: "Không tìm thấy thông tin giao dịch để xóa.", variant: "destructive"});
     }
     setIsBulkDeleting(false);
-    await loadDataForCurrentFilters();
+    await loadDataForCurrentFilters(); // Reload data after bulk delete
   };
 
   if (!currentUser) {
@@ -263,11 +271,11 @@ export default function TransactionsPage() {
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <Button onClick={handleAddNewTransaction} size="lg" variant="outline" className="w-full sm:w-auto">
             <PlusCircle className="mr-2 h-5 w-5" />
-            {isFormVisible && !editingTransaction && !isBillModeActive ? 'Đóng Form' : 'Thêm Mới'}
+            {(isFormVisible && !editingTransaction && !isBillModeActive) ? 'Đóng Form' : 'Thêm Mới'}
             </Button>
             <Button onClick={handleAddFromBill} size="lg" className="w-full sm:w-auto">
             <Camera className="mr-2 h-5 w-5" />
-            {isFormVisible && isBillModeActive ? 'Đóng Form Bill' : 'Thêm từ Bill'}
+            {(isFormVisible && isBillModeActive) ? 'Đóng Form Bill' : 'Thêm từ Bill'}
             </Button>
         </div>
       </div>
@@ -407,7 +415,7 @@ export default function TransactionsPage() {
               <CardDescription>
                 {isDateFilterActive && filterStartDate && filterEndDate ? 
                 `Giao dịch từ ${format(filterStartDate, "dd/MM/yyyy", {locale: vi})} đến ${format(filterEndDate, "dd/MM/yyyy", {locale: vi})}` :
-                `Danh sách giao dịch ${monthOptions.find(m => m.value === currentMonthYear)?.label || (currentMonthYear ? `tháng ${currentMonthYear}` : 'chưa chọn')}`
+                (currentMonthYear ? (monthOptions.find(m => m.value === currentMonthYear)?.label || `tháng ${currentMonthYear}`) : 'Vui lòng chọn tháng hoặc khoảng ngày')
                 }
               </CardDescription>
             </div>
@@ -479,7 +487,11 @@ export default function TransactionsPage() {
           )}
         </CardHeader>
         <CardContent>
-          {(isLoading || isRefreshing) && displayTransactions.length === 0 ? ( 
+          {(isLoading || isRefreshing) && displayTransactions.length === 0 && !isDateFilterActive && !currentMonthYear ? (
+             <div className="flex justify-center items-center h-[200px]">
+                <p className="text-muted-foreground">Vui lòng chọn tháng để xem giao dịch.</p>
+             </div>
+          ) : (isLoading || isRefreshing) ? ( 
             <div className="flex justify-center items-center h-[200px]">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2">Đang tải giao dịch...</p>
@@ -508,3 +520,4 @@ export default function TransactionsPage() {
     </div>
   );
 }
+

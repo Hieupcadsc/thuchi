@@ -17,23 +17,30 @@ interface SaveNoteResult {
 
 // Determine the base URL for API calls.
 // Prioritize NEXT_PUBLIC_APP_URL (useful for deployed environments).
-// Fallback to localhost with the specific port 9002 if not set (matching package.json).
-const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'; // Default to 3000 if running on default, or 9002 if you changed it.
-                                                                                // For server-to-server calls on Linux, localhost might not resolve correctly.
-                                                                                // Consider using 'http://0.0.0.0:PORT' or specific internal IP if issues persist.
+// Fallback to localhost with the specific port if not set.
+const FALLBACK_HOST = 'localhost';
+const FALLBACK_PORT = '3000'; // Adjusted to 3000 as per user's Linux host port
 
 export async function getSharedNote(): Promise<SharedNoteData | { error: string }> {
   const endpoint = '/api/shared-notes';
   let absoluteApiUrl: string;
 
-  try {
-    // Ensure APP_BASE_URL is a valid base URL.
-    const base = new URL(APP_BASE_URL);
-    absoluteApiUrl = new URL(endpoint, base).toString();
-  } catch (e: any) {
-    const criticalErrorMsg = `[notesActions getSharedNote] CRITICAL: Failed to construct URL with base '${APP_BASE_URL}' and endpoint '${endpoint}'. Error: ${e.message}. Check NEXT_PUBLIC_APP_URL or default APP_BASE_URL.`;
-    console.error(criticalErrorMsg);
-    return { error: `Lỗi cấu hình URL máy chủ: ${e.message}` };
+  const appBaseUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL;
+
+  if (appBaseUrlFromEnv) {
+      try {
+          const base = new URL(appBaseUrlFromEnv); // Validate if it's a proper base
+          absoluteApiUrl = new URL(endpoint, base).toString();
+          console.log(`[notesActions getSharedNote] Using NEXT_PUBLIC_APP_URL as base: ${appBaseUrlFromEnv}. Full URL: ${absoluteApiUrl}`);
+      } catch (e: any) {
+          const criticalErrorMsg = `[notesActions getSharedNote] CRITICAL: Invalid NEXT_PUBLIC_APP_URL: ${appBaseUrlFromEnv}. Falling back. Error: ${e.message}.`;
+          console.error(criticalErrorMsg);
+          absoluteApiUrl = `http://${FALLBACK_HOST}:${FALLBACK_PORT}${endpoint}`;
+          console.log(`[notesActions getSharedNote] NEXT_PUBLIC_APP_URL invalid, using fallback http://${FALLBACK_HOST}:${FALLBACK_PORT}. Full URL: ${absoluteApiUrl}`);
+      }
+  } else {
+      absoluteApiUrl = `http://${FALLBACK_HOST}:${FALLBACK_PORT}${endpoint}`;
+      console.log(`[notesActions getSharedNote] NEXT_PUBLIC_APP_URL not set, using fallback http://${FALLBACK_HOST}:${FALLBACK_PORT}. Full URL: ${absoluteApiUrl}`);
   }
   
   console.log(`[notesActions getSharedNote] Attempting to fetch from: ${absoluteApiUrl}`);
@@ -55,7 +62,7 @@ export async function getSharedNote(): Promise<SharedNoteData | { error: string 
         console.warn(`[notesActions getSharedNote] Could not parse API error response (status: ${response.status}) as JSON. Raw text: "${responseBodyText}". Parse error:`, parseError.message);
       }
       const errorMessage = errorData.message || responseBodyText || `Không thể tải ghi chú chung (mã lỗi: ${response.status}).`;
-      console.error(`[notesActions getSharedNote] API Error ${response.status} from ${absoluteApiUrl}:`, errorMessage, `Raw Body Text (if any): ${responseBodyText}`);
+      console.error(`[notesActions getSharedNote] API Error ${response.status} from ${absoluteApiUrl}:`, errorMessage, `Raw Body Text (if any): ${responseBodyText}`, `Original error cause:`, (errorData as any)?.cause || 'N/A');
       return { error: errorMessage };
     }
     
@@ -64,8 +71,10 @@ export async function getSharedNote(): Promise<SharedNoteData | { error: string 
     return data;
   } catch (error: any) {
     // This catch block is for network errors (e.g., DNS, connection refused) or if fetch itself fails
-    console.error(`[notesActions getSharedNote] Network or fetch exception for URL ${absoluteApiUrl}:`, error.message, error.stack, error.cause);
-    return { error: `Lỗi kết nối khi tải ghi chú: ${error.message}. Hãy đảm bảo server API đang chạy và có thể truy cập tại ${absoluteApiUrl}.` };
+    const errorMessage = error.message || 'Lỗi không xác định khi fetch.';
+    const errorCause = error.cause ? `Nguyên nhân: ${JSON.stringify(error.cause)}` : '';
+    console.error(`[notesActions getSharedNote] Network or fetch exception for URL ${absoluteApiUrl}:`, errorMessage, error.stack, errorCause);
+    return { error: `Lỗi kết nối khi tải ghi chú: ${errorMessage}. Hãy đảm bảo server API đang chạy và có thể truy cập tại ${absoluteApiUrl}. ${errorCause}` };
   }
 }
 
@@ -79,14 +88,21 @@ export async function saveSharedNote(noteContent: string, performingUser: Family
 
   const endpoint = '/api/shared-notes';
   let absoluteApiUrl: string;
+  const appBaseUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL;
 
-  try {
-    const base = new URL(APP_BASE_URL);
-    absoluteApiUrl = new URL(endpoint, base).toString();
-  } catch (e: any) {
-    const criticalErrorMsg = `[notesActions saveSharedNote] CRITICAL: Failed to construct URL with base '${APP_BASE_URL}' and endpoint '${endpoint}'. Error: ${e.message}. Check NEXT_PUBLIC_APP_URL or default APP_BASE_URL.`;
-    console.error(criticalErrorMsg);
-    return { success: false, error: `Lỗi cấu hình URL máy chủ: ${e.message}` };
+  if (appBaseUrlFromEnv) {
+    try {
+        const base = new URL(appBaseUrlFromEnv);
+        absoluteApiUrl = new URL(endpoint, base).toString();
+        console.log(`[notesActions saveSharedNote] Using NEXT_PUBLIC_APP_URL as base: ${appBaseUrlFromEnv}. Full URL: ${absoluteApiUrl}`);
+    } catch (e: any) {
+        console.error(`[notesActions saveSharedNote] CRITICAL: Invalid NEXT_PUBLIC_APP_URL: ${appBaseUrlFromEnv}. Falling back. Error: ${e.message}.`);
+        absoluteApiUrl = `http://${FALLBACK_HOST}:${FALLBACK_PORT}${endpoint}`;
+        console.log(`[notesActions saveSharedNote] NEXT_PUBLIC_APP_URL invalid, using fallback http://${FALLBACK_HOST}:${FALLBACK_PORT}. Full URL: ${absoluteApiUrl}`);
+    }
+  } else {
+      absoluteApiUrl = `http://${FALLBACK_HOST}:${FALLBACK_PORT}${endpoint}`;
+      console.log(`[notesActions saveSharedNote] NEXT_PUBLIC_APP_URL not set, using fallback http://${FALLBACK_HOST}:${FALLBACK_PORT}. Full URL: ${absoluteApiUrl}`);
   }
 
   console.log(`[notesActions saveSharedNote] Attempting to post to: ${absoluteApiUrl}`);
@@ -112,7 +128,7 @@ export async function saveSharedNote(noteContent: string, performingUser: Family
          console.warn(`[notesActions saveSharedNote] Could not parse API error response (status: ${response.status}) as JSON. Raw text: "${responseBodyText}". Parse error:`, parseError.message);
       }
       const errorMessage = errorData.message || responseBodyText || `Không thể lưu ghi chú chung (mã lỗi: ${response.status}).`;
-      console.error(`[notesActions saveSharedNote] API Error ${response.status} from ${absoluteApiUrl}:`, errorMessage, `Raw Body Text (if any): ${responseBodyText}`);
+      console.error(`[notesActions saveSharedNote] API Error ${response.status} from ${absoluteApiUrl}:`, errorMessage, `Raw Body Text (if any): ${responseBodyText}`, `Original error cause:`, (errorData as any)?.cause || 'N/A');
       return { success: false, error: errorMessage };
     }
     
@@ -127,7 +143,9 @@ export async function saveSharedNote(noteContent: string, performingUser: Family
         return { success: false, error: errorMessage };
     }
   } catch (error: any) {
-    console.error(`[notesActions saveSharedNote] Network or fetch exception for URL ${absoluteApiUrl}:`, error.message, error.stack, error.cause);
-    return { success: false, error: `Lỗi kết nối khi lưu ghi chú: ${error.message}. Hãy đảm bảo server API đang chạy và có thể truy cập tại ${absoluteApiUrl}.` };
+    const errorMessage = error.message || 'Lỗi không xác định khi fetch.';
+    const errorCause = error.cause ? `Nguyên nhân: ${JSON.stringify(error.cause)}` : '';
+    console.error(`[notesActions saveSharedNote] Network or fetch exception for URL ${absoluteApiUrl}:`, errorMessage, error.stack, errorCause);
+    return { success: false, error: `Lỗi kết nối khi lưu ghi chú: ${errorMessage}. Hãy đảm bảo server API đang chạy và có thể truy cập tại ${absoluteApiUrl}. ${errorCause}` };
   }
 }

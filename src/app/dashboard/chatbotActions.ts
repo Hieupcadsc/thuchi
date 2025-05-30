@@ -6,6 +6,9 @@ import { chatWithSpending, type ChatWithSpendingInput, type ChatWithSpendingOutp
 import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS, FAMILY_ACCOUNT_ID } from '@/lib/constants';
 import type { Transaction } from '@/types';
 
+const FALLBACK_HOST_CHATBOT = 'localhost';
+const FALLBACK_PORT_CHATBOT = '3000'; // Adjusted to 3000 as per user's Linux host port
+
 // Helper to fetch transactions for a given monthYear and familyId
 async function fetchTransactionsForMonth(familyId: string, monthYear: string): Promise<Transaction[]> {
   if (!familyId || familyId === 'undefined') {
@@ -20,25 +23,21 @@ async function fetchTransactionsForMonth(familyId: string, monthYear: string): P
   const relativePath = `/api/transactions?userId=${encodeURIComponent(familyId)}&monthYear=${encodeURIComponent(monthYear)}`;
   let requestUrlString: string;
 
-  const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const appBaseUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL;
 
-  if (appBaseUrl) {
+  if (appBaseUrlFromEnv) {
       try {
-          const baseUrlObj = new URL(appBaseUrl); // Validate if it's a proper base
+          const baseUrlObj = new URL(appBaseUrlFromEnv); // Validate if it's a proper base
           requestUrlString = new URL(relativePath, baseUrlObj).toString();
-          console.log(`[ChatbotActions fetchTransactionsForMonth] Using NEXT_PUBLIC_APP_URL as base: ${appBaseUrl}. Full URL: ${requestUrlString}`);
+          console.log(`[ChatbotActions fetchTransactionsForMonth] Using NEXT_PUBLIC_APP_URL as base: ${appBaseUrlFromEnv}. Full URL: ${requestUrlString}`);
       } catch (e) {
-          console.error(`[ChatbotActions fetchTransactionsForMonth] Invalid NEXT_PUBLIC_APP_URL: ${appBaseUrl}. Falling back. Error:`, e);
-          const defaultHost = 'localhost';
-          const defaultPort = process.env.PORT || '9002'; // Matching package.json default
-          requestUrlString = `http://${defaultHost}:${defaultPort}${relativePath}`;
-          console.log(`[ChatbotActions fetchTransactionsForMonth] NEXT_PUBLIC_APP_URL invalid, using fallback http://${defaultHost}:${defaultPort}. Full URL: ${requestUrlString}`);
+          console.error(`[ChatbotActions fetchTransactionsForMonth] Invalid NEXT_PUBLIC_APP_URL: ${appBaseUrlFromEnv}. Falling back. Error:`, e);
+          requestUrlString = `http://${FALLBACK_HOST_CHATBOT}:${FALLBACK_PORT_CHATBOT}${relativePath}`;
+          console.log(`[ChatbotActions fetchTransactionsForMonth] NEXT_PUBLIC_APP_URL invalid, using fallback http://${FALLBACK_HOST_CHATBOT}:${FALLBACK_PORT_CHATBOT}. Full URL: ${requestUrlString}`);
       }
   } else {
-      const defaultHost = 'localhost';
-      const defaultPort = process.env.PORT || '9002'; // Matching package.json default
-      requestUrlString = `http://${defaultHost}:${defaultPort}${relativePath}`;
-      console.log(`[ChatbotActions fetchTransactionsForMonth] NEXT_PUBLIC_APP_URL not set, using fallback http://${defaultHost}:${defaultPort}. Full URL: ${requestUrlString}`);
+      requestUrlString = `http://${FALLBACK_HOST_CHATBOT}:${FALLBACK_PORT_CHATBOT}${relativePath}`;
+      console.log(`[ChatbotActions fetchTransactionsForMonth] NEXT_PUBLIC_APP_URL not set, using fallback http://${FALLBACK_HOST_CHATBOT}:${FALLBACK_PORT_CHATBOT}. Full URL: ${requestUrlString}`);
   }
   
   console.log(`[ChatbotActions fetchTransactionsForMonth] Final URL for fetch: "${requestUrlString}"`);
@@ -79,8 +78,7 @@ async function fetchTransactionsForMonth(familyId: string, monthYear: string): P
     console.log(`[ChatbotActions fetchTransactionsForMonth] Fetched ${transactions.length} transactions for ${monthYear} from ${requestUrlString}.`);
     return transactions;
   } catch (error: any) {
-    console.error(`[ChatbotActions fetchTransactionsForMonth] Fetch to "${requestUrlString}" FAILED. Error Name: ${error.name}, Message: ${error.message}`);
-    // If error.message already contains "Failed to parse URL", it means 'requestUrlString' itself was the problem for fetch.
+    console.error(`[ChatbotActions fetchTransactionsForMonth] Fetch to "${requestUrlString}" FAILED. Error Name: ${error.name}, Message: ${error.message}, Cause:`, error.cause);
     throw new Error(error.message || `Lỗi khi gọi API giao dịch cho ${monthYear}.`);
   }
 }
@@ -144,7 +142,7 @@ export async function askSpendingChatbot(userQuestion: string): Promise<ChatWith
     return result;
 
   } catch (error: any) {
-    console.error("[ChatbotActions] Error in askSpendingChatbot server action:", error.message, error.stack);
+    console.error("[ChatbotActions] Error in askSpendingChatbot server action:", error.message, error.stack, error.cause);
     return { error: error.message || "Đã có lỗi xảy ra khi trò chuyện với AI." };
   }
 }

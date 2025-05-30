@@ -2,7 +2,6 @@
 'use server';
 
 import type { FamilyMember } from '@/types';
-// Removed useAuthStore import as currentUser is passed in or not strictly needed for API calls if API handles auth
 
 interface SharedNoteData {
   note: string;
@@ -16,20 +15,32 @@ interface SaveNoteResult {
   error?: string;
 }
 
+// Determine the base URL for API calls.
+// Prioritize NEXT_PUBLIC_APP_URL (useful for deployed environments).
+// Fallback to localhost with the specific port 9002 if not set.
+const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
+
 export async function getSharedNote(): Promise<SharedNoteData | { error: string }> {
-  console.log('[notesActions] getSharedNote called');
+  const endpoint = '/api/shared-notes';
+  let absoluteApiUrl: string;
+
   try {
-    // Use relative URL for API call
-    const apiUrl = `/api/shared-notes`; 
-    console.log(`[notesActions getSharedNote] Fetching from: ${apiUrl}`);
-    const response = await fetch(apiUrl, { cache: 'no-store' });
+    absoluteApiUrl = new URL(endpoint, APP_BASE_URL).toString();
+  } catch (e: any) {
+    console.error(`[notesActions getSharedNote] CRITICAL: Failed to construct URL with base '${APP_BASE_URL}' and endpoint '${endpoint}'. Error: ${e.message}`);
+    return { error: `Lỗi cấu hình URL: ${e.message}` };
+  }
+  
+  console.log(`[notesActions getSharedNote] Attempting to fetch from: ${absoluteApiUrl}`);
+
+  try {
+    const response = await fetch(absoluteApiUrl, { cache: 'no-store' });
 
     if (!response.ok) {
       let errorData: any = {};
       let responseBodyText = '';
       try {
         responseBodyText = await response.text();
-        // Attempt to parse as JSON only if it's likely JSON
         if (response.headers.get('content-type')?.includes('application/json')) {
             errorData = JSON.parse(responseBodyText);
         }
@@ -37,34 +48,42 @@ export async function getSharedNote(): Promise<SharedNoteData | { error: string 
         console.warn("[notesActions getSharedNote] API error response was not valid JSON. Raw text:", responseBodyText);
       }
       const errorMessage = errorData.message || responseBodyText || `Không thể tải ghi chú chung (status: ${response.status}).`;
-      console.error(`[notesActions getSharedNote] API Error ${response.status}:`, errorMessage);
-      throw new Error(errorMessage);
+      console.error(`[notesActions getSharedNote] API Error ${response.status} from ${absoluteApiUrl}:`, errorMessage, `Raw Body: ${responseBodyText}`);
+      // Return the actual error message from the API if available
+      return { error: errorMessage };
     }
     const data: SharedNoteData = await response.json();
-    console.log('[notesActions getSharedNote] Fetched data:', data);
+    console.log('[notesActions getSharedNote] Fetched data successfully from API.');
     return data;
   } catch (error: any) {
-    console.error('[notesActions getSharedNote] Exception:', error.message, error.stack);
-    return { error: error.message || 'Lỗi khi tải ghi chú chung.' };
+    // This catch block is for network errors or if fetch itself fails before getting a response
+    console.error(`[notesActions getSharedNote] Network or fetch exception for URL ${absoluteApiUrl}:`, error.message, error.stack);
+    return { error: error.message || 'Lỗi kết nối khi tải ghi chú chung.' };
   }
 }
 
 export async function saveSharedNote(noteContent: string, performingUser: FamilyMember): Promise<SaveNoteResult> {
-  console.log(`[notesActions] saveSharedNote called by ${performingUser}`);
   if (typeof noteContent !== 'string') {
     return { success: false, error: 'Nội dung ghi chú không hợp lệ.' };
   }
   if (!performingUser) {
-    // This check is important if currentUser logic isn't directly available
-    // or if performingUser is expected to be validated upstream.
     return { success: false, error: 'Không xác định được người dùng.' };
   }
 
+  const endpoint = '/api/shared-notes';
+  let absoluteApiUrl: string;
+
   try {
-    // Use relative URL for API call
-    const apiUrl = `/api/shared-notes`; 
-    console.log(`[notesActions saveSharedNote] Posting to: ${apiUrl}`);
-    const response = await fetch(apiUrl, {
+    absoluteApiUrl = new URL(endpoint, APP_BASE_URL).toString();
+  } catch (e: any) {
+    console.error(`[notesActions saveSharedNote] CRITICAL: Failed to construct URL with base '${APP_BASE_URL}' and endpoint '${endpoint}'. Error: ${e.message}`);
+    return { success: false, error: `Lỗi cấu hình URL: ${e.message}` };
+  }
+
+  console.log(`[notesActions saveSharedNote] Attempting to post to: ${absoluteApiUrl}`);
+
+  try {
+    const response = await fetch(absoluteApiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ note: noteContent, modifiedBy: performingUser }),
@@ -82,23 +101,21 @@ export async function saveSharedNote(noteContent: string, performingUser: Family
          console.warn("[notesActions saveSharedNote] API error response was not valid JSON. Raw text:", responseBodyText);
       }
       const errorMessage = errorData.message || responseBodyText || `Không thể lưu ghi chú chung (status: ${response.status}).`;
-      console.error(`[notesActions saveSharedNote] API Error ${response.status}:`, errorMessage);
-      throw new Error(errorMessage);
+      console.error(`[notesActions saveSharedNote] API Error ${response.status} from ${absoluteApiUrl}:`, errorMessage, `Raw Body: ${responseBodyText}`);
+      return { success: false, error: errorMessage };
     }
-    // Assuming the API returns { success: true, data: { note, modifiedBy, modifiedAt } } on successful POST
+    
     const result: { success: boolean, note: string, modifiedBy: FamilyMember, modifiedAt: string } = await response.json();
     if (result.success) {
-        console.log('[notesActions saveSharedNote] Saved data:', result);
+        console.log('[notesActions saveSharedNote] Saved data successfully via API.');
         return { success: true, data: { note: result.note, modifiedBy: result.modifiedBy, modifiedAt: result.modifiedAt } };
     } else {
-        // This case might not be hit if !response.ok already threw,
-        // but good for robustness if API can return 200 OK with success: false
         const errorMessage = (result as any).message || 'Lưu ghi chú không thành công từ API.';
         console.error('[notesActions saveSharedNote] API reported not successful:', result);
         return { success: false, error: errorMessage };
     }
   } catch (error: any) {
-    console.error('[notesActions saveSharedNote] Exception:', error.message, error.stack);
-    return { success: false, error: error.message || 'Lỗi khi lưu ghi chú chung.' };
+    console.error(`[notesActions saveSharedNote] Network or fetch exception for URL ${absoluteApiUrl}:`, error.message, error.stack);
+    return { success: false, error: error.message || 'Lỗi kết nối khi lưu ghi chú chung.' };
   }
 }

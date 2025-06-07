@@ -25,11 +25,11 @@ import {
 import { cn } from '@/lib/utils';
 
 interface DashboardSummary {
-  totalIncome: number;
-  totalExpense: number;
-  balanceBank: number;
-  balanceCash: number;
-  totalBalance: number;
+  totalIncome: number; // For current month
+  totalExpense: number; // For current month
+  balanceBank: number; // Overall
+  balanceCash: number; // Overall
+  totalBalance: number; // Overall
 }
 
 const initialSummary: DashboardSummary = {
@@ -76,83 +76,96 @@ export default function DashboardPage() {
 
     setIsLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, familyId, currentMonthYear, fetchTransactionsByMonth]); // fetchTransactionsByMonth is stable
+  }, [currentUser, familyId, currentMonthYear]); // fetchTransactionsByMonth is stable
 
   useEffect(() => {
     loadAllDashboardData();
   }, [loadAllDashboardData]); 
 
   useEffect(() => {
-    if (currentUser && familyId && transactions.length > 0 && currentMonthYear) {
-      const currentMonthTransactions = getTransactionsForFamilyByMonth(familyId, currentMonthYear);
-      let totalIncome = 0;
-      let totalExpense = 0;
-      let incomeBank = 0;
-      let expenseBank = 0;
-      let incomeCash = 0;
-      let expenseCash = 0;
-
-      currentMonthTransactions.forEach(t => {
-        if (t.type === 'income') {
-          if (t.paymentSource === 'bank') incomeBank += t.amount;
-          else if (t.paymentSource === 'cash') incomeCash += t.amount;
-        } else {
-          if (t.paymentSource === 'bank') expenseBank += t.amount;
-          else if (t.paymentSource === 'cash') expenseCash += t.amount;
-        }
-
-        if (t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID) {
-          if (t.type === 'income') {
-            totalIncome += t.amount;
-          } else {
-            totalExpense += t.amount;
+    if (currentUser && familyId) {
+      // Calculate current month's income & expense (for dedicated cards)
+      let currentMonthTotalIncome = 0;
+      let currentMonthTotalExpense = 0;
+      if (currentMonthYear) {
+        const currentMonthTransactions = getTransactionsForFamilyByMonth(familyId, currentMonthYear);
+        currentMonthTransactions.forEach(t => {
+          if (t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID) {
+            if (t.type === 'income') {
+              currentMonthTotalIncome += t.amount;
+            } else {
+              currentMonthTotalExpense += t.amount;
+            }
           }
-        }
-      });
-      const balanceBank = incomeBank - expenseBank;
-      const balanceCash = incomeCash - expenseCash;
+        });
+      }
+
+      // Calculate all-time bank and cash balances (for the accordion)
+      // This uses ALL transactions available in the store.
+      let allTimeIncomeBank = 0;
+      let allTimeExpenseBank = 0;
+      let allTimeIncomeCash = 0;
+      let allTimeExpenseCash = 0;
+
+      if (transactions.length > 0) {
+        transactions.forEach(t => {
+          if (t.type === 'income') {
+            if (t.paymentSource === 'bank') allTimeIncomeBank += t.amount;
+            else if (t.paymentSource === 'cash') allTimeIncomeCash += t.amount;
+          } else { // expense
+            if (t.paymentSource === 'bank') allTimeExpenseBank += t.amount;
+            else if (t.paymentSource === 'cash') allTimeExpenseCash += t.amount;
+          }
+        });
+      }
+      const allTimeBalanceBank = allTimeIncomeBank - allTimeExpenseBank;
+      const allTimeBalanceCash = allTimeIncomeCash - allTimeExpenseCash;
+      const allTimeTotalBalance = allTimeBalanceBank + allTimeBalanceCash;
+
       setSummary({
-        totalIncome,
-        totalExpense,
-        balanceBank,
-        balanceCash,
-        totalBalance: balanceBank + balanceCash
+        totalIncome: currentMonthTotalIncome,
+        totalExpense: currentMonthTotalExpense,
+        balanceBank: allTimeBalanceBank,
+        balanceCash: allTimeBalanceCash,
+        totalBalance: allTimeTotalBalance,
       });
 
+      // Chart data calculation (for last 6 months - this remains as is)
       const chartData = [];
-      const currentDate = new Date(currentMonthYear + "-01T00:00:00"); 
-      for (let i = 5; i >= 0; i--) { 
-        const date = subMonths(currentDate, i);
+      const chartBaseDate = currentMonthYear ? new Date(currentMonthYear + "-01T00:00:00") : new Date();
+      for (let i = 5; i >= 0; i--) {
+        const date = subMonths(chartBaseDate, i);
         const monthYearKey = format(date, 'yyyy-MM');
-        const monthTransactions = getTransactionsForFamilyByMonth(familyId, monthYearKey);
+        const monthTransactionsForChart = getTransactionsForFamilyByMonth(familyId, monthYearKey);
 
-        const income = monthTransactions
+        const incomeForChart = monthTransactionsForChart
           .filter(t => t.type === 'income' && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID)
           .reduce((sum, t) => sum + t.amount, 0);
-        const expense = monthTransactions
+        const expenseForChart = monthTransactionsForChart
           .filter(t => t.type === 'expense' && t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID)
           .reduce((sum, t) => sum + t.amount, 0);
 
         chartData.push({
           month: MONTH_NAMES[date.getMonth()],
-          thu: income,
-          chi: expense,
+          thu: incomeForChart,
+          chi: expenseForChart,
         });
       }
       setMonthlyChartData(chartData);
-    } else if (currentUser && familyId && !isLoading) {
+
+    } else if (currentUser && familyId && !isLoading) { // No transactions or initial state before data
       setSummary(initialSummary);
-        const chartData = [];
-        const currentDate = new Date(currentMonthYear ? currentMonthYear + "-01T00:00:00" : new Date());
-        for (let i = 5; i >= 0; i--) {
-            const date = subMonths(currentDate, i);
-            chartData.push({
-                month: MONTH_NAMES[date.getMonth()],
-                thu: 0,
-                chi: 0,
-            });
-        }
-        setMonthlyChartData(chartData);
+      const chartData = [];
+      const currentDate = currentMonthYear ? new Date(currentMonthYear + "-01T00:00:00") : new Date();
+      for (let i = 5; i >= 0; i--) {
+          const date = subMonths(currentDate, i);
+          chartData.push({
+              month: MONTH_NAMES[date.getMonth()],
+              thu: 0,
+              chi: 0,
+          });
+      }
+      setMonthlyChartData(chartData);
     }
   }, [currentUser, familyId, transactions, currentMonthYear, getTransactionsForFamilyByMonth, isLoading]);
 
@@ -177,6 +190,8 @@ export default function DashboardPage() {
     setIsWithdrawModalOpen(false);
     if (currentUser && familyId && currentMonthYear) {
         setIsLoading(true);
+        // Re-fetch current month as withdrawal affects current month, 
+        // and all-time balance is recalculated from `transactions` state which will include this new data.
         await fetchTransactionsByMonth(familyId, currentMonthYear); 
         setIsLoading(false);
     }
@@ -209,7 +224,7 @@ export default function DashboardPage() {
                   <AccordionTrigger className="hover:no-underline focus:outline-none w-full text-left p-6 data-[state=open]:pb-2 data-[state=closed]:pb-6 rounded-lg">
                     <div className="w-full">
                       <div className="flex flex-row items-center justify-between space-y-0 mb-2"> 
-                        <p className="text-sm font-medium text-muted-foreground">Tổng Số Dư ({currentMonthName})</p>
+                        <p className="text-sm font-medium text-muted-foreground">Tổng Số Dư Chung</p>
                         <Banknote className={`h-6 w-6 ${summary.totalBalance >= 0 ? "text-indigo-500" : "text-orange-500"}`} />
                       </div>
                       <div> 
@@ -223,7 +238,7 @@ export default function DashboardPage() {
                     <div className="space-y-3 border-t pt-4 mt-2"> 
                       <Card className="shadow-md bg-background/70">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3">
-                          <CardTitle className="text-xs font-medium text-muted-foreground">Số Dư Ngân Hàng</CardTitle>
+                          <CardTitle className="text-xs font-medium text-muted-foreground">Số Dư Ngân Hàng (Chung)</CardTitle>
                           <Landmark className={`h-5 w-5 text-blue-500`} />
                         </CardHeader>
                         <CardContent className="pb-3 pt-0">
@@ -242,7 +257,7 @@ export default function DashboardPage() {
                       </Card>
                        <Card className="shadow-md bg-background/70">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3">
-                          <CardTitle className="text-xs font-medium text-muted-foreground">Số Dư Tiền Mặt</CardTitle>
+                          <CardTitle className="text-xs font-medium text-muted-foreground">Số Dư Tiền Mặt (Chung)</CardTitle>
                           <Wallet className={`h-5 w-5 text-purple-500`} />
                         </CardHeader>
                         <CardContent className="pb-3 pt-0">

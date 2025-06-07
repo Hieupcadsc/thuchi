@@ -33,18 +33,24 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme(); 
 
+  console.log('[AuthenticatedLayout] Rendering. currentUser from store:', currentUser);
+
   useEffect(() => {
+    console.log('[AuthenticatedLayout] useEffect triggered. currentUser from store:', currentUser);
     if (!currentUser) {
+      console.log('[AuthenticatedLayout] No currentUser in useEffect, redirecting to /login');
       router.replace('/login');
     }
   }, [currentUser, router]);
 
   if (!currentUser) {
+    console.log('[AuthenticatedLayout] Render guard: currentUser is null/undefined, showing redirect message to /login.');
     return <div className="flex items-center justify-center min-h-screen"><p>Đang chuyển hướng đến trang đăng nhập...</p></div>;
   }
 
   const handleLogout = () => {
     logout();
+    // router.push('/login') is handled by the useEffect above
   };
   
   return (

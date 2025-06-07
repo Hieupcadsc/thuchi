@@ -1,169 +1,103 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
-import { google } from 'googleapis';
-import type { Transaction, PaymentSource } from '@/types';
+import { db } from '@/lib/sqlite';
+import type { Transaction } from '@/types';
 
-const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
-const auth = new google.auth.GoogleAuth({
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-});
-const sheets = google.sheets({ version: 'v4', auth });
-
-const HEADER_ROW = ['ID', 'UserID', 'Description', 'Amount', 'Date', 'Type', 'CategoryID', 'MonthYear', 'Note', 'PerformedBy', 'PaymentSource'];
-
-
-async function findRowById(spreadsheetId: string, sheetName: string, transactionId: string): Promise<number | null> {
-  try {
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${sheetName}!A:A`, 
-    });
-    const rows = response.data.values;
-    if (rows) {
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i][0] === transactionId) {
-          return i + 1; 
-        }
-      }
-    }
-    return null;
-  } catch (error: any) {
-    console.error(`Error finding row by ID ${transactionId} in sheet ${sheetName}:`, error.message, error.stack);
-    if (error.message && (error.message.includes("No sheet with the name") || error.message.includes("Unable to parse range") || error.message.includes("Requested entity was not found."))) {
-        return null; // If sheet doesn't exist, no row can be found
-    }
-    const message = error.errors?.[0]?.message || error.message || `Failed to find transaction ID ${transactionId} in sheet ${sheetName}.`;
-    throw Object.assign(new Error(message), { code: error.code, details: error.stack });
-  }
-}
+// initDb(); // initDb is now called when sqlite.ts is imported
 
 export async function PUT(request: NextRequest, { params }: { params: { transactionId: string } }) {
-  if (!SPREADSHEET_ID) {
-    return NextResponse.json({ message: 'Google Sheet ID not configured on the server.' }, { status: 500 });
-  }
   const { transactionId } = params;
   try {
-    const updatedTransactionData = await request.json() as Transaction;
+    const updatedTransactionData = await request.json() as Omit<Transaction, 'amount'> & { amount: string | number };
 
-    if (updatedTransactionData.id !== transactionId) {
+    // Ensure amount is a number
+    const amountAsNumber = Number(updatedTransactionData.amount);
+    if (isNaN(amountAsNumber)) {
+      return NextResponse.json({ message: 'Invalid amount format. Amount must be a number.' }, { status: 400 });
+    }
+    const finalTransactionData: Transaction = {
+        ...updatedTransactionData,
+        amount: amountAsNumber,
+    };
+
+
+    if (finalTransactionData.id !== transactionId) {
         return NextResponse.json({ message: 'Transaction ID in path does not match ID in body.' }, { status: 400 });
     }
-    if (!updatedTransactionData.monthYear) {
-        return NextResponse.json({ message: 'monthYear is required in transaction data for update.' }, { status: 400 });
-    }
-    if (!updatedTransactionData.paymentSource) { // Ensure paymentSource is present
-        return NextResponse.json({ message: 'paymentSource is required in transaction data for update.' }, { status: 400 });
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(updatedTransactionData.date)) {
+    // monthYear is derived from date, so validation on date implies monthYear validation.
+    // Re-derive monthYear to ensure consistency if date changed
+    finalTransactionData.monthYear = finalTransactionData.date.substring(0,7);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(finalTransactionData.date)) {
         return NextResponse.json({ message: 'Invalid date format. Expected YYYY-MM-DD.' }, { status: 400 });
     }
-    if (!/^\d{4}-\d{2}$/.test(updatedTransactionData.monthYear)) {
-        return NextResponse.json({ message: 'Invalid monthYear format. Expected YYYY-MM.' }, { status: 400 });
+     if (!finalTransactionData.paymentSource) {
+        return NextResponse.json({ message: 'paymentSource is required in transaction data for update.' }, { status: 400 });
     }
 
-    const sheetName = updatedTransactionData.monthYear;
-    const rowIndex = await findRowById(SPREADSHEET_ID, sheetName, transactionId);
 
-    if (!rowIndex) {
-      return NextResponse.json({ message: `Transaction with ID ${transactionId} not found in sheet ${sheetName}.` }, { status: 404 });
+    const stmt = db.prepare(`
+      UPDATE transactions 
+      SET userId = ?, description = ?, amount = ?, date = ?, type = ?, categoryId = ?, 
+          monthYear = ?, note = ?, performedBy = ?, paymentSource = ?
+      WHERE id = ?
+    `);
+    const info = stmt.run(
+      finalTransactionData.userId,
+      finalTransactionData.description,
+      finalTransactionData.amount,
+      finalTransactionData.date,
+      finalTransactionData.type,
+      finalTransactionData.categoryId,
+      finalTransactionData.monthYear, // Use re-derived monthYear
+      finalTransactionData.note || null,
+      finalTransactionData.performedBy,
+      finalTransactionData.paymentSource,
+      transactionId
+    );
+
+    if (info.changes === 0) {
+      return NextResponse.json({ message: `Transaction with ID ${transactionId} not found.` }, { status: 404 });
     }
 
-    const values = [[
-      updatedTransactionData.id,
-      updatedTransactionData.userId,
-      updatedTransactionData.description,
-      updatedTransactionData.amount,
-      updatedTransactionData.date,
-      updatedTransactionData.type,
-      updatedTransactionData.categoryId,
-      updatedTransactionData.monthYear,
-      updatedTransactionData.note || '',
-      updatedTransactionData.performedBy,
-      updatedTransactionData.paymentSource || '', // Ensure paymentSource is written
-    ]];
+    // Fetch the updated transaction to return it
+    const updatedStmt = db.prepare("SELECT * FROM transactions WHERE id = ?");
+    const result = updatedStmt.get(transactionId) as Transaction | undefined;
 
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A${rowIndex}:${String.fromCharCode(64 + HEADER_ROW.length)}${rowIndex}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values },
-    });
 
-    return NextResponse.json(updatedTransactionData);
+    console.log(`[API_SQLite /transactions/${transactionId}] Transaction updated successfully.`);
+    return NextResponse.json(result);
   } catch (error: any) {
-    console.error(`[API PUT /transactions/${transactionId}] Error:`, error.message, error.stack);
-    const message = error.errors?.[0]?.message || error.message || 'Failed to update transaction.';
-    const statusCode = error.code || 500;
+    console.error(`[API_SQLite PUT /transactions/${transactionId}] Error:`, error.message, error.stack);
+    const message = error.message || 'Failed to update transaction.';
+    let statusCode = typeof error.code === 'number' && error.code >= 200 && error.code <= 599 ? error.code : 500;
     return NextResponse.json({ message, details: error.stack }, { status: statusCode });
   }
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: { transactionId: string } }) {
-  if (!SPREADSHEET_ID) {
-    return NextResponse.json({ message: 'Google Sheet ID not configured on the server.' }, { status: 500 });
-  }
   const { transactionId } = params;
-  const { searchParams } = new URL(request.url);
-  const monthYear = searchParams.get('monthYear');
+  // const { searchParams } = new URL(request.url);
+  // const monthYear = searchParams.get('monthYear'); // monthYear is no longer strictly needed for deletion by ID with SQLite
 
-  if (!monthYear) {
-    return NextResponse.json({ message: 'monthYear query parameter is required for deletion.' }, { status: 400 });
-  }
+  // if (!monthYear) { // Kept for API contract consistency but not used in query
+  //   return NextResponse.json({ message: 'monthYear query parameter is required for deletion (though not used in SQLite context).' }, { status: 400 });
+  // }
 
   try {
-    const sheetName = monthYear;
-    
-    // Try to get sheetId, but proceed even if it fails initially, findRowById will also check sheet existence.
-    let sheetId;
-    try {
-        const sheetData = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID, ranges: [sheetName] });
-        sheetId = sheetData.data.sheets?.find(s => s.properties?.title === sheetName)?.properties?.sheetId;
-    } catch (getSheetError: any) {
-        // If sheet doesn't exist, findRowById will return null, and we'll handle it there.
-        console.warn(`[API DELETE /transactions/${transactionId}] Could not get sheet metadata for ${sheetName}, possibly it doesn't exist. Error: ${getSheetError.message}`);
+    const stmt = db.prepare("DELETE FROM transactions WHERE id = ?");
+    const info = stmt.run(transactionId);
+
+    if (info.changes === 0) {
+      return NextResponse.json({ message: `Transaction with ID ${transactionId} not found.` }, { status: 404 });
     }
 
-
-    const rowIndex = await findRowById(SPREADSHEET_ID, sheetName, transactionId);
-
-    if (!rowIndex) {
-      return NextResponse.json({ message: `Transaction with ID ${transactionId} not found in sheet ${sheetName}.` }, { status: 404 });
-    }
-    
-    // Re-fetch sheetId if it wasn't found before, now that we know the sheet and row exist
-    if (sheetId === undefined) {
-        const sheetDataRetry = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID, ranges: [sheetName] });
-        sheetId = sheetDataRetry.data.sheets?.find(s => s.properties?.title === sheetName)?.properties?.sheetId;
-        if (sheetId === undefined) {
-            // This case should be rare if rowIndex was found, but as a safeguard:
-            return NextResponse.json({ message: `Sheet with name ${sheetName} found but could not retrieve its ID for deletion.` }, { status: 500 });
-        }
-    }
-
-
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
-      requestBody: {
-        requests: [
-          {
-            deleteDimension: {
-              range: {
-                sheetId: sheetId,
-                dimension: 'ROWS',
-                startIndex: rowIndex - 1,
-                endIndex: rowIndex,
-              },
-            },
-          },
-        ],
-      },
-    });
-
+    console.log(`[API_SQLite /transactions/${transactionId}] Transaction deleted successfully.`);
     return NextResponse.json({ message: `Transaction ${transactionId} deleted successfully.` });
   } catch (error: any) {
-    console.error(`[API DELETE /transactions/${transactionId}] Error:`, error.message, error.stack);
-    const message = error.errors?.[0]?.message || error.message || 'Failed to delete transaction.';
-    const statusCode = error.code || 500;
+    console.error(`[API_SQLite DELETE /transactions/${transactionId}] Error:`, error.message, error.stack);
+    const message = error.message || 'Failed to delete transaction.';
+    let statusCode = typeof error.code === 'number' && error.code >= 200 && error.code <= 599 ? error.code : 500;
     return NextResponse.json({ message, details: error.stack }, { status: statusCode });
   }
 }

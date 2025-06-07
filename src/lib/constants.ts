@@ -1,13 +1,13 @@
 
 import type { Category, FamilyMember, PaymentSource } from '@/types';
-import { Utensils, ShoppingCart, Car, Home, Receipt, Film, HeartPulse, BookOpen, MoreHorizontal, TrendingUp, TrendingDown, LayoutDashboard, ArrowRightLeft, LineChart, Settings, LogOut, CircleDollarSign, Moon, Sun, Landmark, Wallet, ArrowDownUp, ArrowUpDown } from 'lucide-react'; // Added ArrowDownUp, ArrowUpDown
+import { Utensils, ShoppingCart, Car, Home, Receipt, Film, HeartPulse, BookOpen, MoreHorizontal, TrendingUp, TrendingDown, LayoutDashboard, ArrowRightLeft, LineChart, Settings, LogOut, CircleDollarSign, Moon, Sun, Landmark, Wallet, ArrowDownUp, ArrowUpDown } from 'lucide-react'; // Added Settings
 import type { LucideIcon } from 'lucide-react';
 
 
 export const APP_NAME = "Ngân Sách Gia Đình";
 
 export const FAMILY_MEMBERS: FamilyMember[] = ['Minh Đan', 'Minh Hiếu'];
-export const FAMILY_ACCOUNT_ID: UserType = "GIA_DINH"; // Added and exported
+export const FAMILY_ACCOUNT_ID: UserType = "GIA_DINH"; 
 
 export const PAYMENT_SOURCE_OPTIONS: Array<{ id: PaymentSource, label: string, icon: LucideIcon }> = [
   { id: 'bank', label: 'Ngân hàng', icon: Landmark },
@@ -35,6 +35,7 @@ export const NAV_LINKS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/transactions', label: 'Giao dịch', icon: ArrowRightLeft },
   { href: '/reports', label: 'Báo cáo', icon: LineChart },
+  { href: '/settings', label: 'Cài đặt', icon: Settings }, // Added Settings link
 ];
 
 export const MONTH_NAMES = [
@@ -51,7 +52,8 @@ export const THEME_TOGGLE_ICONS = {
 export const RUT_TIEN_MAT_CATEGORY_ID = 'rut_tien_mat';
 export const NAP_TIEN_MAT_CATEGORY_ID = 'nap_tien_mat_tu_nh';
 
-// For Shared Notes feature
-export const SHARED_NOTES_SHEET_NAME = "SharedNotes";
-export const SHARED_NOTE_CELL = "A1";
-export const SHARED_NOTE_MODIFIED_INFO_CELL = "B1";
+// For Shared Notes feature - SQLite doesn't need these for sheet interaction
+// export const SHARED_NOTES_SHEET_NAME = "SharedNotes";
+// export const SHARED_NOTE_CELL = "A1";
+// export const SHARED_NOTE_MODIFIED_INFO_CELL = "B1";
+

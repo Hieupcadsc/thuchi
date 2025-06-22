@@ -266,9 +266,21 @@ export default function ReportsPage() {
             <div>
                 <h3 className="text-xl font-semibold mb-2">Tổng Quan Gia Đình - {selectedMonthLabel}</h3>
                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
-                    <SummaryCard title={`Tổng Thu (${selectedMonthLabel})`} value={familyMonthlySummary.totalIncome} icon={TrendingUp} colorClass="text-green-500" />
-                    <SummaryCard title={`Tổng Chi (${selectedMonthLabel})`} value={familyMonthlySummary.totalExpense} icon={TrendingDown} colorClass="text-red-500" />
-                    <SummaryCard title={`Số Dư (${selectedMonthLabel})`} value={familyMonthlySummary.balance} icon={Banknote} colorClass={familyMonthlySummary.balance >= 0 ? "text-blue-500" : "text-orange-500"} />
+                    <SummaryCard 
+                      title={`Tổng Thu (${selectedMonthLabel})`} 
+                      value={new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', minimumFractionDigits: 0 }).format(familyMonthlySummary.totalIncome)} 
+                      variant="income"
+                    />
+                    <SummaryCard 
+                      title={`Tổng Chi (${selectedMonthLabel})`} 
+                      value={new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', minimumFractionDigits: 0 }).format(familyMonthlySummary.totalExpense)} 
+                      variant="expense"
+                    />
+                    <SummaryCard 
+                      title={`Số Dư (${selectedMonthLabel})`} 
+                      value={new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', minimumFractionDigits: 0 }).format(familyMonthlySummary.balance)} 
+                      variant="balance"
+                    />
                 </div>
                 <CategoryBreakdownChart data={categoryBreakdownDataFamily} />
             </div>
@@ -278,9 +290,21 @@ export default function ReportsPage() {
                 <div key={member} className="space-y-4">
                     <h3 className="text-xl font-semibold">Thống Kê Của {member} - {selectedMonthLabel}</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <SummaryCard title={`Tổng Thu (${member})`} value={memberSummary[member]?.totalIncome || 0} icon={TrendingUp} colorClass="text-green-500" />
-                        <SummaryCard title={`Tổng Chi (${member})`} value={memberSummary[member]?.totalExpense || 0} icon={TrendingDown} colorClass="text-red-500" />
-                        <SummaryCard title={`Số Dư (${member})`} value={memberSummary[member]?.balance || 0} icon={Banknote} colorClass={(memberSummary[member]?.balance || 0) >= 0 ? "text-blue-500" : "text-orange-500"} />
+                        <SummaryCard 
+                          title={`Tổng Thu (${member})`} 
+                          value={new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', minimumFractionDigits: 0 }).format(memberSummary[member]?.totalIncome || 0)} 
+                          variant="income"
+                        />
+                        <SummaryCard 
+                          title={`Tổng Chi (${member})`} 
+                          value={new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', minimumFractionDigits: 0 }).format(memberSummary[member]?.totalExpense || 0)} 
+                          variant="expense"
+                        />
+                        <SummaryCard 
+                          title={`Số Dư (${member})`} 
+                          value={new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', minimumFractionDigits: 0 }).format(memberSummary[member]?.balance || 0)} 
+                          variant="balance"
+                        />
                     </div>
                     <CategoryBreakdownChart data={memberCategoryBreakdown[member] || []} />
                 </div>

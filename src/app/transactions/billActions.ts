@@ -1,36 +1,53 @@
-
 'use server';
 
-import { extractBillInfo, type ExtractBillInfoInput, type ExtractBillInfoOutput } from '@/ai/flows/extract-bill-info-flow';
+import { type ExtractBillInfoOutput } from '@/ai/flows/extract-bill-info-flow';
 
-interface ProcessBillResult {
+interface ProcessBillResult { 
   success: boolean;
   data?: ExtractBillInfoOutput;
   error?: string;
+  warning?: string;
 }
 
 export async function processBillImage(imageDataUri: string): Promise<ProcessBillResult> {
-  if (!imageDataUri) {
-    return { success: false, error: 'No image data provided.' };
-  }
-
-  console.log('[billActions] Starting bill image processing...');
   try {
-    const input: ExtractBillInfoInput = { photoDataUri: imageDataUri };
-    const result = await extractBillInfo(input);
-    
-    if (Object.keys(result).length === 0) {
-        console.warn('[billActions] AI returned no usable data from the bill.');
-        // It's not an error per se, but AI couldn't extract anything.
-        // We can let the client decide how to handle an empty result.
-        // For now, treat as success with empty data.
-        return { success: true, data: {} };
+    if (!imageDataUri || !imageDataUri.startsWith('data:image/')) {
+      return {
+        success: false,
+        error: 'Invalid image data provided',
+      };
     }
+
+    // Call the API route for consistent processing
+    const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:9002'}/api/ai/process-bill`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ imageDataUri }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      return {
+        success: false,
+        error: errorData.error || `HTTP error! status: ${response.status}`,
+      };
+    }
+
+    const result = await response.json();
     
-    console.log('[billActions] Bill processing successful, data:', result);
-    return { success: true, data: result };
+    return {
+      success: result.success,
+      data: result.data,
+      error: result.error,
+      warning: result.warning,
+    };
   } catch (error: any) {
-    console.error('[billActions] Error processing bill image with AI:', error);
-    return { success: false, error: error.message || 'Failed to process bill image with AI.' };
+    console.error('Error processing bill image:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to process bill image',
+    };
   }
-}
+} 

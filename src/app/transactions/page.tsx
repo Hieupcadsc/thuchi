@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useAuthStore } from '@/hooks/useAuth';
 import type { Transaction, FamilyMember } from '@/types';
 import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS, FAMILY_ACCOUNT_ID } from '@/lib/constants';
-import { PlusCircle, AlertTriangle, Loader2, Search, Filter, CalendarIcon, XCircle, Camera, Trash2, RefreshCw } from 'lucide-react';
+import { PlusCircle, AlertTriangle, Loader2, Search, Filter, CalendarIcon, XCircle, Camera, Trash2, RefreshCw, Tag, User } from 'lucide-react';
 import { format, subMonths, isValid, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -33,6 +33,7 @@ import {
 
 const ALL_CATEGORIES_VALUE = "all_categories";
 const ALL_MEMBERS_VALUE = "all_members";
+const ALL_TRANSACTIONS_VALUE = "all_transactions";
 
 export default function TransactionsPage() {
   const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth, addTransaction, updateTransaction, deleteTransaction, bulkDeleteTransactions } = useAuthStore();
@@ -55,6 +56,8 @@ export default function TransactionsPage() {
 
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+
 
   const monthOptions = useMemo(() => {
     const options = [];
@@ -89,6 +92,12 @@ export default function TransactionsPage() {
           nextMonth.setMonth(nextMonth.getMonth() + 1);
           currentFetchMonth = nextMonth;
       }
+    } else if (currentMonthYear === ALL_TRANSACTIONS_VALUE) {
+      // Load last 12 months for "all transactions" view
+      for (let i = 0; i < 12; i++) {
+        const date = subMonths(new Date(), i);
+        monthsToFetch.add(format(date, 'yyyy-MM'));
+      }
     } else if (currentMonthYear && !isDateFilterActive) {
       monthsToFetch.add(currentMonthYear);
     } else if (monthOptions.length > 0 && !isDateFilterActive && monthOptions[0]?.value) {
@@ -115,6 +124,15 @@ export default function TransactionsPage() {
     setSelectedTransactionIds([]); // Clear selection on refresh
     await loadDataForCurrentFilters();
     setIsRefreshing(false);
+  };
+
+  const handleDebugState = () => {
+    console.log("🔧 [DEBUG] Current state:");
+    console.log("🔧 [DEBUG] familyId:", familyId);
+    console.log("🔧 [DEBUG] currentMonthYear:", currentMonthYear);
+    console.log("🔧 [DEBUG] All transactions in store:", transactions);
+    console.log("🔧 [DEBUG] Displayed transactions:", displayTransactions);
+    console.log("🔧 [DEBUG] Filter states:", { searchTerm, filterCategory, filterPerformedBy, isDateFilterActive, filterStartDate, filterEndDate });
   };
 
   const handleFormSuccess = async () => {
@@ -156,12 +174,15 @@ export default function TransactionsPage() {
     if (isDateFilterActive && filterStartDate && filterEndDate) {
         sourceTransactions = transactions.filter(t => {
             try {
-                const transactionDate = parseISO(t.date); // Ensure date is parsed correctly
+                const transactionDate = parseISO(t.date);
                 return isValid(transactionDate) && 
-                       transactionDate >= startOfMonth(filterStartDate) && // Compare with start/end of day for inclusivity
+                       transactionDate >= startOfMonth(filterStartDate) && 
                        transactionDate <= endOfMonth(filterEndDate);
             } catch (e) { return false; }
         });
+    } else if (currentMonthYear === ALL_TRANSACTIONS_VALUE) {
+        // Show all transactions from all loaded months
+        sourceTransactions = transactions;
     } else if (currentMonthYear && !isDateFilterActive) {
         sourceTransactions = getTransactionsForFamilyByMonth(familyId, currentMonthYear);
     } else {
@@ -262,34 +283,71 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Quản Lý Giao Dịch ({currentUser})</h1>
-          <p className="text-muted-foreground">Thêm mới, sửa, xóa và xem lại các khoản thu chi của gia đình.</p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <Button onClick={handleAddNewTransaction} size="lg" variant="outline" className="w-full sm:w-auto">
-            <PlusCircle className="mr-2 h-5 w-5" />
-            {(isFormVisible && !editingTransaction && !isBillModeActive) ? 'Đóng Form' : 'Thêm Mới'}
+    <div className="space-y-6 animate-fade-in">
+      {/* Hero Section with Action Buttons */}
+      <div className="glass rounded-2xl p-6 border animate-slide-down">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              Quản Lý Giao Dịch ({currentUser})
+            </h1>
+            <p className="text-muted-foreground text-sm sm:text-base">
+              Thêm mới, sửa, xoá và xem lại các khoản thu chi của gia đình.
+            </p>
+          </div>
+          <div className="flex gap-3 w-full sm:w-auto">
+            <Button
+              onClick={handleAddNewTransaction}
+              className="flex-1 sm:flex-none btn-enhanced gradient-bg-success text-white hover:shadow-lg transition-all duration-300"
+              size="lg"
+            >
+              <PlusCircle className="mr-2 h-5 w-5" />
+              {(isFormVisible && !editingTransaction && !isBillModeActive) ? 'Đóng Form' : 'Thêm Mới'}
             </Button>
-            <Button onClick={handleAddFromBill} size="lg" className="w-full sm:w-auto">
-            <Camera className="mr-2 h-5 w-5" />
-            {(isFormVisible && isBillModeActive) ? 'Đóng Form Bill' : 'Thêm từ Bill'}
+            <Button
+              onClick={handleAddFromBill}
+              variant="outline"
+              className="flex-1 sm:flex-none btn-enhanced border-2 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950 transition-all duration-300"
+              size="lg"
+            >
+              <Camera className="mr-2 h-5 w-5" />
+              {(isFormVisible && isBillModeActive) ? 'Đóng Form Bill' : 'Thêm từ Bill'}
             </Button>
+          </div>
         </div>
       </div>
 
+      {/* Enhanced Form Modal */}
       {(isFormVisible || editingTransaction) && (
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle>{editingTransaction ? 'Chỉnh Sửa Giao Dịch' : (isBillModeActive ? 'Thêm Giao Dịch từ Bill' : 'Thêm Giao Dịch Mới')}</CardTitle>
-            <CardDescription>
-              {editingTransaction ? 'Chỉnh sửa thông tin chi tiết cho khoản thu hoặc chi.' : 
-               (isBillModeActive ? 'Tải ảnh bill để AI trích xuất thông tin tự động.' : 'Điền thông tin chi tiết cho khoản thu hoặc chi của gia đình.')}
-            </CardDescription>
+        <Card className="shadow-2xl border-2 border-primary/20 card-hover animate-scale-in">
+          <CardHeader className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950 dark:via-indigo-950 dark:to-purple-950 rounded-t-lg">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white animate-pulse-soft">
+                    {editingTransaction ? 
+                      <PlusCircle className="h-5 w-5" /> : 
+                      (isBillModeActive ? <Camera className="h-5 w-5" /> : <PlusCircle className="h-5 w-5" />)
+                    }
+                  </div>
+                  {editingTransaction ? 'Chỉnh Sửa Giao Dịch' : (isBillModeActive ? 'Thêm Giao Dịch từ Bill' : 'Thêm Giao Dịch Mới')}
+                </CardTitle>
+                <CardDescription className="text-base">
+                  {editingTransaction ? 'Chỉnh sửa thông tin chi tiết cho khoản thu hoặc chi.' : 
+                   (isBillModeActive ? 'Tải ảnh bill để AI trích xuất thông tin tự động.' : 'Điền thông tin chi tiết cho khoản thu hoặc chi của gia đình.')}
+                </CardDescription>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCancelForm}
+                className="rounded-full hover:bg-red-100 dark:hover:bg-red-950/20 hover:text-red-600 transition-all duration-200"
+              >
+                <XCircle className="h-5 w-5" />
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6 bg-gradient-to-br from-white via-slate-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-950 rounded-b-lg">
             <TransactionForm 
                 onSuccess={handleFormSuccess} 
                 transactionToEdit={editingTransaction}
@@ -300,110 +358,262 @@ export default function TransactionsPage() {
         </Card>
       )}
 
-      <Card className="shadow-md">
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-            <CardTitle className="flex items-center gap-2"><Filter className="h-5 w-5"/> Bộ Lọc Giao Dịch</CardTitle>
-            <Button onClick={handleRefreshTransactions} disabled={isLoading || isRefreshing} variant="outline" size="sm" className="mt-2 sm:mt-0">
-              {isRefreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-              Làm mới
-            </Button>
+      {/* Enhanced Filter Section */}
+      <Card className="shadow-xl card-hover border-2 border-gradient animate-slide-up overflow-hidden">
+        <CardHeader className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/50 dark:via-indigo-950/50 dark:to-purple-950/50 border-b border-border/50">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl animate-pulse opacity-75"></div>
+                <div className="relative p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg">
+                  <Filter className="h-5 w-5"/>
+                </div>
+              </div>
+              <div>
+                <CardTitle className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  Bộ Lọc Thông Minh
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">Tìm kiếm và lọc giao dịch nhanh chóng</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                onClick={handleRefreshTransactions} 
+                disabled={isLoading || isRefreshing} 
+                variant="outline" 
+                size="sm" 
+                className="btn-enhanced hover:shadow-lg transition-all duration-300 border-2 hover:border-blue-400"
+              >
+                {isRefreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Làm mới
+              </Button>
+              <Button
+                onClick={handleDebugState}
+                variant="outline"
+                size="sm"
+                className="btn-enhanced bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800 dark:hover:bg-amber-900 transition-all duration-300"
+              >
+                🔧 Debug
+              </Button>
+            </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Input 
-                    placeholder="Tìm theo mô tả..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="h-10"
-                />
-                <Select value={filterCategory} onValueChange={setFilterCategory}>
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Lọc theo danh mục..." /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value={ALL_CATEGORIES_VALUE}>Tất cả danh mục</SelectItem>
-                        {CATEGORIES.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
-                    </SelectContent>
-                </Select>
-                <Select value={filterPerformedBy} onValueChange={(value) => setFilterPerformedBy(value as string)}>
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Lọc theo người thực hiện..." /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value={ALL_MEMBERS_VALUE}>Tất cả thành viên</SelectItem>
-                        {FAMILY_MEMBERS.map(member => <SelectItem key={member} value={member}>{member}</SelectItem>)}
-                    </SelectContent>
-                </Select>
-                 <Select 
-                    value={isDateFilterActive ? "custom" : (currentMonthYear || (monthOptions[0]?.value ?? ''))} 
-                    onValueChange={(value) => {
-                        if (value === "custom") {
-                            if (!filterStartDate || !filterEndDate) {
-                                const today = new Date();
-                                setFilterStartDate(startOfMonth(today));
-                                setFilterEndDate(endOfMonth(today));
-                            }
-                            setIsDateFilterActive(true);
-                            setSelectedTransactionIds([]);
-                        } else {
-                            setIsDateFilterActive(false);
-                            setCurrentMonthYear(value);
-                            setFilterStartDate(undefined);
-                            setFilterEndDate(undefined);
-                            setSelectedTransactionIds([]);
-                        }
-                    }}
-                 >
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Lọc theo tháng/khoảng tùy chỉnh" /></SelectTrigger>
-                    <SelectContent>
-                        {monthOptions.map(option => (
-                            <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                            </SelectItem>
-                        ))}
-                        <SelectItem value="custom">Khoảng ngày tùy chỉnh</SelectItem>
-                    </SelectContent>
-                </Select>
+        
+        <CardContent className="p-6 bg-gradient-to-br from-white via-slate-50/50 to-blue-50/30 dark:from-gray-900 dark:via-gray-800/50 dark:to-blue-950/20">
+          {/* Quick Filters Pills */}
+          <div className="flex flex-wrap gap-2 mb-6">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="font-medium">Lọc nhanh:</span>
             </div>
+            <Button
+              variant={currentMonthYear === ALL_TRANSACTIONS_VALUE ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setIsDateFilterActive(false);
+                setCurrentMonthYear(ALL_TRANSACTIONS_VALUE);
+                setFilterStartDate(undefined);
+                setFilterEndDate(undefined);
+                setSelectedTransactionIds([]);
+              }}
+              className="rounded-full h-8 px-4 transition-all duration-300 hover:scale-105"
+            >
+              📊 Toàn bộ giao dịch
+            </Button>
+            <Button
+              variant={currentMonthYear === monthOptions[0]?.value && !isDateFilterActive ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setIsDateFilterActive(false);
+                setCurrentMonthYear(monthOptions[0]?.value || '');
+                setFilterStartDate(undefined);
+                setFilterEndDate(undefined);
+                setSelectedTransactionIds([]);
+              }}
+              className="rounded-full h-8 px-4 transition-all duration-300 hover:scale-105"
+            >
+              📅 Tháng hiện tại
+            </Button>
+            <Button
+              variant={isDateFilterActive ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                if (!filterStartDate || !filterEndDate) {
+                  const today = new Date();
+                  setFilterStartDate(startOfMonth(today));
+                  setFilterEndDate(endOfMonth(today));
+                }
+                setIsDateFilterActive(true);
+                setSelectedTransactionIds([]);
+              }}
+              className="rounded-full h-8 px-4 transition-all duration-300 hover:scale-105"
+            >
+              🎯 Khoảng ngày tùy chỉnh
+            </Button>
+          </div>
+
+          <div className="space-y-6">
+            {/* Main Filters Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Search className="h-4 w-4" />
+                  Tìm kiếm
+                </label>
+                <Input 
+                  placeholder="Nhập mô tả giao dịch..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="h-12 bg-white/80 dark:bg-gray-800/80 border-2 focus:border-blue-400 transition-all duration-300"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Tag className="h-4 w-4" />
+                  Danh mục
+                </label>
+                <Select value={filterCategory} onValueChange={setFilterCategory}>
+                  <SelectTrigger className="h-12 bg-white/80 dark:bg-gray-800/80 border-2 focus:border-blue-400">
+                    <SelectValue placeholder="Chọn danh mục..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_CATEGORIES_VALUE}>🏷️ Tất cả danh mục</SelectItem>
+                    {CATEGORIES.map(cat => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Người thực hiện
+                </label>
+                <Select value={filterPerformedBy} onValueChange={(value) => setFilterPerformedBy(value as string)}>
+                  <SelectTrigger className="h-12 bg-white/80 dark:bg-gray-800/80 border-2 focus:border-blue-400">
+                    <SelectValue placeholder="Chọn thành viên..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_MEMBERS_VALUE}>👥 Tất cả thành viên</SelectItem>
+                    {FAMILY_MEMBERS.map(member => (
+                      <SelectItem key={member} value={member}>
+                        {member}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <CalendarIcon className="h-4 w-4" />
+                  Thời gian
+                </label>
+                <Select 
+                  value={
+                    isDateFilterActive ? "custom" : 
+                    currentMonthYear === ALL_TRANSACTIONS_VALUE ? ALL_TRANSACTIONS_VALUE :
+                    (currentMonthYear || (monthOptions[0]?.value ?? ''))
+                  } 
+                  onValueChange={(value) => {
+                    if (value === "custom") {
+                      if (!filterStartDate || !filterEndDate) {
+                        const today = new Date();
+                        setFilterStartDate(startOfMonth(today));
+                        setFilterEndDate(endOfMonth(today));
+                      }
+                      setIsDateFilterActive(true);
+                      setSelectedTransactionIds([]);
+                    } else {
+                      setIsDateFilterActive(false);
+                      setCurrentMonthYear(value);
+                      setFilterStartDate(undefined);
+                      setFilterEndDate(undefined);
+                      setSelectedTransactionIds([]);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-12 bg-white/80 dark:bg-gray-800/80 border-2 focus:border-blue-400">
+                    <SelectValue placeholder="Chọn thời gian..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_TRANSACTIONS_VALUE}>📊 Toàn bộ giao dịch</SelectItem>
+                    {monthOptions.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        📅 {option.label}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">🎯 Khoảng ngày tùy chỉnh</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Custom Date Range */}
             {isDateFilterActive && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end pt-4">
-                    <div className="flex flex-col space-y-1">
-                        <span className="text-sm font-medium">Từ ngày</span>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn("h-10 justify-start text-left font-normal w-full", !filterStartDate && "text-muted-foreground")}>
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {filterStartDate ? format(filterStartDate, "dd/MM/yyyy", {locale: vi}) : <span>Chọn ngày bắt đầu</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                                <Calendar mode="single" selected={filterStartDate} onSelect={setFilterStartDate} initialFocus />
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                     <div className="flex flex-col space-y-1">
-                        <span className="text-sm font-medium">Đến ngày</span>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn("h-10 justify-start text-left font-normal w-full", !filterEndDate && "text-muted-foreground")}>
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {filterEndDate ? format(filterEndDate, "dd/MM/yyyy", {locale: vi}) : <span>Chọn ngày kết thúc</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                                <Calendar mode="single" selected={filterEndDate} onSelect={setFilterEndDate} disabled={(date) => filterStartDate ? date < filterStartDate : false} initialFocus />
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                    <Button onClick={handleApplyDateFilter} className="h-10 w-full md:w-auto" disabled={!filterStartDate || !filterEndDate || isLoading || isRefreshing}>
-                        {(isLoading || isRefreshing) && isDateFilterActive ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Áp dụng khoảng ngày
-                    </Button>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl p-4 border-2 border-blue-200 dark:border-blue-800 animate-fade-in">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-blue-700 dark:text-blue-300">Từ ngày</label>
+                    <Input
+                      type="date"
+                      value={filterStartDate ? format(filterStartDate, "yyyy-MM-dd") : ""}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setFilterStartDate(new Date(e.target.value));
+                        }
+                      }}
+                      className="h-12 bg-white dark:bg-gray-800 border-2 focus:border-blue-400"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-blue-700 dark:text-blue-300">Đến ngày</label>
+                    <Input
+                      type="date"
+                      value={filterEndDate ? format(filterEndDate, "yyyy-MM-dd") : ""}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setFilterEndDate(new Date(e.target.value));
+                        }
+                      }}
+                      className="h-12 bg-white dark:bg-gray-800 border-2 focus:border-blue-400"
+                    />
+                  </div>
+                  
+                  <Button 
+                    onClick={handleApplyDateFilter} 
+                    className="h-12 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium transition-all duration-300 hover:shadow-lg" 
+                    disabled={!filterStartDate || !filterEndDate || isLoading || isRefreshing}
+                  >
+                    {(isLoading || isRefreshing) && isDateFilterActive ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="mr-2 h-4 w-4" />
+                    )}
+                    Áp dụng bộ lọc
+                  </Button>
                 </div>
+              </div>
             )}
-            {(searchTerm || (filterCategory !== ALL_CATEGORIES_VALUE) || (filterPerformedBy !== ALL_MEMBERS_VALUE) || isDateFilterActive) && (
-                <Button variant="ghost" onClick={resetFilters} className="text-sm text-muted-foreground hover:text-destructive mt-4">
-                    <XCircle className="mr-2 h-4 w-4"/> Xóa tất cả bộ lọc
+
+            {/* Reset Filters */}
+            {(searchTerm || (filterCategory !== ALL_CATEGORIES_VALUE) || (filterPerformedBy !== ALL_MEMBERS_VALUE) || isDateFilterActive || currentMonthYear === ALL_TRANSACTIONS_VALUE) && (
+              <div className="flex justify-center pt-4">
+                <Button 
+                  variant="ghost" 
+                  onClick={resetFilters} 
+                  className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all duration-300 rounded-full px-6 py-2"
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Xóa tất cả bộ lọc
                 </Button>
+              </div>
             )}
+          </div>
         </CardContent>
       </Card>
 
@@ -415,6 +625,7 @@ export default function TransactionsPage() {
               <CardDescription>
                 {isDateFilterActive && filterStartDate && filterEndDate ? 
                 `Giao dịch từ ${format(filterStartDate, "dd/MM/yyyy", {locale: vi})} đến ${format(filterEndDate, "dd/MM/yyyy", {locale: vi})}` :
+                currentMonthYear === ALL_TRANSACTIONS_VALUE ? 'Toàn bộ giao dịch (12 tháng gần nhất)' :
                 (currentMonthYear ? (monthOptions.find(m => m.value === currentMonthYear)?.label || `tháng ${currentMonthYear}`) : 'Vui lòng chọn tháng hoặc khoảng ngày')
                 }
               </CardDescription>

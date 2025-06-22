@@ -1,72 +1,84 @@
+import { gemini15Flash } from '@genkit-ai/googleai';
+import { z } from 'zod';
+import { ai } from '../genkit';
 
-'use server';
-/**
- * @fileOverview A Genkit flow for extracting information from a bill/receipt image.
- *
- * - extractBillInfo - A function that takes a bill image and returns extracted information.
- * - ExtractBillInfoInput - The input type for the extractBillInfo function.
- * - ExtractBillInfoOutput - The return type for the extractBillInfo function.
- */
-
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
-
-const ExtractBillInfoInputSchema = z.object({
-  photoDataUri: z
-    .string()
-    .describe(
-      "A photo of a bill or receipt, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
-    ),
+export const ExtractBillInfoInputSchema = z.object({
+  imageDataUri: z.string(),
 });
+
+export const ExtractBillInfoOutputSchema = z.object({
+  totalAmount: z.number().optional(),
+  transactionDate: z.string().optional(),
+  description: z.string().optional(),
+  note: z.string().optional(),
+});
+
 export type ExtractBillInfoInput = z.infer<typeof ExtractBillInfoInputSchema>;
-
-const ExtractBillInfoOutputSchema = z.object({
-  totalAmount: z.number().optional().describe('The final total amount paid on the bill.'),
-  transactionDate: z.string().optional().describe('The date of the transaction, ideally in YYYY-MM-DD format, or as seen on the bill.'),
-  description: z.string().optional().describe('A brief description of the purchase, often the store name or a summary.'),
-});
 export type ExtractBillInfoOutput = z.infer<typeof ExtractBillInfoOutputSchema>;
 
-export async function extractBillInfo(input: ExtractBillInfoInput): Promise<ExtractBillInfoOutput> {
-  return extractBillInfoFlow(input);
-}
-
-const prompt = ai.definePrompt({
-  name: 'extractBillInfoPrompt',
-  model: 'googleai/gemini-1.5-flash-latest', // Vision capable model
-  input: {schema: ExtractBillInfoInputSchema},
-  output: {schema: ExtractBillInfoOutputSchema},
-  prompt: `You are an AI assistant specialized in extracting information from receipts and bills.
-Analyze the provided image of a bill.
-
-Instructions:
-1.  Extract the TOTAL AMOUNT PAID. This is usually labeled as "Total", "Grand Total", "Thành tiền", "Tổng cộng", etc. If there are multiple totals (e.g., subtotal, total with tax), use the final amount the customer actually paid.
-2.  Extract the TRANSACTION DATE. Try to identify the date the transaction occurred. If possible, format it as YYYY-MM-DD. If not, return the date string as you see it on the bill.
-3.  Extract a brief DESCRIPTION of the purchase. This is often the store name, restaurant name, or a general summary if the store name is not clear.
-
-If any piece of information is unclear, ambiguous, or not present on the bill, please omit that field or set its value to null in the JSON output. Focus on accuracy.
-
-Bill Image:
-{{media url=photoDataUri}}
-
-Return the information in the specified JSON format.
-`,
-});
-
-const extractBillInfoFlow = ai.defineFlow(
+export const extractBillInfo = ai.defineFlow(
   {
-    name: 'extractBillInfoFlow',
+    name: 'extractBillInfo',
     inputSchema: ExtractBillInfoInputSchema,
     outputSchema: ExtractBillInfoOutputSchema,
   },
-  async (input) => {
-    const {output, usage} = await prompt(input);
-    console.log('[extractBillInfoFlow] AI Usage:', usage);
-    if (!output) {
-        console.warn('[extractBillInfoFlow] AI did not return any output.');
-        return {}; // Return empty object if AI gives no output
+  async (input: ExtractBillInfoInput): Promise<ExtractBillInfoOutput> => {
+    const prompt = `
+Bạn là một AI chuyên phân tích hóa đơn/bill Việt Nam. Hãy phân tích hình ảnh này và trích xuất thông tin sau:
+
+1. Tổng số tiền (totalAmount) - chỉ trả về số, không có ký tự đặc biệt
+2. Ngày giao dịch (transactionDate) - định dạng YYYY-MM-DD
+3. Mô tả/tên cửa hàng (description) - tên cửa hàng hoặc loại giao dịch
+4. Chi tiết các món (note) - liệt kê tất cả các món/item trong bill
+
+Lưu ý:
+- Nếu không tìm thấy thông tin nào, trả về undefined cho field đó
+- Số tiền là số cuối cùng, thường là tổng cộng
+- Ngày có thể ở nhiều định dạng khác nhau (dd/mm/yyyy, dd-mm-yyyy, etc.)
+- Mô tả nên ngắn gọn và có ý nghĩa
+- Note: liệt kê chi tiết các món với giá, ví dụ: "Cà ngã gha rang muối 39k, Ốc lái háp thái 15k, Nghêu Bắc háp xả 15k..."
+
+QUAN TRỌNG: Chỉ trả về JSON object thuần túy, KHÔNG sử dụng markdown code blocks hoặc text khác. Ví dụ:
+{"totalAmount": 248000, "transactionDate": "2025-01-21", "description": "Nhà hàng hải sản", "note": "Cà ngã gha rang muối 39k, Ốc lái háp thái 15k, Nghêu Bắc háp xả 15k, Mì xào bạch tuộc 30k..."}
+`;
+
+    try {
+      const response = await ai.generate({
+        model: gemini15Flash,
+        prompt: [
+          {
+            text: prompt,
+          },
+          {
+            media: {
+              url: input.imageDataUri,
+            },
+          },
+        ],
+      });
+
+      let result = response.text.trim();
+      console.log('AI Response:', result);
+
+      // Remove markdown code blocks if present
+      if (result.startsWith('```json') && result.endsWith('```')) {
+        result = result.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (result.startsWith('```') && result.endsWith('```')) {
+        result = result.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+
+      // Parse JSON response
+      const parsed = JSON.parse(result);
+      
+      return {
+        totalAmount: parsed.totalAmount,
+        transactionDate: parsed.transactionDate,
+        description: parsed.description,
+        note: parsed.note,
+      };
+    } catch (error) {
+      console.error('Error in extractBillInfo:', error);
+      return {};
     }
-    console.log('[extractBillInfoFlow] AI Output:', output);
-    return output;
   }
-);
+); 

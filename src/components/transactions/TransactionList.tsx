@@ -1,7 +1,6 @@
-
 "use client";
 
-import React from "react";
+import React, { useState } from 'react';
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import {
   Table,
@@ -26,11 +25,19 @@ import {
   AlertDialogTrigger as RadixAlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { CATEGORIES, PAYMENT_SOURCE_OPTIONS } from "@/lib/constants";
-import type { Transaction } from "@/types";
+import type { Transaction, FamilyMember } from "@/types";
 import { format, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { AlertTriangle, User, FileText, StickyNote, Edit3, Trash2, ChevronDown, Landmark, Wallet, Coins, CalendarDays, Tag, ArrowRightLeft } from "lucide-react";
+import { AlertTriangle, User, FileText, StickyNote, Edit3, Trash2, ChevronDown, Landmark, Wallet, Coins, CalendarDays, Tag, ArrowRightLeft, TrendingUp, TrendingDown, MoreVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -38,30 +45,200 @@ interface TransactionListProps {
   onDelete: (transactionId: string, monthYear: string) => Promise<void>;
   selectedIds: string[];
   onToggleSelect: (transactionId: string) => void;
+  isLoading?: boolean;
 }
 
-export function TransactionList({ transactions, onEdit, onDelete, selectedIds, onToggleSelect }: TransactionListProps) {
+const TransactionCard = ({ 
+  transaction, 
+  onEdit, 
+  onDelete 
+}: { 
+  transaction: Transaction; 
+  onEdit: (transaction: Transaction) => void; 
+  onDelete: (transactionId: string, monthYear: string) => void; 
+}) => {
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  const category = transaction.type === 'income' 
+    ? CATEGORIES.find(cat => cat.id === transaction.categoryId)
+    : CATEGORIES.find(cat => cat.id === transaction.categoryId);
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await onDelete(transaction.id, transaction.monthYear);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const isIncome = transaction.type === 'income';
+  const cardVariant = isIncome ? 'income' : 'expense';
+
+  return (
+    <Card className={cn(
+      "modern-card group transition-all duration-200",
+      isIncome 
+        ? "border-l-4 border-l-green-500 hover:border-l-green-400" 
+        : "border-l-4 border-l-red-500 hover:border-l-red-400"
+    )}>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          {/* Main Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start gap-3">
+              {/* Icon */}
+              <div className={cn(
+                "p-2 rounded-xl shadow-sm",
+                isIncome 
+                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                  : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+              )}>
+                {isIncome ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+              </div>
+
+              {/* Transaction Details */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <h3 className="font-semibold text-foreground truncate">
+                    {transaction.description}
+                  </h3>
+                  <div className={cn(
+                    "text-lg font-bold shrink-0",
+                    isIncome ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                  )}>
+                    {isIncome ? '+' : '-'}{new Intl.NumberFormat('vi-VN', { 
+                      style: 'currency', 
+                      currency: 'VND',
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0
+                    }).format(transaction.amount)}
+                  </div>
+                </div>
+
+                {/* Meta Information */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <CalendarDays className="h-3 w-3" />
+                      <span>{format(parseISO(transaction.date), 'dd/MM/yyyy', { locale: vi })}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      <span>{transaction.performedBy}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {category && (
+                      <Badge 
+                        variant="secondary" 
+                        className="text-xs bg-muted/50 hover:bg-muted"
+                      >
+                        {category.name}
+                      </Badge>
+                    )}
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "text-xs",
+                        transaction.paymentSource === 'bank' 
+                          ? "border-blue-200 text-blue-700 dark:border-blue-800 dark:text-blue-400"
+                          : "border-purple-200 text-purple-700 dark:border-purple-800 dark:text-purple-400"
+                      )}
+                    >
+                      {transaction.paymentSource === 'bank' ? (
+                        <><Landmark className="h-3 w-3 mr-1" /> Ngân hàng</>
+                      ) : (
+                        <><Wallet className="h-3 w-3 mr-1" /> Tiền mặt</>
+                      )}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity hover-lift rounded-lg"
+              >
+                <MoreVertical className="h-4 w-4" />
+                <span className="sr-only">Mở menu</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => onEdit(transaction)}>
+                <Edit3 className="h-4 w-4 mr-2" />
+                Chỉnh sửa
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                {isDeleting ? 'Đang xóa...' : 'Xóa'}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+export function TransactionList({ transactions, onEdit, onDelete, selectedIds, onToggleSelect, isLoading }: TransactionListProps) {
   const [itemToConfirmDelete, setItemToConfirmDelete] = React.useState<Transaction | null>(null);
   const [openAccordionItems, setOpenAccordionItems] = React.useState<string[]>([]);
 
-  if (transactions.length === 0) {
+  if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center text-center p-8 border rounded-lg bg-card text-card-foreground">
-        <AlertTriangle className="h-12 w-12 text-muted-foreground mb-4" />
-        <h3 className="text-xl font-semibold">Chưa có giao dịch nào</h3>
-        <p className="text-muted-foreground">Hãy thêm giao dịch mới hoặc điều chỉnh bộ lọc để xem kết quả.</p>
+      <div className="space-y-4">
+        {[...Array(3)].map((_, i) => (
+          <Card key={i} className="modern-card">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="h-8 w-8 bg-muted rounded-xl shimmer" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-muted rounded shimmer w-3/4" />
+                  <div className="h-3 bg-muted rounded shimmer w-1/2" />
+                  <div className="flex gap-2">
+                    <div className="h-5 bg-muted rounded shimmer w-16" />
+                    <div className="h-5 bg-muted rounded shimmer w-20" />
+                  </div>
+                </div>
+                <div className="h-6 bg-muted rounded shimmer w-24" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     );
   }
 
-  const getCategoryInfo = (categoryId: string) => {
-    return CATEGORIES.find(cat => cat.id === categoryId);
-  };
-
-  const getPaymentSourceInfo = (paymentSourceId?: string) => {
-    if (!paymentSourceId) return null;
-    return PAYMENT_SOURCE_OPTIONS.find(ps => ps.id === paymentSourceId);
-  };
+  if (transactions.length === 0) {
+    return (
+      <Card className="modern-card">
+        <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+          <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4">
+            <FileText className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-semibold mb-2">Chưa có giao dịch nào</h3>
+          <p className="text-muted-foreground mb-4">
+            Bắt đầu thêm giao dịch đầu tiên của bạn để theo dõi thu chi.
+          </p>
+          <Button variant="outline" className="hover-lift">
+            Thêm giao dịch mới
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <TooltipProvider>
@@ -73,9 +250,9 @@ export function TransactionList({ transactions, onEdit, onDelete, selectedIds, o
             onValueChange={setOpenAccordionItems}
         >
           {transactions.map((transaction) => {
-            const category = getCategoryInfo(transaction.categoryId);
+            const category = CATEGORIES.find(cat => cat.id === transaction.categoryId);
             const CategoryIcon = category?.icon;
-            const paymentSourceInfo = getPaymentSourceInfo(transaction.paymentSource);
+            const paymentSourceInfo = PAYMENT_SOURCE_OPTIONS.find(ps => ps.id === transaction.paymentSource);
             const PaymentSourceIcon = paymentSourceInfo?.icon;
             const isSelected = selectedIds.includes(transaction.id);
 

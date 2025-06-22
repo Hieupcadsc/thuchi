@@ -1,6 +1,6 @@
 
-import { type NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/sqlite';
+import { NextRequest, NextResponse } from 'next/server';
+import { firestoreService } from '@/lib/firestore-service';
 
 interface TransactionToDelete {
   id: string;
@@ -20,38 +20,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'No transactions provided for deletion or invalid format.' }, { status: 400 });
     }
 
-    const deleteStmt = db.prepare("DELETE FROM transactions WHERE id = ?");
+    // Extract transaction IDs
+    const transactionIds = transactionsToDelete.map(item => item.id);
     
-    let successfullyDeletedCount = 0;
-    const errors: string[] = [];
-
-    const runManyDeletes = db.transaction((items: TransactionToDelete[]) => {
-      for (const item of items) {
-        try {
-          const info = deleteStmt.run(item.id);
-          if (info.changes > 0) {
-            successfullyDeletedCount++;
-          } else {
-            errors.push(`Transaction with ID ${item.id} not found or not deleted.`);
-          }
-        } catch (dbError: any) {
-           console.error(`[API_SQLite /transactions/bulk] Error deleting transaction ID ${item.id}:`, dbError.message);
-           errors.push(`Error deleting transaction ID ${item.id}: ${dbError.message}`);
-        }
-      }
-    });
-
-    runManyDeletes(transactionsToDelete);
-
-    if (errors.length > 0) {
+    try {
+      await firestoreService.bulkDeleteTransactions(transactionIds);
+      
+      console.log(`[Firestore BULK DELETE] Successfully deleted ${transactionIds.length} transactions.`);
       return NextResponse.json({ 
-        message: `Processed bulk delete. Successfully deleted: ${successfullyDeletedCount}. Some errors occurred.`, 
-        deletedCount: successfullyDeletedCount,
-        errors 
-      }, { status: successfullyDeletedCount > 0 && errors.length > 0 ? 207 : 500 }); // 207 Multi-Status if partial success
+        message: `Successfully deleted ${transactionIds.length} transactions.`,
+        deletedCount: transactionIds.length 
+      });
+    } catch (deleteError: any) {
+      console.error('[Firestore BULK DELETE] Error:', deleteError.message);
+      return NextResponse.json({ 
+        message: 'Failed to bulk delete transactions.',
+        error: deleteError.message 
+      }, { status: 500 });
     }
-
-    return NextResponse.json({ message: `Successfully deleted ${successfullyDeletedCount} transactions.`, deletedCount: successfullyDeletedCount });
 
   } catch (error: any) {
     console.error('[API_SQLite POST /transactions/bulk] Error:', error.message, error.stack);

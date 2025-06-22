@@ -33,6 +33,33 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Exclude server-only modules from client bundle
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        'async_hooks': false,
+        'fs': false,
+        'net': false,
+        'tls': false,
+        'child_process': false,
+      };
+      
+      // Exclude genkit and AI-related packages from client bundle
+      config.externals = config.externals || [];
+      config.externals.push({
+        'genkit': 'commonjs genkit',
+        '@genkit-ai/googleai': 'commonjs @genkit-ai/googleai',
+        '@genkit-ai/express': 'commonjs @genkit-ai/express',
+        '@opentelemetry/api': 'commonjs @opentelemetry/api',
+        '@opentelemetry/context-async-hooks': 'commonjs @opentelemetry/context-async-hooks',
+      });
+    }
+    return config;
+  },
+  experimental: {
+    serverComponentsExternalPackages: ['genkit', '@genkit-ai/googleai', '@genkit-ai/express'],
+  },
 };
 
 export default withPWA(nextConfig);

@@ -1,44 +1,50 @@
-
-import type { Metadata, Viewport } from 'next';
+import type { Metadata } from "next";
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
-import './globals.css';
+import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Providers } from './providers';
-import { ThemeProvider } from '@/contexts/ThemeContext';
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import { APP_NAME } from '@/lib/constants';
-
-const geistSans = GeistSans;
-const geistMono = GeistMono;
 
 export const metadata: Metadata = {
   title: APP_NAME,
-  description: 'Ứng dụng quản lý chi tiêu gia đình của Minh Đan và Minh Hiếu, phát triển bởi Ngô Minh Hiếu.',
-  manifest: '/manifest.json', // Link to manifest file
-  appleWebApp: { // Apple specific PWA settings
-    capable: true,
-    statusBarStyle: 'default', // or 'black-translucent'
-    title: APP_NAME,
-    // startupImage: [ // You can add startup images for different iOS devices
-    //   { url: '/splash/iphone5_splash.png', media: '(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)' },
-    // ]
-  },
+  description: "Ứng dụng quản lý thu chi gia đình hiện đại với AI chatbot, biểu đồ thông minh và ghi chú chia sẻ.",
+  keywords: "quản lý tài chính, thu chi gia đình, ngân sách, Vietnam, budgeting",
+  authors: [{ name: "Hieu Ngo", url: "https://hieungo.uk" }],
+  creator: "Hieu Ngo",
+  publisher: "Hieu Ngo",
   formatDetection: {
+    email: false,
+    address: false,
     telephone: false,
   },
-  // Other common PWA meta tags can be added here if needed
-  // themeColor: [ // theme-color for different schemes
-  //   { media: '(prefers-color-scheme: light)', color: '#E8F5E9' },
-  //   { media: '(prefers-color-scheme: dark)', color: '#1C2B1F' }, // Example dark theme color
-  // ],
-};
-
-export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 5, // Allow zooming up to 5x
-  userScalable: true, // Allow user to scale (zoom)
-  themeColor: '#388E3C', // Primary theme color for address bar, etc.
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+    viewportFit: 'cover',
+  },
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#388E3C' },
+    { media: '(prefers-color-scheme: dark)', color: '#4CAF50' }
+  ],
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Thu Chi Gia Đình',
+  },
+  manifest: '/manifest.json',
+  icons: {
+    icon: [
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/icons/icon-180x180.png', sizes: '180x180', type: 'image/png' },
+    ],
+  },
 };
 
 export default function RootLayout({
@@ -47,21 +53,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="vi" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <head>
-        {/*
-          It's generally recommended to let Next.js handle the manifest link via metadata.
-          If you need more control or older browser support, you can uncomment the line below.
-          <link rel="manifest" href="/manifest.json" />
-        */}
-        {/*
-          It's generally recommended to let Next.js handle theme-color via viewport metadata.
-          If you need more control or older browser support, you can uncomment the line below.
-          <meta name="theme-color" content="#388E3C" />
-        */}
-         <link rel="apple-touch-icon" href="/icons/icon-192x192.png"></link>
+        {/* Mobile-specific optimizations */}
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Thu Chi" />
+        <meta name="msapplication-TileColor" content="#388E3C" />
+        
+        {/* Performance hints */}
+        <link rel="dns-prefetch" href="//fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
-      <body className="antialiased">
+      <body className="antialiased min-h-screen bg-background text-foreground" suppressHydrationWarning>
         <ThemeProvider>
           <Providers>
             {children}

@@ -1,11 +1,11 @@
-
 "use client";
 
-import React, { useState, useEffect } from 'react'; // Added React import
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Loader2, Wand2 } from 'lucide-react';
-import { suggestExpenseCategories } from '@/ai/flows/suggest-expense-categories';
+// Removed direct AI flow import to avoid client-side issues
 import { CATEGORIES } from '@/lib/constants';
 import type { Category } from '@/types';
 import { useToast } from '@/hooks/use-toast';
@@ -14,99 +14,157 @@ interface AiCategorySuggestorProps {
   onCategorySelect: (categoryId: string) => void;
   transactionType: 'income' | 'expense';
   currentDescription: string;
+  autoTrigger?: boolean;
+  onAutoTriggerComplete?: () => void;
 }
 
-export function AiCategorySuggestor({ onCategorySelect, transactionType, currentDescription }: AiCategorySuggestorProps) {
-  const [suggestions, setSuggestions] = useState<Category[]>([]);
+export function AiCategorySuggestor({ 
+  onCategorySelect, 
+  transactionType, 
+  currentDescription,
+  autoTrigger = false,
+  onAutoTriggerComplete
+}: AiCategorySuggestorProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<{categoryId: string; confidence: number; category: Category}[]>([]);
   const { toast } = useToast();
 
-  const availableExpenseCategoryNames = React.useMemo(() => {
-    return CATEGORIES.filter(cat => cat.type === 'expense').map(cat => cat.name);
-  }, []);
+  // Auto-trigger suggestion when autoTrigger is set
+  useEffect(() => {
+    if (autoTrigger && currentDescription.trim() && !isLoading) {
+      handleSuggest();
+      onAutoTriggerComplete?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoTrigger, currentDescription]);
 
   const handleSuggest = async () => {
-    if (!currentDescription.trim() || transactionType === 'income' || availableExpenseCategoryNames.length === 0) {
-      setSuggestions([]);
+    if (!currentDescription.trim()) {
+      toast({
+        title: "Cần mô tả",
+        description: "Vui lòng nhập mô tả giao dịch để AI có thể gợi ý danh mục.",
+        variant: "default",
+      });
       return;
     }
+
     setIsLoading(true);
-    setSuggestions([]);
     try {
-      const result = await suggestExpenseCategories({
-        expenseDescription: currentDescription,
-        availableExpenseCategoryNames: availableExpenseCategoryNames
+      const response = await fetch('/api/ai/suggest-categories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          description: currentDescription,
+          type: transactionType,
+        }),
       });
 
-      const suggestedCategoryNames = result.suggestedCategories.map(s => s.toLowerCase().trim());
-
-      const matchedCategories = CATEGORIES.filter(category =>
-        category.type === 'expense' &&
-        suggestedCategoryNames.some(suggestedName => {
-            const categoryNameLower = category.name.toLowerCase().trim();
-            // Check for exact match or if one contains the other (helps with pluralization/variations)
-            return categoryNameLower === suggestedName || categoryNameLower.includes(suggestedName) || suggestedName.includes(categoryNameLower);
-        })
-      ).slice(0, 3); // Limit to 3 suggestions
-
-      setSuggestions(matchedCategories);
-      if(matchedCategories.length === 0 && currentDescription.trim()) {
-        toast({ title: "Không tìm thấy gợi ý AI", description: "Không có danh mục phù hợp nào từ gợi ý của AI cho mô tả này.", variant: "default" });
+      if (!response.ok) {
+        throw new Error('Failed to get AI suggestions');
       }
-    } catch (error) {
-      console.error("Error suggesting categories:", error);
-      toast({ title: "Lỗi gợi ý AI", description: "Không thể gợi ý danh mục vào lúc này.", variant: "destructive" });
+
+      const result = await response.json();
+
+      // Find the category details
+      const category = CATEGORIES.find((c: any) => c.id === result.suggestedCategoryId);
+      
+      if (category) {
+        setSuggestions([{
+          categoryId: result.suggestedCategoryId,
+          confidence: result.confidence,
+          category,
+        }]);
+        
+        toast({
+          title: "AI Gợi ý",
+          description: `Đề xuất danh mục: ${category.name} (${Math.round(result.confidence * 100)}% tin cậy)`,
+        });
+      }
+    } catch (error: any) {
+      console.error('Error getting AI suggestions:', error);
+      toast({
+        title: "Lỗi AI",
+        description: "Không thể lấy gợi ý từ AI. Vui lòng thử lại sau.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
-  useEffect(() => {
-    if (transactionType === 'expense' && currentDescription.trim()) {
-      const debounceTimeout = setTimeout(() => {
-        handleSuggest();
-      }, 700);
-      return () => clearTimeout(debounceTimeout);
-    } else {
-      setSuggestions([]);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentDescription, transactionType, availableExpenseCategoryNames]);
-
-
-  if (transactionType === 'income') {
-    return null;
-  }
+  const handleSelectSuggestion = (categoryId: string) => {
+    onCategorySelect(categoryId);
+    setSuggestions([]);
+    toast({
+      title: "Đã chọn",
+      description: "Đã áp dụng gợi ý từ AI.",
+    });
+  };
 
   return (
-    <div className="space-y-2 mt-2 p-3 border rounded-md bg-muted/50 dark:bg-muted/30">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium text-muted-foreground">
-            {isLoading ? "AI đang tìm gợi ý..." : (suggestions.length > 0 || currentDescription.trim() === '') ? "Gợi ý danh mục từ AI:" : "Nhập mô tả để AI gợi ý."}
-        </p>
-        <Button onClick={handleSuggest} disabled={isLoading || !currentDescription.trim()} size="icon" variant="ghost" className="h-7 w-7">
-          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-          <span className="sr-only">Gợi ý danh mục bằng AI</span>
-        </Button>
-      </div>
-      {suggestions.length > 0 && (
-        <div className="flex flex-wrap gap-2 pt-1">
-          {suggestions.map((category) => (
+    <Card className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 border-purple-200 dark:border-purple-800">
+      <CardContent className="p-4">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Wand2 className="h-4 w-4 text-purple-600" />
+            <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+              AI Gợi Ý Danh Mục
+            </span>
+            {isLoading && (
+              <span className="text-xs text-muted-foreground">(Đang phân tích...)</span>
+            )}
+          </div>
+          
+          <div className="flex gap-2">
             <Button
-              key={category.id}
+              type="button"
               variant="outline"
               size="sm"
-              onClick={() => onCategorySelect(category.id)}
-              className="bg-background hover:bg-primary/10 text-xs"
+              onClick={handleSuggest}
+              disabled={isLoading || !currentDescription.trim()}
+              className="border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-300"
             >
-              {category.icon && <category.icon className="mr-1.5 h-3.5 w-3.5" />}
-              {category.name}
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Wand2 className="h-4 w-4 mr-2" />
+              )}
+              {isLoading ? 'Đang phân tích...' : 'Gợi ý AI'}
             </Button>
-          ))}
+          </div>
+
+          {suggestions.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Gợi ý từ AI:</p>
+              {suggestions.map((suggestion, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded-lg border"
+                >
+                  <div className="flex items-center gap-2">
+                    <suggestion.category.icon className="h-4 w-4 text-purple-600" />
+                    <span className="text-sm font-medium">{suggestion.category.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      ({Math.round(suggestion.confidence * 100)}%)
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleSelectSuggestion(suggestion.categoryId)}
+                    className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                  >
+                    Chọn
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-       { !isLoading && suggestions.length === 0 && currentDescription.trim() && (
-         <p className="text-xs text-muted-foreground">Không có gợi ý nào từ AI. Vui lòng chọn thủ công.</p>
-       )}
-    </div>
+      </CardContent>
+    </Card>
   );
-}
+} 

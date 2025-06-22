@@ -26,7 +26,7 @@ export function SharedNotes() {
   const fetchNote = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    const result = await getSharedNote();
+    const result = await getSharedNote('GIA_DINH');
     if ('error' in result) {
       setError(result.error);
       toast({ title: "Lỗi Tải Ghi Chú", description: result.error, variant: "destructive" });
@@ -49,7 +49,7 @@ export function SharedNotes() {
     }
     setIsSaving(true);
     setError(null);
-    const result = await saveSharedNote(note, currentUser);
+    const result = await saveSharedNote(note, currentUser, 'GIA_DINH');
     if (result.success && result.data) {
       setLastModifiedBy(result.data.modifiedBy);
       setLastModifiedAt(result.data.modifiedAt);
@@ -82,7 +82,7 @@ export function SharedNotes() {
           <div className="flex flex-col items-center justify-center h-32 text-destructive">
             <AlertTriangle className="h-8 w-8 mb-2" />
             <p>Lỗi: {error}</p>
-            <Button onClick={fetchNote} variant="outline" size="sm" className="mt-2">Thử lại</Button>
+            <Button onClick={fetchNote} className="mt-2 border border-border">Thử lại</Button>
           </div>
         ) : (
           <Textarea

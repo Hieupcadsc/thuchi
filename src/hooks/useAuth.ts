@@ -1,4 +1,3 @@
-
 "use client";
 
 import { create } from 'zustand';
@@ -7,6 +6,7 @@ import type { Transaction, UserType, FamilyMember, HighValueExpenseAlert, Paymen
 import { toast as showAppToast } from './use-toast';
 import { FAMILY_MEMBERS, APP_NAME, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, FAMILY_ACCOUNT_ID } from '@/lib/constants';
 import { format } from 'date-fns';
+import { firestoreService } from '@/lib/firestore-service';
 
 const HIGH_EXPENSE_THRESHOLD = 1000000;
 const SHARED_PASSWORD = "123456";
@@ -18,7 +18,7 @@ interface AuthState {
   highValueExpenseAlerts: HighValueExpenseAlert[];
   login: (user: FamilyMember, pass: string) => boolean;
   logout: () => void;
-  addTransaction: (transactionData: Omit<Transaction, 'id' | 'userId' | 'monthYear' > & { date: string }) => Promise<Transaction | null>;
+  addTransaction: (transactionData: Omit<Transaction, 'id' | 'familyId' | 'monthYear' > & { date: string }) => Promise<Transaction | null>;
   updateTransaction: (updatedTransaction: Transaction) => Promise<void>;
   deleteTransaction: (transactionId: string, monthYear: string) => Promise<void>;
   bulkDeleteTransactions: (transactionsToDelete: Array<{ id: string, monthYear: string }>) => Promise<void>;
@@ -26,6 +26,7 @@ interface AuthState {
   getTransactionsForFamilyByMonth: (familyId: UserType, monthYear: string) => Transaction[];
   markAlertAsViewedBySpouse: (alertId: string) => void;
   processCashWithdrawal: (amount: number, note?: string) => Promise<boolean>;
+  forceRefreshTransactions: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -84,7 +85,7 @@ export const useAuthStore = create<AuthState>()(
 
         const newTransaction: Transaction = {
           id: transactionId,
-          userId: currentFamilyId, 
+          familyId: currentFamilyId, 
           description: transactionData.description,
           amount: transactionData.amount,
           date: transactionData.date,
@@ -98,29 +99,17 @@ export const useAuthStore = create<AuthState>()(
 
         const originalTransactions = get().transactions;
         
-        set((state) => ({ transactions: [...state.transactions, newTransaction].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
+        console.log("🔧 [useAuth] Adding transaction to state:", newTransaction);
+        console.log("🔧 [useAuth] Current transactions in state:", get().transactions.length);
+        set((state) => ({ 
+          transactions: [...state.transactions, newTransaction].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
+        }));
+        console.log("🔧 [useAuth] After adding, transactions in state:", get().transactions.length);
 
         try {
-          const response = await fetch('/api/transactions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newTransaction),
-          });
-
-          if (!response.ok) {
-            let errorData: any = {};
-            let responseBodyText = '';
-            try {
-                responseBodyText = await response.text();
-                errorData = JSON.parse(responseBodyText);
-            } catch (e) {
-                console.warn("[useAuthStore addTransaction] API error response was not valid JSON. Raw text:", responseBodyText);
-            }
-            console.error("[useAuthStore addTransaction] Error response from API:", errorData, `Raw Body: "${responseBodyText}"`);
-            throw new Error(errorData.message || responseBodyText || 'Không thể thêm giao dịch lên server.');
-          }
-
-          const savedTransaction = await response.json();
+          // Remove id field for Firestore service
+          const { id, ...transactionWithoutId } = newTransaction;
+          const savedTransaction = await firestoreService.addTransaction(transactionWithoutId);
           
           set((state) => ({
             transactions: state.transactions.map(t => t.id === newTransaction.id ? savedTransaction : t)
@@ -181,15 +170,7 @@ export const useAuthStore = create<AuthState>()(
                                             .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         }));
         try {
-            const response = await fetch(`/api/transactions/${updatedTransaction.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updatedTransaction),
-            });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Không thể cập nhật giao dịch.');
-            }
+            await firestoreService.updateTransaction(updatedTransaction.id, updatedTransaction);
             showAppToast({ title: "Thành công!", description: "Đã cập nhật giao dịch." });
         } catch (error: any) {
             console.error("Failed to update transaction:", error);
@@ -205,13 +186,7 @@ export const useAuthStore = create<AuthState>()(
             transactions: state.transactions.filter(t => t.id !== transactionId)
         }));
         try {
-            const response = await fetch(`/api/transactions/${transactionId}?monthYear=${encodeURIComponent(monthYear)}`, {
-                method: 'DELETE',
-            });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Không thể xóa giao dịch.');
-            }
+            await firestoreService.deleteTransaction(transactionId);
             showAppToast({ title: "Thành công!", description: "Đã xóa giao dịch." });
         } catch (error: any) {
             console.error("Failed to delete transaction:", error);
@@ -223,29 +198,40 @@ export const useAuthStore = create<AuthState>()(
       bulkDeleteTransactions: async (transactionsToDelete) => {
         if (transactionsToDelete.length === 0) return;
         const originalTransactions = get().transactions;
-        const idsToDelete = new Set(transactionsToDelete.map(t => t.id));
+        const transactionIds = transactionsToDelete.map(t => t.id);
 
-        
+        console.log('🗑️ Starting bulk delete for transaction IDs:', transactionIds);
+
+        // Update UI optimistically
         set(state => ({
-            transactions: state.transactions.filter(t => !idsToDelete.has(t.id))
+            transactions: state.transactions.filter(t => !transactionIds.includes(t.id))
         }));
 
         try {
-            const response = await fetch(`/api/transactions/bulk`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ transactions: transactionsToDelete }),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || `Không thể xóa hàng loạt giao dịch. ${errorData.details || ''}`);
-            }
-            const result = await response.json();
-            showAppToast({ title: "Thành công!", description: result.message || `Đã xóa ${result.deletedCount || transactionsToDelete.length} giao dịch.` });
+            console.log('🔄 Calling firestoreService.bulkDeleteTransactions...');
+            await firestoreService.bulkDeleteTransactions(transactionIds);
+            console.log('✅ Firestore bulk delete completed successfully');
+            
+            // Also save to localStorage for persistence (temporary fix)
+            const currentState = get();
+            localStorage.setItem(`transactions_${currentState.familyId}`, JSON.stringify(currentState.transactions));
+            console.log('💾 Saved updated transactions to localStorage');
+            
+            showAppToast({ title: "Thành công!", description: `Đã xóa ${transactionsToDelete.length} giao dịch.` });
         } catch (error: any) {
-            console.error("Failed to bulk delete transactions:", error);
-            showAppToast({ title: "Lỗi Xóa Hàng Loạt", description: error.message, variant: "destructive" });
+            console.error("❌ Failed to bulk delete transactions:", error);
+            console.error("Error name:", error.name);
+            console.error("Error message:", error.message);
+            console.error("Error code:", error.code);
+            console.error("Full error object:", error);
+            
+            showAppToast({ 
+              title: "Lỗi Xóa Hàng Loạt", 
+              description: `Chi tiết lỗi: ${error.message}`, 
+              variant: "destructive" 
+            });
+            
+            // Rollback UI changes
             set({ transactions: originalTransactions }); 
         }
       },
@@ -255,46 +241,36 @@ export const useAuthStore = create<AuthState>()(
             familyIdToFetch = FAMILY_ACCOUNT_ID;
         }
         
-        const apiUrl = `/api/transactions?userId=${encodeURIComponent(familyIdToFetch)}&monthYear=${encodeURIComponent(monthYear)}`;
-        
-        console.log(`[useAuthStore fetchTransactionsByMonth] Attempting to fetch from: ${apiUrl}`); 
+        console.log(`[useAuthStore fetchTransactionsByMonth] Fetching transactions for familyId: ${familyIdToFetch}, monthYear: ${monthYear}`); 
 
         try {
-          const response = await fetch(apiUrl, { cache: 'no-store' });
-          if (!response.ok) {
-            let errorData: any = {};
-            let responseBodyText = '';
+          // Try Firestore first
+          console.log('🔄 Trying Firestore...');
+          const fetchedTransactions = await firestoreService.getTransactionsByMonth(familyIdToFetch, monthYear);
+          console.log(`[useAuthStore fetchTransactionsByMonth] Successfully fetched ${fetchedTransactions.length} transactions from Firestore`);
+          
+          // Check if we have localStorage backup for comparison
+          const localStorageKey = `transactions_${familyIdToFetch}`;
+          const localBackup = localStorage.getItem(localStorageKey);
+          
+          if (localBackup) {
             try {
-              responseBodyText = await response.text(); 
-              try {
-                errorData = JSON.parse(responseBodyText); 
-              } catch (e) {
-                console.warn("[useAuthStore fetchTransactionsByMonth] API error response was not valid JSON. Raw text:", responseBodyText);
+              const localTransactions = JSON.parse(localBackup);
+              const localForMonth = localTransactions.filter((t: Transaction) => t.monthYear === monthYear);
+              console.log(`💾 Found ${localForMonth.length} transactions in localStorage for ${monthYear}`);
+              
+              // If localStorage has more transactions than Firestore, it might have recent data not yet synced
+              if (localForMonth.length > fetchedTransactions.length) {
+                console.log('🔄 Using localStorage data (has more recent data)');
+                set({ transactions: localTransactions });
+                return;
               }
-            } catch (textErr) {
-              console.error("[useAuthStore fetchTransactionsByMonth] Failed to read API error response text:", textErr);
+            } catch (e) {
+              console.warn('Failed to parse localStorage backup:', e);
             }
-      
-            console.error(
-              `[useAuthStore fetchTransactionsByMonth] Error response from API (status: ${response.status}, statusText: ${response.statusText}) when fetching transactions. Parsed JSON:`,
-              errorData,
-              responseBodyText ? `Raw Body: "${responseBodyText}"` : "Raw body could not be read."
-            );
-            
-            let finalErrorMessage = 'Không thể tải giao dịch từ server.';
-            if (errorData?.message) {
-              finalErrorMessage = errorData.message;
-            } else if (responseBodyText && responseBodyText.trim() !== '' && !responseBodyText.trim().startsWith('<') && responseBodyText.trim() !== '{}' ) { 
-              finalErrorMessage = `Lỗi server: ${responseBodyText.substring(0, 150)}${responseBodyText.length > 150 ? '...' : ''}`;
-            } else if (response.statusText) {
-              finalErrorMessage = `Lỗi server: ${response.status} ${response.statusText}`;
-            }
-            
-            throw new Error(finalErrorMessage);
           }
-          const fetchedTransactions: Transaction[] = await response.json();
-          console.log(`[useAuthStore fetchTransactionsByMonth] Successfully fetched ${fetchedTransactions.length} transactions for ${monthYear} from ${apiUrl}`);
-
+          
+          // Use Firestore data and update local storage
           set((state) => {
             const existingTransactionsMap = new Map(state.transactions.map(t => [t.id, t]));
             fetchedTransactions.forEach(ft => {
@@ -302,22 +278,52 @@ export const useAuthStore = create<AuthState>()(
             });
             const currentMonthTransactionsFromServerIds = new Set(fetchedTransactions.map(ft => ft.id));
             const transactionsToKeepForCurrentMonth = state.transactions.filter(t => 
-                !(t.monthYear === monthYear && t.userId === familyIdToFetch && !currentMonthTransactionsFromServerIds.has(t.id))
+                !(t.monthYear === monthYear && t.familyId === familyIdToFetch && !currentMonthTransactionsFromServerIds.has(t.id))
             );
             
             const otherTransactions = transactionsToKeepForCurrentMonth.filter(t => 
-                !(t.monthYear === monthYear && t.userId === familyIdToFetch)
+                !(t.monthYear === monthYear && t.familyId === familyIdToFetch)
             );
             
             const updatedTransactions = [...otherTransactions, ...fetchedTransactions]
                                       .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
             console.log(`[useAuthStore fetchTransactionsByMonth] Updated local state with ${updatedTransactions.length} total transactions after fetching for ${monthYear}.`);
+            
+            // Save to localStorage backup
+            localStorage.setItem(localStorageKey, JSON.stringify(updatedTransactions));
+            
             return { transactions: updatedTransactions };
           });
         } catch (error: any) {
-          console.error(`[useAuthStore fetchTransactionsByMonth] CATCH_ALL Error for ${monthYear}:`, error.message, error.stack);
-          showAppToast({ title: `Lỗi tải giao dịch (${monthYear})`, description: error.message, variant: "destructive" });
+          console.error('[useAuthStore fetchTransactionsByMonth] Error fetching transactions directly from Firestore:', error);
+          
+          // Try localStorage fallback
+          const localStorageKey = `transactions_${familyIdToFetch}`;
+          const localBackup = localStorage.getItem(localStorageKey);
+          
+          if (localBackup) {
+            try {
+              console.log('🔄 Using localStorage fallback...');
+              const localTransactions = JSON.parse(localBackup);
+              set({ transactions: localTransactions });
+              
+              showAppToast({ 
+                title: "⚠️ Dùng backup local", 
+                description: "Firestore lỗi, đang dùng dữ liệu backup", 
+                variant: "default" 
+              });
+              return;
+            } catch (parseError) {
+              console.error('Failed to parse localStorage fallback:', parseError);
+            }
+          }
+          
+          showAppToast({ 
+            title: "Lỗi tải giao dịch", 
+            description: error.message || "Không thể tải danh sách giao dịch", 
+            variant: "destructive" 
+          });
         }
       },
 
@@ -326,8 +332,10 @@ export const useAuthStore = create<AuthState>()(
             familyIdToFilter = FAMILY_ACCOUNT_ID;
         }
         const allTransactions = get().transactions;
-        const filtered = allTransactions.filter(t => t.userId === familyIdToFilter && t.monthYear === monthYear);
+        const filtered = allTransactions.filter(t => t.familyId === familyIdToFilter && t.monthYear === monthYear);
         console.log(`[useAuthStore] getTransactionsForFamilyByMonth for ${monthYear} (familyId: ${familyIdToFilter}): Found ${filtered.length} of ${allTransactions.length} total transactions in state.`);
+        console.log(`🔧 [useAuth] All transactions:`, allTransactions.map(t => ({id: t.id, desc: t.description, monthYear: t.monthYear, familyId: t.familyId})));
+        console.log(`🔧 [useAuth] Filtered transactions:`, filtered.map(t => ({id: t.id, desc: t.description, monthYear: t.monthYear})));
         return filtered.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       },
 
@@ -390,6 +398,46 @@ export const useAuthStore = create<AuthState>()(
         
         showAppToast({ title: "Thành Công", description: `Đã rút ${amount.toLocaleString('vi-VN')} VND tiền mặt.` });
         return true;
+      },
+
+      // Force refresh all transactions from Firestore (clear cache)
+      forceRefreshTransactions: async () => {
+        const state = get();
+        const familyId = state.familyId || FAMILY_ACCOUNT_ID;
+        const currentMonth = format(new Date(), 'yyyy-MM');
+        
+        console.log('🔄 Force refreshing transactions from Firestore...');
+        
+        // Clear ALL caches
+        localStorage.removeItem(`transactions_${familyId}`);
+        set({ transactions: [] });
+        
+        // Direct fetch from Firestore bypassing all cache logic
+        try {
+          const freshTransactions = await firestoreService.getTransactionsByMonth(familyId, currentMonth);
+          console.log(`🔄 Force refresh: Got ${freshTransactions.length} fresh transactions from Firestore`);
+          
+          // Debug: Log the actual IDs we're getting
+          freshTransactions.forEach((t, index) => {
+            console.log(`🔍 Fresh transaction ${index + 1}: ID=${t.id}, desc="${t.description}", amount=${t.amount}`);
+          });
+          
+          // Set directly without merging
+          set({ transactions: freshTransactions });
+          
+          // Verify what's actually in store after setting
+          const storeAfterSet = get().transactions;
+          console.log(`🔍 Store after set: ${storeAfterSet.length} transactions`);
+          storeAfterSet.forEach((t, index) => {
+            console.log(`🔍 Store transaction ${index + 1}: ID=${t.id}, desc="${t.description}"`);
+          });
+          
+          console.log('✅ Force refresh completed with fresh Firestore data');
+        } catch (error) {
+          console.error('❌ Force refresh failed:', error);
+          set({ transactions: [] });
+          throw error;
+        }
       },
     }),
     {

@@ -1,7 +1,8 @@
+import { startFlowServer } from '@genkit-ai/express';
+import { extractBillInfo } from './flows/extract-bill-info-flow';
+import { suggestExpenseCategories } from './flows/suggest-expense-categories';
 
-import { config } from 'dotenv';
-config();
-
-import '@/ai/flows/suggest-expense-categories.ts';
-import '@/ai/flows/chat-with-spending-flow.ts';
-import '@/ai/flows/extract-bill-info-flow.ts'; // Added new bill extraction flow
+startFlowServer({
+  flows: [extractBillInfo, suggestExpenseCategories],
+  port: 3400,
+}); 

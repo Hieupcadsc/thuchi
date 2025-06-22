@@ -18,8 +18,8 @@ interface SaveNoteResult {
 const FALLBACK_HOST = 'localhost';
 const FALLBACK_PORT = '9002'; // Reverted to 9002 as per user's server log
 
-export async function getSharedNote(): Promise<SharedNoteData | { error: string }> {
-  const endpoint = '/api/shared-notes';
+export async function getSharedNote(familyId: string = 'GIA_DINH'): Promise<SharedNoteData | { error: string }> {
+  const endpoint = `/api/shared-notes?familyId=${encodeURIComponent(familyId)}`;
   let absoluteApiUrl: string;
 
   const appBaseUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL;
@@ -63,9 +63,14 @@ export async function getSharedNote(): Promise<SharedNoteData | { error: string 
       return { error: errorMessage };
     }
     
-    const data: SharedNoteData = await response.json();
+    const data = await response.json();
     console.log('[notesActions getSharedNote] Fetched data successfully from API.');
-    return data;
+    // Transform Firestore response to expected format
+    return {
+      note: data.content || '',
+      modifiedBy: data.modifiedBy,
+      modifiedAt: data.modifiedAt
+    };
   } catch (error: any) {
     const errorMessage = error.message || 'Lỗi không xác định khi fetch.';
     const errorCauseString = error.cause ? `Nguyên nhân: ${JSON.stringify(error.cause)}` : '';
@@ -74,7 +79,7 @@ export async function getSharedNote(): Promise<SharedNoteData | { error: string 
   }
 }
 
-export async function saveSharedNote(noteContent: string, performingUser: FamilyMember): Promise<SaveNoteResult> {
+export async function saveSharedNote(noteContent: string, performingUser: FamilyMember, familyId: string = 'GIA_DINH'): Promise<SaveNoteResult> {
   if (typeof noteContent !== 'string') {
     return { success: false, error: 'Nội dung ghi chú không hợp lệ.' };
   }
@@ -107,7 +112,7 @@ export async function saveSharedNote(noteContent: string, performingUser: Family
     const response = await fetch(absoluteApiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ note: noteContent, modifiedBy: performingUser }),
+      body: JSON.stringify({ familyId: familyId, content: noteContent, modifiedBy: performingUser }),
     });
 
     if (!response.ok) {
@@ -128,13 +133,20 @@ export async function saveSharedNote(noteContent: string, performingUser: Family
       return { success: false, error: errorMessage };
     }
     
-    const result: { success: boolean, note: string, modifiedBy: FamilyMember, modifiedAt: string } = await response.json();
+    const result = await response.json();
     if (result.success) {
         console.log('[notesActions saveSharedNote] Saved data successfully via API.');
-        return { success: true, data: { note: result.note, modifiedBy: result.modifiedBy, modifiedAt: result.modifiedAt } };
+        return { 
+          success: true, 
+          data: { 
+            note: noteContent, // Use the content we sent
+            modifiedBy: performingUser, 
+            modifiedAt: new Date().toISOString()
+          } 
+        };
     } else {
         // This case might not be hit if API returns non-ok status, but as a fallback
-        const errorMessage = (result as any).message || 'Lưu ghi chú không thành công từ API.';
+        const errorMessage = result.message || 'Lưu ghi chú không thành công từ API.';
         console.error('[notesActions saveSharedNote] API reported not successful (but HTTP OK):', result);
         return { success: false, error: errorMessage };
     }

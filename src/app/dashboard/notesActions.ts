@@ -15,8 +15,25 @@ interface SaveNoteResult {
   error?: string;
 }
 
-const FALLBACK_HOST = 'localhost';
-const FALLBACK_PORT = '9002'; // Reverted to 9002 as per user's server log
+// Smart fallback detection for different environments
+const getSmartFallbackUrl = () => {
+  // In browser context, use current origin
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  
+  // Server-side fallback - detect environment
+  const isReplit = process.env.REPL_SLUG || process.env.REPLIT_DB_URL;
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  if (isReplit) {
+    // Replit environment - use port 3000
+    return 'http://localhost:3000';
+  }
+  
+  // Local development - use port 9002
+  return 'http://localhost:9002';
+};
 
 export async function getSharedNote(familyId: string = 'GIA_DINH'): Promise<SharedNoteData | { error: string }> {
   const endpoint = `/api/shared-notes?familyId=${encodeURIComponent(familyId)}`;
@@ -32,12 +49,14 @@ export async function getSharedNote(familyId: string = 'GIA_DINH'): Promise<Shar
       } catch (e: any) {
           const criticalErrorMsg = `[notesActions getSharedNote] CRITICAL: Invalid NEXT_PUBLIC_APP_URL: ${appBaseUrlFromEnv}. Falling back. Error: ${e.message}.`;
           console.error(criticalErrorMsg);
-          absoluteApiUrl = `http://${FALLBACK_HOST}:${FALLBACK_PORT}${endpoint}`;
-          console.log(`[notesActions getSharedNote] NEXT_PUBLIC_APP_URL invalid, using fallback http://${FALLBACK_HOST}:${FALLBACK_PORT}. Full URL: ${absoluteApiUrl}`);
+          const fallbackUrl = getSmartFallbackUrl();
+          absoluteApiUrl = `${fallbackUrl}${endpoint}`;
+          console.log(`[notesActions getSharedNote] NEXT_PUBLIC_APP_URL invalid, using fallback ${fallbackUrl}. Full URL: ${absoluteApiUrl}`);
       }
   } else {
-      absoluteApiUrl = `http://${FALLBACK_HOST}:${FALLBACK_PORT}${endpoint}`;
-      console.log(`[notesActions getSharedNote] NEXT_PUBLIC_APP_URL not set, using fallback http://${FALLBACK_HOST}:${FALLBACK_PORT}. Full URL: ${absoluteApiUrl}`);
+      const fallbackUrl = getSmartFallbackUrl();
+      absoluteApiUrl = `${fallbackUrl}${endpoint}`;
+      console.log(`[notesActions getSharedNote] NEXT_PUBLIC_APP_URL not set, using fallback ${fallbackUrl}. Full URL: ${absoluteApiUrl}`);
   }
   
   console.log(`[notesActions getSharedNote] Attempting to fetch from: ${absoluteApiUrl}`);
@@ -98,12 +117,14 @@ export async function saveSharedNote(noteContent: string, performingUser: Family
         console.log(`[notesActions saveSharedNote] Using NEXT_PUBLIC_APP_URL as base: ${appBaseUrlFromEnv}. Full URL: ${absoluteApiUrl}`);
     } catch (e: any) {
         console.error(`[notesActions saveSharedNote] CRITICAL: Invalid NEXT_PUBLIC_APP_URL: ${appBaseUrlFromEnv}. Falling back. Error: ${e.message}.`);
-        absoluteApiUrl = `http://${FALLBACK_HOST}:${FALLBACK_PORT}${endpoint}`;
-        console.log(`[notesActions saveSharedNote] NEXT_PUBLIC_APP_URL invalid, using fallback http://${FALLBACK_HOST}:${FALLBACK_PORT}. Full URL: ${absoluteApiUrl}`);
+        const fallbackUrl = getSmartFallbackUrl();
+        absoluteApiUrl = `${fallbackUrl}${endpoint}`;
+        console.log(`[notesActions saveSharedNote] NEXT_PUBLIC_APP_URL invalid, using fallback ${fallbackUrl}. Full URL: ${absoluteApiUrl}`);
     }
   } else {
-      absoluteApiUrl = `http://${FALLBACK_HOST}:${FALLBACK_PORT}${endpoint}`;
-      console.log(`[notesActions saveSharedNote] NEXT_PUBLIC_APP_URL not set, using fallback http://${FALLBACK_HOST}:${FALLBACK_PORT}. Full URL: ${absoluteApiUrl}`);
+      const fallbackUrl = getSmartFallbackUrl();
+      absoluteApiUrl = `${fallbackUrl}${endpoint}`;
+      console.log(`[notesActions saveSharedNote] NEXT_PUBLIC_APP_URL not set, using fallback ${fallbackUrl}. Full URL: ${absoluteApiUrl}`);
   }
 
   console.log(`[notesActions saveSharedNote] Attempting to post to: ${absoluteApiUrl}`);

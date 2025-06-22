@@ -516,6 +516,53 @@ html {
     @apply min-h-[44px] min-w-[44px] touch-manipulation;
   }
 
+  /* Mobile-specific optimizations */
+  @media (max-width: 768px) {
+    .mobile-optimized {
+      @apply p-4 text-base leading-relaxed;
+    }
+    
+    .mobile-card {
+      @apply shadow-sm border-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm;
+    }
+    
+    .mobile-button {
+      @apply h-12 px-4 rounded-xl font-medium transition-all duration-200 active:scale-95;
+    }
+    
+    .mobile-input {
+      @apply h-12 px-4 rounded-xl border-2 focus:border-blue-500 transition-colors;
+    }
+    
+    .mobile-header {
+      @apply sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-border/50;
+    }
+    
+    .mobile-safe-area {
+      @apply pb-20; /* Account for bottom navigation */
+    }
+  }
+
+  /* Touch-friendly animations */
+  .touch-feedback {
+    @apply transition-transform duration-150 active:scale-95;
+  }
+
+  /* Mobile pull-to-refresh */
+  .pull-to-refresh {
+    @apply overscroll-behavior-y-contain;
+  }
+
+  /* Hide scrollbar for mobile horizontal scrolling */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   .mobile-card {
     @apply modern-card p-4 sm:p-6;
   }

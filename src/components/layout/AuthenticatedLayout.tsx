@@ -10,6 +10,8 @@ import { UserNav } from '@/components/layout/UserNav';
 import { GlobalAlertToaster } from '@/components/layout/GlobalAlertToaster';
 import { useTheme } from '@/contexts/ThemeContext'; 
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useMobileFirst } from '@/hooks/use-mobile-detection';
+import { MobileBottomNavigation } from '@/components/mobile/MobileBottomNavigation';
 import {
   SidebarProvider,
   Sidebar,
@@ -22,36 +24,10 @@ import {
   SidebarTrigger,
   SidebarFooter
 } from '@/components/ui/sidebar';
-import { LogOut, PiggyBank, Moon, Sun, Sparkles, Menu } from 'lucide-react'; 
+import { LogOut, PiggyBank, Moon, Sun, Sparkles, Menu } from 'lucide-react';
+import { cn } from '@/lib/utils'; 
 
-// Mobile Bottom Navigation Component
-function MobileBottomNav({ currentPath }: { currentPath: string }) {
-  return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border/50 safe-area-bottom z-50">
-      <div className="grid grid-cols-4 gap-1 p-2">
-        {NAV_LINKS.slice(0, 4).map((link) => {
-          const isActive = currentPath === link.href || (link.href !== "/dashboard" && currentPath.startsWith(link.href));
-          return (
-            <Link 
-              key={link.href}
-              href={link.href}
-              className={`mobile-friendly flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200 ${
-                isActive 
-                  ? 'bg-primary text-primary-foreground shadow-sm' 
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              }`}
-            >
-              <link.icon className="h-5 w-5 mb-1" />
-              <span className="text-xs font-medium truncate">
-                {link.label.replace(/\s+/g, ' ').split(' ')[0]}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const { currentUser } = useAuthStore((state) => ({
@@ -62,6 +38,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme(); 
   const isMobile = useIsMobile();
+  const { showMobileUI } = useMobileFirst();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   console.log('[AuthenticatedLayout] Rendering. currentUser from store:', currentUser);
@@ -141,7 +118,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
                   onClick={handleLogout}
                   tooltip={{ children: "Đăng xuất", className: "ml-2"}}
                   className="justify-start w-full hover-lift rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 mobile-friendly"
-                  variant="ghost"
+                  variant="outline"
                 >
                   <LogOut className="h-4 w-4" />
                   <span className="group-data-[collapsible=icon]:hidden font-medium">Đăng xuất</span>
@@ -173,8 +150,17 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
                 </div>
               </div>
             </header>
-            <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 md:pb-6">
-              <div className="max-w-7xl mx-auto">
+            <main className={cn(
+              "flex-1 overflow-y-auto overflow-x-hidden pb-20 md:pb-6",
+              showMobileUI 
+                ? "p-0" 
+                : "p-4 sm:p-6"
+            )}>
+              <div className={cn(
+                showMobileUI 
+                  ? "w-full" 
+                  : "max-w-7xl mx-auto"
+              )}>
                 {children}
               </div>
             </main>
@@ -182,7 +168,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
         </div>
         
         {/* Mobile Bottom Navigation */}
-        <MobileBottomNav currentPath={pathname} />
+        {showMobileUI && <MobileBottomNavigation />}
         
         <footer className="hidden md:block py-4 px-6 border-t border-border/50 bg-gradient-card text-center">
           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">

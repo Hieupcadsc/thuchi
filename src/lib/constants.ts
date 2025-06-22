@@ -62,3 +62,8 @@ export const THU_NO_CATEGORY_ID = 'thu_no';
 // export const SHARED_NOTE_CELL = "A1";
 // export const SHARED_NOTE_MODIFIED_INFO_CELL = "B1";
 
+// Filter constants
+export const ALL_CATEGORIES_VALUE = "all_categories";
+export const ALL_MEMBERS_VALUE = "all_members";
+export const ALL_TRANSACTIONS_VALUE = "all_transactions";
+

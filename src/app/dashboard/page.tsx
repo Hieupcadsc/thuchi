@@ -36,6 +36,9 @@ import { cn } from '@/lib/utils';
 import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { BackupService } from '@/lib/backup';
 import { useToast } from '@/hooks/use-toast';
+import { useMobileFirst } from '@/hooks/use-mobile-detection';
+import { MobileDashboard } from '@/components/mobile/MobileDashboard';
+import { MobileQuickActions, MobilePullToRefresh } from '@/components/mobile/MobileQuickActions';
 
 interface DashboardSummary {
   totalIncome: number; // All-time total income
@@ -66,6 +69,7 @@ const formatCurrency = (amount: number): string => {
 export default function DashboardPage() {
   const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth } = useAuthStore();
   const { toast } = useToast();
+  const { showMobileUI, isMobile } = useMobileFirst();
   const [summary, setSummary] = useState<DashboardSummary>(initialSummary);
   const [monthlyChartData, setMonthlyChartData] = useState<any[]>([]);
   const [currentMonthYear, setCurrentMonthYear] = useState<string>('');
@@ -253,6 +257,32 @@ export default function DashboardPage() {
 
   if (!currentUser) {
     return <div className="text-center p-8"><AlertTriangle className="mx-auto h-12 w-12 text-destructive" /><p className="mt-4 text-lg">Vui lòng đăng nhập để xem dashboard.</p></div>;
+  }
+
+  // Mobile view
+  if (showMobileUI) {
+    return (
+      <div className="relative">
+        <MobilePullToRefresh 
+          onRefresh={handleRefreshDashboard} 
+          isRefreshing={isRefreshing}
+        />
+        
+        <MobileDashboard
+          summary={summary}
+          onRefresh={handleRefreshDashboard}
+          isRefreshing={isRefreshing}
+          currentUser={currentUser}
+        />
+
+        <MobileQuickActions
+          onAddTransaction={() => window.location.href = '/transactions'}
+          onAddFromBill={() => window.location.href = '/transactions?mode=bill'}
+          onSearch={() => window.location.href = '/transactions'}
+          onFilter={() => window.location.href = '/transactions'}
+        />
+      </div>
+    );
   }
 
   const chartConfig = {

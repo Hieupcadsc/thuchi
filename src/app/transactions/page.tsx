@@ -13,12 +13,17 @@ import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuthStore } from '@/hooks/useAuth';
 import type { Transaction, FamilyMember } from '@/types';
-import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS, FAMILY_ACCOUNT_ID } from '@/lib/constants';
+import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS, FAMILY_ACCOUNT_ID, ALL_CATEGORIES_VALUE, ALL_MEMBERS_VALUE, ALL_TRANSACTIONS_VALUE } from '@/lib/constants';
 import { PlusCircle, AlertTriangle, Loader2, Search, Filter, CalendarIcon, XCircle, Camera, Trash2, RefreshCw, Tag, User } from 'lucide-react';
 import { format, subMonths, isValid, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useMobileFirst } from '@/hooks/use-mobile-detection';
+import { MobileTransactionList } from '@/components/mobile/MobileTransactionList';
+import { MobileQuickActions } from '@/components/mobile/MobileQuickActions';
+import { MobileSearchBar } from '@/components/mobile/MobileSearchBar';
+import { MobileFilterSheet } from '@/components/mobile/MobileFilterSheet';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,13 +36,12 @@ import {
   AlertDialogTrigger, // Added AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
 
-const ALL_CATEGORIES_VALUE = "all_categories";
-const ALL_MEMBERS_VALUE = "all_members";
-const ALL_TRANSACTIONS_VALUE = "all_transactions";
+
 
 export default function TransactionsPage() {
   const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth, addTransaction, updateTransaction, deleteTransaction, bulkDeleteTransactions } = useAuthStore();
   const { toast } = useToast();
+  const { showMobileUI } = useMobileFirst();
   
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -56,6 +60,7 @@ export default function TransactionsPage() {
 
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
 
 
 
@@ -273,11 +278,152 @@ export default function TransactionsPage() {
     await loadDataForCurrentFilters(); // Reload data after bulk delete
   };
 
+  const hasActiveFilters = searchTerm || 
+    filterCategory !== ALL_CATEGORIES_VALUE || 
+    filterPerformedBy !== ALL_MEMBERS_VALUE || 
+    isDateFilterActive;
+
   if (!currentUser) {
     return (
       <div className="text-center p-8">
         <AlertTriangle className="mx-auto h-12 w-12 text-destructive" />
         <p className="mt-4 text-lg">Vui lòng đăng nhập để quản lý giao dịch.</p>
+      </div>
+    );
+  }
+
+  // Mobile view
+  if (showMobileUI) {
+    return (
+      <div className="space-y-4 animate-fade-in mobile-safe-area p-4">
+        {/* Mobile Header */}
+        <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl -mx-4 mb-2">
+          <div>
+            <h1 className="text-lg font-bold">Giao Dịch</h1>
+            <p className="text-sm opacity-90">{currentUser}</p>
+          </div>
+          <Button
+            onClick={handleRefreshTransactions}
+            disabled={isLoading || isRefreshing}
+            variant="ghost"
+            size="sm"
+            className="text-white hover:bg-white/20"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+
+        {/* Mobile Search & Filter */}
+        <MobileSearchBar
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          onFilterOpen={() => setIsFilterSheetOpen(true)}
+          hasActiveFilters={hasActiveFilters}
+          resultCount={displayTransactions.length}
+        />
+
+        {/* Mobile Filter Sheet */}
+        <MobileFilterSheet
+          searchTerm={searchTerm}
+          filterCategory={filterCategory}
+          filterPerformedBy={filterPerformedBy}
+          filterStartDate={filterStartDate}
+          filterEndDate={filterEndDate}
+          isDateFilterActive={isDateFilterActive}
+          onSearchChange={setSearchTerm}
+          onCategoryChange={setFilterCategory}
+          onPerformedByChange={(value: string) => setFilterPerformedBy(value)}
+          onDateRangeChange={(startDate, endDate) => {
+            setFilterStartDate(startDate);
+            setFilterEndDate(endDate);
+          }}
+          onDateFilterActiveChange={(active: boolean) => setIsDateFilterActive(active)}
+          onApplyFilters={async () => {
+            await loadDataForCurrentFilters();
+          }}
+          onResetFilters={resetFilters}
+          isOpen={isFilterSheetOpen}
+          onOpenChange={setIsFilterSheetOpen}
+          resultCount={displayTransactions.length}
+        />
+
+        {/* Mobile Form */}
+        {(isFormVisible || editingTransaction) && (
+          <Card className="mobile-card">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">
+                  {editingTransaction ? 'Chỉnh sửa' : (isBillModeActive ? 'Scan Bill' : 'Thêm mới')}
+                </CardTitle>
+                <Button variant="ghost" size="sm" onClick={handleCancelForm}>
+                  <XCircle className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <TransactionForm 
+                onSuccess={handleFormSuccess} 
+                transactionToEdit={editingTransaction}
+                onCancel={handleCancelForm}
+                isBillMode={isBillModeActive && !editingTransaction} 
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Mobile Transaction List */}
+        <Card className="mobile-card">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">
+                Giao dịch ({displayTransactions.length})
+              </CardTitle>
+              <div className="flex gap-2">
+                {selectedTransactionIds.length > 0 && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    disabled={isBulkDeleting}
+                    className="mobile-button"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="text-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Đang tải...</p>
+              </div>
+            ) : (
+              <MobileTransactionList
+                transactions={displayTransactions}
+                onEdit={handleEdit}
+                onDelete={async (transactionId) => {
+                  const transaction = transactions.find(t => t.id === transactionId);
+                  if (transaction) {
+                    await deleteTransaction(transactionId, transaction.monthYear);
+                    await loadDataForCurrentFilters();
+                  }
+                }}
+                onSelect={handleToggleSelectTransaction}
+                selectedIds={selectedTransactionIds}
+                isLoading={isLoading}
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <MobileQuickActions
+          onAddTransaction={handleAddNewTransaction}
+          onAddFromBill={handleAddFromBill}
+          onSearch={() => setIsFilterSheetOpen(true)}
+          onFilter={() => setIsFilterSheetOpen(true)}
+        />
       </div>
     );
   }

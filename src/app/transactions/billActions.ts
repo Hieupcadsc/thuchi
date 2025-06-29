@@ -18,8 +18,24 @@ export async function processBillImage(imageDataUri: string): Promise<ProcessBil
       };
     }
 
+    // Smart URL detection
+    const getApiUrl = () => {
+      const envUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL;
+      if (envUrl) return envUrl;
+      
+      // Auto-detect based on environment
+      const port = process.env.PORT || '3000';
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      if (isProduction || port === '3000') {
+        return 'http://localhost:3000';
+      }
+      
+      return 'http://localhost:9002';
+    };
+
     // Call the API route for consistent processing
-    const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:9002'}/api/ai/process-bill`, {
+    const response = await fetch(`${getApiUrl()}/api/ai/process-bill`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

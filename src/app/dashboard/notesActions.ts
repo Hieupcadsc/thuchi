@@ -1,4 +1,3 @@
-
 'use server';
 
 import type { FamilyMember } from '@/types';
@@ -22,12 +21,18 @@ const getSmartFallbackUrl = () => {
     return window.location.origin;
   }
   
-  // Server-side fallback - detect environment
+  // Server-side fallback - detect current port from process.env.PORT
+  const port = process.env.PORT || '3000';
   const isReplit = process.env.REPL_SLUG || process.env.REPLIT_DB_URL;
   const isProduction = process.env.NODE_ENV === 'production';
   
   if (isReplit) {
     // Replit environment - use port 3000
+    return 'http://localhost:3000';
+  }
+  
+  // Check if running on production mode (port 3000) or dev mode (port 9002)
+  if (isProduction || port === '3000') {
     return 'http://localhost:3000';
   }
   

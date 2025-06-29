@@ -1,4 +1,3 @@
-
 import type {NextConfig} from 'next';
 import withPWAInit from 'next-pwa';
 
@@ -23,6 +22,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  output: 'standalone',
   images: {
     remotePatterns: [
       {

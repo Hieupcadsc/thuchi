@@ -21,6 +21,14 @@ const getSmartFallbackUrl = () => {
     return window.location.origin;
   }
   
+  // Check for Railway environment
+  if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
+    // On Railway, use relative URLs or detect from headers
+    return process.env.RAILWAY_PUBLIC_DOMAIN 
+      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+      : ''; // Use relative URLs
+  }
+  
   // Server-side fallback - detect current port from process.env.PORT
   const port = process.env.PORT || '3000';
   const isReplit = process.env.REPL_SLUG || process.env.REPLIT_DB_URL;
@@ -55,13 +63,21 @@ export async function getSharedNote(familyId: string = 'GIA_DINH'): Promise<Shar
           const criticalErrorMsg = `[notesActions getSharedNote] CRITICAL: Invalid NEXT_PUBLIC_APP_URL: ${appBaseUrlFromEnv}. Falling back. Error: ${e.message}.`;
           console.error(criticalErrorMsg);
           const fallbackUrl = getSmartFallbackUrl();
-          absoluteApiUrl = `${fallbackUrl}${endpoint}`;
-          console.log(`[notesActions getSharedNote] NEXT_PUBLIC_APP_URL invalid, using fallback ${fallbackUrl}. Full URL: ${absoluteApiUrl}`);
+          if (fallbackUrl) {
+            absoluteApiUrl = `${fallbackUrl}${endpoint}`;
+          } else {
+            absoluteApiUrl = endpoint; // Use relative URL
+          }
+          console.log(`[notesActions getSharedNote] NEXT_PUBLIC_APP_URL invalid, using fallback ${fallbackUrl || 'relative'}. Full URL: ${absoluteApiUrl}`);
       }
   } else {
       const fallbackUrl = getSmartFallbackUrl();
-      absoluteApiUrl = `${fallbackUrl}${endpoint}`;
-      console.log(`[notesActions getSharedNote] NEXT_PUBLIC_APP_URL not set, using fallback ${fallbackUrl}. Full URL: ${absoluteApiUrl}`);
+      if (fallbackUrl) {
+        absoluteApiUrl = `${fallbackUrl}${endpoint}`;
+      } else {
+        absoluteApiUrl = endpoint; // Use relative URL
+      }
+      console.log(`[notesActions getSharedNote] NEXT_PUBLIC_APP_URL not set, using fallback ${fallbackUrl || 'relative'}. Full URL: ${absoluteApiUrl}`);
   }
   
   console.log(`[notesActions getSharedNote] Attempting to fetch from: ${absoluteApiUrl}`);
@@ -123,13 +139,21 @@ export async function saveSharedNote(noteContent: string, performingUser: Family
     } catch (e: any) {
         console.error(`[notesActions saveSharedNote] CRITICAL: Invalid NEXT_PUBLIC_APP_URL: ${appBaseUrlFromEnv}. Falling back. Error: ${e.message}.`);
         const fallbackUrl = getSmartFallbackUrl();
-        absoluteApiUrl = `${fallbackUrl}${endpoint}`;
-        console.log(`[notesActions saveSharedNote] NEXT_PUBLIC_APP_URL invalid, using fallback ${fallbackUrl}. Full URL: ${absoluteApiUrl}`);
+        if (fallbackUrl) {
+          absoluteApiUrl = `${fallbackUrl}${endpoint}`;
+        } else {
+          absoluteApiUrl = endpoint; // Use relative URL
+        }
+        console.log(`[notesActions saveSharedNote] NEXT_PUBLIC_APP_URL invalid, using fallback ${fallbackUrl || 'relative'}. Full URL: ${absoluteApiUrl}`);
     }
   } else {
       const fallbackUrl = getSmartFallbackUrl();
-      absoluteApiUrl = `${fallbackUrl}${endpoint}`;
-      console.log(`[notesActions saveSharedNote] NEXT_PUBLIC_APP_URL not set, using fallback ${fallbackUrl}. Full URL: ${absoluteApiUrl}`);
+      if (fallbackUrl) {
+        absoluteApiUrl = `${fallbackUrl}${endpoint}`;
+      } else {
+        absoluteApiUrl = endpoint; // Use relative URL
+      }
+      console.log(`[notesActions saveSharedNote] NEXT_PUBLIC_APP_URL not set, using fallback ${fallbackUrl || 'relative'}. Full URL: ${absoluteApiUrl}`);
   }
 
   console.log(`[notesActions saveSharedNote] Attempting to post to: ${absoluteApiUrl}`);

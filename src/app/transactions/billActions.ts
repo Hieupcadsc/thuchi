@@ -23,6 +23,14 @@ export async function processBillImage(imageDataUri: string): Promise<ProcessBil
       const envUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL;
       if (envUrl) return envUrl;
       
+      // Check for Railway environment
+      if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
+        // On Railway, use relative URLs
+        return process.env.RAILWAY_PUBLIC_DOMAIN 
+          ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+          : ''; // Return empty for relative URLs
+      }
+      
       // Auto-detect based on environment
       const port = process.env.PORT || '3000';
       const isProduction = process.env.NODE_ENV === 'production';
@@ -34,8 +42,11 @@ export async function processBillImage(imageDataUri: string): Promise<ProcessBil
       return 'http://localhost:9002';
     };
 
+    const baseUrl = getApiUrl();
+    const apiUrl = baseUrl ? `${baseUrl}/api/ai/process-bill` : '/api/ai/process-bill';
+
     // Call the API route for consistent processing
-    const response = await fetch(`${getApiUrl()}/api/ai/process-bill`, {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -82,9 +82,15 @@ export function CalendarEventModal({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     editingItem ? new Date(editingItem.date) : new Date()
   );
-  const [isLunarDate, setIsLunarDate] = useState(false);
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [selectedColor, setSelectedColor] = useState('#4A90E2');
+  const [isLunarDate, setIsLunarDate] = useState(
+    mode === 'event' && editingItem ? (editingItem as CalendarEvent).isLunarDate || false : false
+  );
+  const [isRecurring, setIsRecurring] = useState(
+    editingItem ? editingItem.isRecurring || false : false
+  );
+  const [selectedColor, setSelectedColor] = useState(
+    editingItem ? editingItem.color || '#4A90E2' : '#4A90E2'
+  );
 
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm({
     defaultValues: {
@@ -254,7 +260,7 @@ export function CalendarEventModal({
               {/* Priority */}
               <div className="space-y-2">
                 <Label>Mức độ ưu tiên</Label>
-                <Select value={watch('priority')} onValueChange={(value) => setValue('priority', value)}>
+                <Select value={watch('priority')} onValueChange={(value) => setValue('priority', value as 'low' | 'medium' | 'high')}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -279,7 +285,7 @@ export function CalendarEventModal({
                 <Checkbox
                   id="lunar"
                   checked={isLunarDate}
-                  onCheckedChange={setIsLunarDate}
+                  onCheckedChange={(checked) => setIsLunarDate(checked === true)}
                 />
                 <Label htmlFor="lunar" className="text-sm">
                   Theo lịch âm (đặc biệt hữu ích cho đám giỗ)
@@ -293,7 +299,7 @@ export function CalendarEventModal({
               {/* Employee Name */}
               <div className="space-y-2">
                 <Label>Người thực hiện</Label>
-                <Select value={watch('employeeName')} onValueChange={(value) => setValue('employeeName', value)}>
+                <Select value={watch('employeeName')} onValueChange={(value) => setValue('employeeName', value as FamilyMember)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -374,7 +380,7 @@ export function CalendarEventModal({
               <Checkbox
                 id="recurring"
                 checked={isRecurring}
-                onCheckedChange={setIsRecurring}
+                onCheckedChange={(checked) => setIsRecurring(checked === true)}
               />
               <Label htmlFor="recurring" className="text-sm">
                 Lặp lại hàng năm

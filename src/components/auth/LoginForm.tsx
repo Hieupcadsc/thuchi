@@ -21,7 +21,7 @@ export function LoginForm() {
   const [selectedUser, setSelectedUser] = useState<FamilyMember | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleLoginAttempt = () => {
+  const handleLoginAttempt = async () => {
     if (!selectedUser) {
       setError("Vui lòng chọn tài khoản.");
       return;
@@ -31,12 +31,18 @@ export function LoginForm() {
       return;
     }
     setError(null);
-    const loginSuccess = login(selectedUser, password);
-    if (loginSuccess) {
-      router.push('/dashboard');
-    } else {
-      // Error toast is handled by useAuthStore.login
-      // setError("Mật khẩu không đúng."); // This can be uncommented if specific local error is needed
+    
+    try {
+      const loginSuccess = await login(selectedUser, password);
+      if (loginSuccess) {
+        router.push('/dashboard');
+      } else {
+        // Error toast is handled by useAuthStore.login
+        // setError("Mật khẩu không đúng."); // This can be uncommented if specific local error is needed
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError("Có lỗi xảy ra khi đăng nhập.");
     }
   };
 

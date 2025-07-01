@@ -7,6 +7,10 @@ import { SummaryCard } from '@/components/dashboard/SummaryCard';
 
 import { WithdrawCashModal } from '@/components/dashboard/WithdrawCashModal';
 import { SharedNotes } from '@/components/dashboard/SharedNotes';
+import { NotificationCenter } from '@/components/dashboard/NotificationCenter';
+import { ScheduleUploader } from '@/components/dashboard/ScheduleUploader';
+import { ChangelogModal } from '@/components/dashboard/ChangelogModal';
+
 import dynamic from 'next/dynamic';
 
 // OPTIMIZED: Lazy load calendar component to improve initial page load
@@ -17,7 +21,7 @@ const TransactionCalendar = dynamic(
     ssr: false
   }
 );
-import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera, PlusCircle, Landmark, Wallet, ArrowRightLeft, ChevronDown, RefreshCw } from 'lucide-react';
+import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera, PlusCircle, Landmark, Wallet, ArrowRightLeft, ChevronDown, RefreshCw, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from "@/components/ui/chart"
@@ -39,6 +43,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useMobileFirst } from '@/hooks/use-mobile-detection';
 import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 import { MobileQuickActions, MobilePullToRefresh } from '@/components/mobile/MobileQuickActions';
+import { useWorkSchedules } from '@/hooks/useWorkSchedules';
 
 interface DashboardSummary {
   totalIncome: number; // All-time total income
@@ -70,6 +75,7 @@ export default function DashboardPage() {
   const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth } = useAuthStore();
   const { toast } = useToast();
   const { showMobileUI, isMobile } = useMobileFirst();
+  const { workSchedules } = useWorkSchedules();
   const [summary, setSummary] = useState<DashboardSummary>(initialSummary);
   const [monthlyChartData, setMonthlyChartData] = useState<any[]>([]);
   const [currentMonthYear, setCurrentMonthYear] = useState<string>('');
@@ -77,7 +83,9 @@ export default function DashboardPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+  const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadNotifications, setUploadNotifications] = useState<any[]>([]);
 
   useEffect(() => {
     const now = new Date();
@@ -303,16 +311,47 @@ export default function DashboardPage() {
     }
   };
 
+  const addUploadNotification = (result: any) => {
+    const notification = {
+      id: `upload-${Date.now()}`,
+      type: 'success',
+      title: '🤖 AI Lịch Upload Thành Công',
+      message: `Đã thêm ${result.summary?.totalShifts || 0} ca làm việc cho ${result.summary?.employee || 'Minh Hiếu'} - Tháng ${result.summary?.month}/${result.summary?.year}`,
+      timestamp: new Date(),
+      isRead: false,
+      priority: 'high',
+      details: result.notifications || []
+    };
+    
+    setUploadNotifications(prev => [notification, ...prev.slice(0, 4)]); // Keep max 5 notifications
+    
+    // Show toast notification
+    toast({
+      title: "🎉 Upload lịch thành công!",
+      description: `Đã thêm ${result.summary?.totalShifts || 0} ca làm việc tháng ${result.summary?.month}/${result.summary?.year}`,
+    });
+  };
+
   return (
     <div className="flex gap-6">
-      {/* Main Content - Takes more space */}
-      <div className="w-3/5 space-y-6">
+      {/* Main Content - Takes less space for bigger calendar */}
+      <div className="w-1/2 space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Chào {currentUser}!</h1>
           <p className="text-muted-foreground">{format(new Date(), 'EEEE, dd MMMM yyyy', { locale: vi })}</p>
         </div>
         <div className="flex gap-3">
+          <Button 
+            onClick={() => setIsChangelogModalOpen(true)} 
+            variant="outline"
+            size="lg"
+            className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200 text-purple-700 hover:from-purple-100 hover:to-blue-100"
+          >
+            <Sparkles className="h-5 w-5 mr-2" />
+            Có gì mới
+          </Button>
+          
           <Button 
             onClick={handleRefreshDashboard} 
             disabled={isLoading || isRefreshing} 
@@ -419,7 +458,17 @@ export default function DashboardPage() {
               currentBankBalance={summary.balanceBank}
             />
 
-            <SharedNotes />
+            <ChangelogModal 
+              isOpen={isChangelogModalOpen} 
+              onClose={() => setIsChangelogModalOpen(false)}
+            />
+
+                        <SharedNotes />
+
+            <NotificationCenter 
+              workSchedules={workSchedules} 
+              uploadNotifications={uploadNotifications}
+            />
 
             <Card className="shadow-lg">
               <CardHeader>
@@ -489,10 +538,10 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Calendar Sidebar - Right side, moderate size */}
-      <div className="hidden lg:block w-2/5">
+      {/* Calendar Sidebar - Right side, bigger size */}
+      <div className="hidden lg:block w-1/2">
         <div className="sticky top-6">
-          <TransactionCalendar />
+          <TransactionCalendar onUploadSuccess={addUploadNotification} />
         </div>
       </div>
       
@@ -503,7 +552,7 @@ export default function DashboardPage() {
             <CardTitle className="text-lg">Lịch Giao Dịch</CardTitle>
           </CardHeader>
           <CardContent>
-            <TransactionCalendar />
+            <TransactionCalendar onUploadSuccess={addUploadNotification} />
           </CardContent>
         </Card>
       </div>

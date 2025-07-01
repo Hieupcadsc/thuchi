@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { 
@@ -19,16 +19,21 @@ import {
   FlowerIcon as Flower,
   Cake,
   Bell,
-  Dot
+  Dot,
+  Camera
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 import { useAuthStore } from '@/hooks/useAuth';
 import type { Transaction, CalendarEvent, WorkSchedule, CalendarDay, LunarDate } from '@/types';
 import { cn } from '@/lib/utils';
 import { CalendarEventModal } from './CalendarEventModal';
+import { DayDetailModal } from './DayDetailModal';
+import { WorkScheduleEditModal } from './WorkScheduleEditModal';
+import { SimpleScheduleInput } from './SimpleScheduleInput';
 
 // Vietnamese Lunar calendar conversion
 const solarToLunar = (date: Date): LunarDate => {
@@ -156,7 +161,11 @@ const sampleWorkSchedules: WorkSchedule[] = [
   }
 ];
 
-export function TransactionCalendar() {
+interface TransactionCalendarProps {
+  onUploadSuccess?: (result: any) => void;
+}
+
+export function TransactionCalendar({ onUploadSuccess }: TransactionCalendarProps = {}) {
   const { transactions, familyId } = useAuthStore();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'all' | 'transactions' | 'events' | 'work'>('all');
@@ -164,6 +173,41 @@ export function TransactionCalendar() {
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'event' | 'work'>('event');
   const [editingItem, setEditingItem] = useState<CalendarEvent | WorkSchedule | null>(null);
+  const [isDayDetailModalOpen, setIsDayDetailModalOpen] = useState(false);
+  const [selectedDayDetail, setSelectedDayDetail] = useState<Date | null>(null);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [workSchedules, setWorkSchedules] = useState<WorkSchedule[]>([]);
+  const [isWorkEditModalOpen, setIsWorkEditModalOpen] = useState(false);
+  const [editingWorkSchedule, setEditingWorkSchedule] = useState<WorkSchedule | null>(null);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+
+  // Load events and work schedules
+  useEffect(() => {
+    const loadCalendarData = async () => {
+      if (!familyId) return;
+      
+      try {
+        const [eventsRes, schedulesRes] = await Promise.all([
+          fetch(`/api/events?familyId=${familyId}`),
+          fetch(`/api/work-schedules?familyId=${familyId}`)
+        ]);
+
+        if (eventsRes.ok) {
+          const eventsData = await eventsRes.json();
+          setEvents(eventsData.events || []);
+        }
+
+        if (schedulesRes.ok) {
+          const schedulesData = await schedulesRes.json();
+          setWorkSchedules(schedulesData.schedules || []);
+        }
+      } catch (error) {
+        console.error('Error loading calendar data:', error);
+      }
+    };
+
+    loadCalendarData();
+  }, [familyId]);
 
   // Calculate calendar days with all data
   const calendarDays = useMemo(() => {
@@ -178,12 +222,12 @@ export function TransactionCalendar() {
       );
 
       // Events for this date
-      const dayEvents = sampleEvents.filter(event => 
+      const dayEvents = events.filter(event => 
         isSameDay(new Date(event.date), date)
       );
 
       // Work schedules for this date
-      const dayWorkSchedules = sampleWorkSchedules.filter(schedule => 
+      const dayWorkSchedules = workSchedules.filter(schedule => 
         isSameDay(new Date(schedule.date), date)
       );
 
@@ -213,7 +257,7 @@ export function TransactionCalendar() {
         lunarDate,
       } as CalendarDay;
     });
-  }, [currentDate, transactions]);
+  }, [currentDate, transactions, events, workSchedules]);
 
   const handlePrevMonth = () => {
     setCurrentDate(prev => subMonths(prev, 1));
@@ -239,11 +283,158 @@ export function TransactionCalendar() {
     setIsEventModalOpen(true);
   };
 
-  const handleSaveEvent = (data: Partial<CalendarEvent> | Partial<WorkSchedule>) => {
-    console.log('Saving event/work:', data);
-    // In production, this would save to your database
-    // For now, we'll just add it to the sample data arrays
+  const handleSaveEvent = async (data: Partial<CalendarEvent> | Partial<WorkSchedule>) => {
+    try {
+      if (modalMode === 'event') {
+        const eventData = data as Partial<CalendarEvent>;
+        eventData.familyId = familyId || 'family1';
+        
+        if (editingItem && 'type' in editingItem) {
+          // Editing existing event
+          const response = await fetch('/api/events', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: editingItem.id, ...eventData })
+          });
+          
+          if (response.ok) {
+            setEvents(prev => prev.map(event => 
+              event.id === editingItem.id ? { ...event, ...eventData } : event
+            ));
+          }
+        } else {
+          // Creating new event
+          const response = await fetch('/api/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(eventData)
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            setEvents(prev => [...prev, result.event]);
+          }
+        }
+      } else {
+        const workData = data as Partial<WorkSchedule>;
+        
+        if (editingItem && 'employeeName' in editingItem) {
+          // Editing existing work schedule
+          const response = await fetch('/api/work-schedules', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: editingItem.id, ...workData })
+          });
+          
+          if (response.ok) {
+            setWorkSchedules(prev => prev.map(work => 
+              work.id === editingItem.id ? { ...work, ...workData } : work
+            ));
+          }
+        } else {
+          // Creating new work schedule
+          workData.familyId = familyId || 'family1';
+          const response = await fetch('/api/work-schedules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(workData)
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            setWorkSchedules(prev => [...prev, result.schedule]);
+          }
+        }
+      }
+      
+      setEditingItem(null);
+      setIsEventModalOpen(false);
+    } catch (error) {
+      console.error('Error saving event/work:', error);
+    }
   };
+
+  const handleDayClick = (date: Date) => {
+    setSelectedDayDetail(date);
+    setIsDayDetailModalOpen(true);
+  };
+
+  const handleEditEvent = (event: CalendarEvent) => {
+    setEditingItem(event);
+    setModalMode('event');
+    setIsEventModalOpen(true);
+  };
+
+  const handleDeleteEvent = async (eventId: string) => {
+    if (confirm('Bạn có chắc muốn xóa sự kiện này?')) {
+      try {
+        const response = await fetch(`/api/events?id=${eventId}`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          setEvents(prev => prev.filter(event => event.id !== eventId));
+        }
+      } catch (error) {
+        console.error('Error deleting event:', error);
+      }
+    }
+  };
+
+  const handleEditWork = (work: WorkSchedule) => {
+    setEditingWorkSchedule(work);
+    setIsWorkEditModalOpen(true);
+  };
+
+  const handleDeleteWork = async (workId: string) => {
+    if (confirm('Bạn có chắc muốn xóa lịch làm việc này?')) {
+      try {
+        const response = await fetch(`/api/work-schedules?id=${workId}`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          setWorkSchedules(prev => prev.filter(work => work.id !== workId));
+        }
+      } catch (error) {
+        console.error('Error deleting work schedule:', error);
+      }
+    }
+  };
+
+  const handleSaveWorkSchedule = async (scheduleId: string, updates: Partial<WorkSchedule>) => {
+    try {
+      const response = await fetch('/api/work-schedules', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: scheduleId, ...updates })
+      });
+      
+      if (response.ok) {
+        setWorkSchedules(prev => prev.map(work => 
+          work.id === scheduleId ? { ...work, ...updates } : work
+        ));
+      }
+    } catch (error) {
+      console.error('Error updating work schedule:', error);
+    }
+  };
+
+  const handleDeleteWorkSchedule = async (scheduleId: string) => {
+    try {
+      const response = await fetch(`/api/work-schedules?id=${scheduleId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        setWorkSchedules(prev => prev.filter(work => work.id !== scheduleId));
+      }
+    } catch (error) {
+      console.error('Error deleting work schedule:', error);
+    }
+  };
+
+
 
   const weekDays = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
@@ -335,6 +526,16 @@ export function TransactionCalendar() {
             <Plus className="h-4 w-4 mr-2" />
             Thêm Công Việc
           </Button>
+          <Button 
+            variant="outline" 
+            size="lg" 
+            onClick={() => setIsUploadModalOpen(true)} 
+            className="h-11 px-4 text-sm text-blue-700 border-blue-300 hover:bg-blue-50 font-semibold"
+            title="Nhập lịch làm việc thủ công"
+          >
+            <Camera className="h-4 w-4 mr-2" />
+            Nhập Lịch
+          </Button>
         </div>
       </CardHeader>
 
@@ -363,6 +564,7 @@ export function TransactionCalendar() {
               day={day} 
               viewMode={viewMode}
               showLunar={showLunar}
+              onDayClick={handleDayClick}
             />
           ))}
         </div>
@@ -376,6 +578,70 @@ export function TransactionCalendar() {
         mode={modalMode}
         editingItem={editingItem}
       />
+
+      {/* Day Detail Modal */}
+      <DayDetailModal
+        isOpen={isDayDetailModalOpen}
+        onClose={() => setIsDayDetailModalOpen(false)}
+        selectedDate={selectedDayDetail}
+        events={events}
+        workSchedules={workSchedules}
+        onEditEvent={handleEditEvent}
+        onDeleteEvent={handleDeleteEvent}
+        onEditWork={handleEditWork}
+        onDeleteWork={handleDeleteWork}
+      />
+
+      {/* Work Schedule Edit Modal */}
+      <WorkScheduleEditModal
+        isOpen={isWorkEditModalOpen}
+        onClose={() => {
+          setIsWorkEditModalOpen(false);
+          setEditingWorkSchedule(null);
+        }}
+        workSchedule={editingWorkSchedule}
+        onSave={handleSaveWorkSchedule}
+        onDelete={handleDeleteWorkSchedule}
+      />
+
+      {/* Manual Schedule Input Modal */}
+      {isUploadModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setIsUploadModalOpen(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Nhập Lịch Làm Việc</h3>
+              <button 
+                onClick={() => setIsUploadModalOpen(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+            <SimpleScheduleInput onSuccess={(result) => {
+              setIsUploadModalOpen(false);
+              
+              // Call parent notification handler
+              if (onUploadSuccess && result) {
+                onUploadSuccess(result);
+              }
+              
+              // Auto navigate to the input month if provided
+              if (result?.summary?.month && result?.summary?.year) {
+                const inputDate = new Date(result.summary.year, result.summary.month - 1, 1);
+                setCurrentDate(inputDate);
+              }
+              
+              // Reload calendar data
+              if (familyId) {
+                Promise.all([
+                  fetch(`/api/events?familyId=${familyId}`).then(res => res.json()).then(data => setEvents(data.events || [])),
+                  fetch(`/api/work-schedules?familyId=${familyId}`).then(res => res.json()).then(data => setWorkSchedules(data.schedules || []))
+                ]).catch(console.error);
+              }
+            }} />
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
@@ -384,9 +650,10 @@ interface CompactCalendarDayCellProps {
   day: CalendarDay;
   viewMode: 'all' | 'transactions' | 'events' | 'work';
   showLunar: boolean;
+  onDayClick: (date: Date) => void;
 }
 
-function CompactCalendarDayCell({ day, viewMode, showLunar }: CompactCalendarDayCellProps) {
+function CompactCalendarDayCell({ day, viewMode, showLunar, onDayClick }: CompactCalendarDayCellProps) {
   const isToday = isSameDay(day.date, new Date());
   const hasTransactions = day.transactions.length > 0;
   const hasEvents = day.events.length > 0;
@@ -412,11 +679,13 @@ function CompactCalendarDayCell({ day, viewMode, showLunar }: CompactCalendarDay
   return (
     <div 
       className={cn(
-        "relative h-32 p-3 border-r border-b border-gray-200 hover:bg-gray-50 transition-all duration-200 cursor-pointer bg-white",
+        "relative h-32 p-3 border-r border-b border-gray-200 hover:bg-gray-50 transition-all duration-200 cursor-pointer bg-white hover:shadow-md",
         !day.isCurrentMonth && "bg-gray-50/50 text-gray-400",
         isToday && "bg-gradient-to-br from-blue-50 to-blue-100 border-blue-300 border-2 shadow-md ring-1 ring-blue-200",
         hasAnyActivity && "bg-gradient-to-br from-green-50 to-emerald-50 border-green-200"
       )}
+      onClick={() => onDayClick(day.date)}
+      title="Click để xem chi tiết ngày này"
     >
       {/* Date header - Enhanced */}
       <div className="flex justify-between items-start mb-2">

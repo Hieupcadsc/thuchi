@@ -16,7 +16,7 @@ interface AuthState {
   familyId: UserType | null;
   transactions: Transaction[];
   highValueExpenseAlerts: HighValueExpenseAlert[];
-  login: (user: FamilyMember, pass: string) => boolean;
+  login: (user: FamilyMember, pass: string) => Promise<boolean>;
   logout: () => void;
   addTransaction: (transactionData: Omit<Transaction, 'id' | 'familyId' | 'monthYear' > & { date: string }) => Promise<Transaction | null>;
   updateTransaction: (updatedTransaction: Transaction) => Promise<void>;
@@ -36,20 +36,59 @@ export const useAuthStore = create<AuthState>()(
       familyId: null,
       transactions: [],
       highValueExpenseAlerts: [],
-      login: (user, pass) => {
-        if (pass === SHARED_PASSWORD && FAMILY_MEMBERS.includes(user as FamilyMember)) {
-          set({
-            currentUser: user,
-            familyId: FAMILY_ACCOUNT_ID,
+      login: async (user, pass) => {
+        if (!FAMILY_MEMBERS.includes(user as FamilyMember)) {
+          showAppToast({
+            title: "Đăng nhập thất bại",
+            description: "Tài khoản không tồn tại.",
+            variant: "destructive",
           });
-          return true;
+          return false;
         }
-        showAppToast({
-          title: "Đăng nhập thất bại",
-          description: "Tài khoản hoặc mật khẩu không đúng. Vui lòng thử lại.",
-          variant: "destructive",
-        });
-        return false;
+
+        try {
+          // Call API to authenticate
+          const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              username: user,
+              password: pass,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok && data.success) {
+            // Update localStorage for immediate UI feedback
+            if (data.user.passwordStrength) {
+              localStorage.setItem(`password_strength_${user}`, data.user.passwordStrength);
+            }
+
+            set({
+              currentUser: user,
+              familyId: FAMILY_ACCOUNT_ID,
+            });
+            return true;
+          } else {
+            showAppToast({
+              title: "Đăng nhập thất bại",
+              description: data.error || "Mật khẩu không đúng. Vui lòng thử lại.",
+              variant: "destructive",
+            });
+            return false;
+          }
+        } catch (error) {
+          console.error('Login error:', error);
+          showAppToast({
+            title: "Đăng nhập thất bại",
+            description: "Có lỗi xảy ra. Vui lòng thử lại.",
+            variant: "destructive",
+          });
+          return false;
+        }
       },
       logout: () => {
         set({

@@ -113,6 +113,62 @@ export function initDb() {
     `);
     console.log('[SQLite initDb] "loan_payments" table checked/created.');
 
+    // Create calendar_events table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS calendar_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        familyId TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        type TEXT NOT NULL DEFAULT 'family',
+        date TEXT NOT NULL, -- YYYY-MM-DD
+        isRecurring INTEGER DEFAULT 0,
+        recurringPattern TEXT,
+        isLunarDate INTEGER DEFAULT 0,
+        lunarDate TEXT, -- JSON string
+        createdBy TEXT NOT NULL,
+        color TEXT DEFAULT '#8B5CF6',
+        priority TEXT DEFAULT 'medium',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT
+      );
+    `);
+    console.log('[SQLite initDb] "calendar_events" table checked/created.');
+
+    // Create work_schedules table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS work_schedules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employeeName TEXT NOT NULL,
+        title TEXT NOT NULL,
+        startTime TEXT NOT NULL,
+        endTime TEXT NOT NULL,
+        date TEXT NOT NULL, -- YYYY-MM-DD
+        isRecurring INTEGER DEFAULT 0,
+        location TEXT,
+        notes TEXT,
+        color TEXT DEFAULT '#4A90E2',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT
+      );
+    `);
+    console.log('[SQLite initDb] "work_schedules" table checked/created.');
+
+    // Create users table for password management
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        familyId INTEGER NOT NULL,
+        passwordStrength TEXT DEFAULT 'weak',
+        passwordChangedAt TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+    `);
+    console.log('[SQLite initDb] "users" table checked/created.');
+
     console.log('[SQLite initDb] Database schema initialization complete.');
   } catch (error) {
     console.error('[SQLite initDb] Error initializing database schema:', error);

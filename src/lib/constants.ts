@@ -1,6 +1,6 @@
 
 import type { Category, FamilyMember, PaymentSource, UserType } from '@/types';
-import { Utensils, ShoppingCart, Car, Home, Receipt, Film, HeartPulse, BookOpen, MoreHorizontal, TrendingUp, TrendingDown, LayoutDashboard, ArrowRightLeft, LineChart, Settings, LogOut, CircleDollarSign, Moon, Sun, Landmark, Wallet, ArrowDownUp, ArrowUpDown, HandCoins, PiggyBank } from 'lucide-react'; // Added Settings
+import { Utensils, ShoppingCart, Car, Home, Receipt, Film, HeartPulse, BookOpen, MoreHorizontal, TrendingUp, TrendingDown, LayoutDashboard, ArrowRightLeft, LineChart, Settings, LogOut, CircleDollarSign, Moon, Sun, Landmark, Wallet, ArrowDownUp, ArrowUpDown, HandCoins, PiggyBank, Sparkles } from 'lucide-react'; // Added Settings and Sparkles
 import type { LucideIcon } from 'lucide-react';
 
 
@@ -35,6 +35,7 @@ export const CATEGORIES: Category[] = [
 
 export const NAV_LINKS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/smart-hub', label: 'Smart Hub', icon: Sparkles },
   { href: '/transactions', label: 'Giao dịch', icon: ArrowRightLeft },
   // { href: '/loans', label: 'Cho vay (Đang phát triển)', icon: HandCoins },
   { href: '/reports', label: 'Báo cáo', icon: LineChart },

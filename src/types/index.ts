@@ -81,6 +81,7 @@ export interface CalendarEvent {
 
 export interface WorkSchedule {
   id: string;
+  familyId?: string; // Add familyId for consistency
   employeeName: FamilyMember;
   title: string;
   startTime: string; // HH:MM

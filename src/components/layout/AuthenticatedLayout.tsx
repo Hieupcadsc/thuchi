@@ -8,6 +8,7 @@ import { NAV_LINKS, APP_NAME } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { UserNav } from '@/components/layout/UserNav';
 import { GlobalAlertToaster } from '@/components/layout/GlobalAlertToaster';
+import { WeakPasswordWarning } from '@/components/auth/WeakPasswordWarning';
 import { useTheme } from '@/contexts/ThemeContext'; 
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useMobileFirst } from '@/hooks/use-mobile-detection';
@@ -80,6 +81,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
   return (
     <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
       <GlobalAlertToaster />
+      <WeakPasswordWarning />
       <div className="flex min-h-screen flex-col overflow-x-hidden bg-gradient-to-br from-background via-background to-muted/20"> 
         <div className="flex flex-1"> 
           <Sidebar className="border-r border-border/50 !bg-white dark:!bg-slate-900" collapsible="icon">

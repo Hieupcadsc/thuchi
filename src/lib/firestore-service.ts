@@ -12,10 +12,12 @@ import {
   getDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Transaction, SharedNote } from '@/types';
+import type { Transaction, SharedNote, CalendarEvent, WorkSchedule } from '@/types';
 
 const TRANSACTIONS_COLLECTION = 'transactions';
 const SHARED_NOTES_COLLECTION = 'shared_notes';
+const CALENDAR_EVENTS_COLLECTION = 'calendar_events';
+const WORK_SCHEDULES_COLLECTION = 'work_schedules';
 
 // Helper function to remove undefined values from object
 const cleanData = (obj: any) => {
@@ -226,6 +228,147 @@ export const firestoreService = {
       } as SharedNote));
     } catch (error) {
       console.error('Error getting all shared notes:', error);
+      throw error;
+    }
+  },
+
+  // Calendar Events operations
+  async getCalendarEvents(familyId: string): Promise<CalendarEvent[]> {
+    try {
+      const q = query(
+        collection(db, CALENDAR_EVENTS_COLLECTION),
+        where('familyId', '==', familyId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const events = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as CalendarEvent));
+      
+      // Sort client-side to avoid index requirement
+      return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    } catch (error) {
+      console.error('Error getting calendar events:', error);
+      throw error;
+    }
+  },
+
+  async addCalendarEvent(event: Omit<CalendarEvent, 'id'>): Promise<CalendarEvent> {
+    const cleanedEvent = cleanData(event);
+    const docRef = await addDoc(collection(db, CALENDAR_EVENTS_COLLECTION), cleanedEvent);
+    return { id: docRef.id, ...cleanedEvent };
+  },
+
+  async updateCalendarEvent(id: string, updates: Partial<CalendarEvent>): Promise<void> {
+    const docRef = doc(db, CALENDAR_EVENTS_COLLECTION, id);
+    const cleanedUpdates = cleanData(updates);
+    await updateDoc(docRef, cleanedUpdates);
+  },
+
+  async deleteCalendarEvent(eventId: string): Promise<void> {
+    const docRef = doc(db, CALENDAR_EVENTS_COLLECTION, eventId);
+    await deleteDoc(docRef);
+  },
+
+  // Work Schedules operations
+  async getWorkSchedules(familyId: string): Promise<WorkSchedule[]> {
+    try {
+      // Try to get by familyId first, if no results then get all (for backward compatibility)
+      let q = query(
+        collection(db, WORK_SCHEDULES_COLLECTION),
+        where('familyId', '==', familyId)
+      );
+      
+      let querySnapshot = await getDocs(q);
+      
+      // If no results with familyId, get all work schedules (backward compatibility)
+      if (querySnapshot.empty) {
+        q = query(collection(db, WORK_SCHEDULES_COLLECTION));
+        querySnapshot = await getDocs(q);
+      }
+      
+      const schedules = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as WorkSchedule));
+      
+      // Sort client-side to avoid index requirement
+      return schedules.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    } catch (error) {
+      console.error('Error getting work schedules:', error);
+      throw error;
+    }
+  },
+
+  async addWorkSchedule(schedule: Omit<WorkSchedule, 'id'>): Promise<WorkSchedule> {
+    const cleanedSchedule = cleanData(schedule);
+    const docRef = await addDoc(collection(db, WORK_SCHEDULES_COLLECTION), cleanedSchedule);
+    return { id: docRef.id, ...cleanedSchedule };
+  },
+
+  async updateWorkSchedule(id: string, updates: Partial<WorkSchedule>): Promise<void> {
+    const docRef = doc(db, WORK_SCHEDULES_COLLECTION, id);
+    const cleanedUpdates = cleanData(updates);
+    await updateDoc(docRef, cleanedUpdates);
+  },
+
+  async deleteWorkSchedule(scheduleId: string): Promise<void> {
+    const docRef = doc(db, WORK_SCHEDULES_COLLECTION, scheduleId);
+    await deleteDoc(docRef);
+  },
+
+  // Delete all work schedules for a specific employee in a specific month/year
+  async deleteWorkSchedulesByEmployeeAndMonth(familyId: string, employeeName: string, year: number, month: number): Promise<void> {
+    try {
+      console.log(`🗑️ [firestoreService] Deleting work schedules for ${employeeName} in ${year}/${month}`);
+      
+      // Query all work schedules for this employee
+      const q = query(
+        collection(db, WORK_SCHEDULES_COLLECTION),
+        where('familyId', '==', familyId),
+        where('employeeName', '==', employeeName)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      console.log(`📋 [firestoreService] Found ${querySnapshot.docs.length} work schedules for ${employeeName}`);
+      
+      if (querySnapshot.empty) {
+        console.log(`ℹ️ [firestoreService] No existing schedules found for ${employeeName} in ${year}/${month}`);
+        return;
+      }
+
+      // Filter schedules by month/year client-side and collect IDs to delete
+      const schedulesToDelete: string[] = [];
+      const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+      
+      querySnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.date && data.date.startsWith(monthPrefix)) {
+          schedulesToDelete.push(doc.id);
+          console.log(`🎯 [firestoreService] Will delete schedule ${doc.id} for date ${data.date}`);
+        }
+      });
+
+      if (schedulesToDelete.length === 0) {
+        console.log(`ℹ️ [firestoreService] No schedules found for ${employeeName} in ${year}/${month}`);
+        return;
+      }
+
+      // Batch delete
+      console.log(`🔄 [firestoreService] Batch deleting ${schedulesToDelete.length} schedules...`);
+      const batch = writeBatch(db);
+      
+      schedulesToDelete.forEach(scheduleId => {
+        const docRef = doc(db, WORK_SCHEDULES_COLLECTION, scheduleId);
+        batch.delete(docRef);
+      });
+      
+      await batch.commit();
+      console.log(`✅ [firestoreService] Successfully deleted ${schedulesToDelete.length} work schedules for ${employeeName} in ${year}/${month}`);
+      
+    } catch (error) {
+      console.error(`❌ [firestoreService] Error deleting work schedules for ${employeeName} in ${year}/${month}:`, error);
       throw error;
     }
   }

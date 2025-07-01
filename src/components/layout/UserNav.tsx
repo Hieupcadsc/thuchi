@@ -1,6 +1,7 @@
 
 "use client";
 
+import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,16 +13,26 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/hooks/useAuth";
-import { LogOut, User } from "lucide-react"; 
+import { LogOut, User, Lock, Settings } from "lucide-react"; 
 import { useRouter } from "next/navigation";
+import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
 
 export function UserNav() {
   const { currentUser, familyId, logout } = useAuthStore();
   const router = useRouter();
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
 
   const handleLogout = () => {
     logout();
     router.push("/login");
+  };
+
+  const handleChangePassword = () => {
+    setShowChangePasswordModal(true);
+  };
+
+  const handleGoToSettings = () => {
+    router.push("/settings");
   };
 
   if (!currentUser || !familyId) return null;
@@ -47,11 +58,27 @@ export function UserNav() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleGoToSettings}>
+          <Settings className="mr-2 h-4 w-4" />
+          <span>Cài đặt</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handleChangePassword}>
+          <Lock className="mr-2 h-4 w-4" />
+          <span>Đổi mật khẩu</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />
           <span>Đăng xuất</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
+      
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={showChangePasswordModal}
+        onClose={() => setShowChangePasswordModal(false)}
+        isForced={false}
+      />
     </DropdownMenu>
   );
 }

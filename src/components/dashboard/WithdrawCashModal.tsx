@@ -89,20 +89,20 @@ export function WithdrawCashModal({ isOpen, onOpenChange, onSuccess, currentBank
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center">
-            <Wallet className="mr-2 h-5 w-5 text-primary" />
+      <DialogContent className="sm:max-w-[425px] xl:max-w-[600px] modal-fhd">
+        <DialogHeader className="modal-header-fhd">
+          <DialogTitle className="flex items-center text-xl xl:text-2xl font-bold">
+            <Wallet className="mr-2 h-5 w-5 xl:h-8 xl:w-8 text-primary icon-md-fhd" />
             Rút Tiền Mặt từ Ngân Hàng
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-base xl:text-lg modal-content-fhd">
             Nhập số tiền bạn muốn rút từ tài khoản ngân hàng sang tiền mặt.
             Hệ thống sẽ tự động tạo giao dịch chi (ngân hàng) và giao dịch thu (tiền mặt).
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        <form onSubmit={handleSubmit} className="space-y-4 xl:space-y-6 py-4 xl:py-6 element-spacing-fhd">
           <div>
-            <Label htmlFor="withdraw-amount">Số tiền rút</Label>
+            <Label htmlFor="withdraw-amount" className="text-base xl:text-lg font-semibold label-fhd">Số tiền rút</Label>
             <Input
               id="withdraw-amount"
               type="text"
@@ -112,29 +112,40 @@ export function WithdrawCashModal({ isOpen, onOpenChange, onSuccess, currentBank
               onBlur={handleBlurAmount}
               placeholder="0"
               disabled={isSubmitting}
+              className="input-fhd text-base xl:text-lg focus-fhd"
             />
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs xl:text-base text-muted-foreground mt-1">
               Số dư ngân hàng hiện tại: {formatVnCurrency(currentBankBalance)} VND
             </p>
           </div>
           <div>
-            <Label htmlFor="withdraw-note">Ghi chú (tuỳ chọn)</Label>
+            <Label htmlFor="withdraw-note" className="text-base xl:text-lg font-semibold label-fhd">Ghi chú (tuỳ chọn)</Label>
             <Textarea
               id="withdraw-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="VD: Rút tiền chi tiêu cá nhân"
               disabled={isSubmitting}
+              className="input-fhd text-base xl:text-lg focus-fhd"
             />
           </div>
-          <DialogFooter className="mt-6">
+          <DialogFooter className="mt-6 xl:mt-8 space-x-4">
             <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={isSubmitting}>
+              <Button 
+                type="button" 
+                variant="outline" 
+                disabled={isSubmitting}
+                className="btn-fhd text-base xl:text-lg shadow-fhd"
+              >
                 Hủy
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={isSubmitting || amount <= 0 || amount > currentBankBalance}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button 
+              type="submit" 
+              disabled={isSubmitting || amount <= 0 || amount > currentBankBalance}
+              className="btn-fhd-large text-base xl:text-lg shadow-fhd"
+            >
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 xl:h-6 xl:w-6 animate-spin" />}
               Xác Nhận Rút Tiền
             </Button>
           </DialogFooter>

@@ -434,47 +434,39 @@ export function TransactionCalendar({ onUploadSuccess }: TransactionCalendarProp
     }
   };
 
-
-
   const weekDays = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
   return (
-    <Card className="w-full shadow-xl border-0 bg-gradient-to-br from-white to-slate-50 dark:from-gray-900 dark:to-gray-800 overflow-visible">
-      <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-100 text-gray-800 p-6 border-b border-gray-200">
+    <div className="w-full max-w-7xl mx-auto">
+      {/* Ultra Compact Header */}
+      <div className="space-y-1 mb-2">
+        {/* Top controls row */}
         <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl font-bold flex items-center gap-3">
-          <Calendar className="h-6 w-6" />
-          Lịch Gia Đình Thông Minh
-        </CardTitle>
-                      <div className="flex items-center gap-3">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant={showLunar ? "secondary" : "outline"} 
-                      size="default" 
-                      onClick={() => setShowLunar(!showLunar)}
-                      className="h-9 px-4 text-sm"
-                    >
-                      <Moon className="h-4 w-4 mr-2" />
-                      Âm lịch
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{showLunar ? 'Ẩn' : 'Hiện'} âm lịch</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              
-              <Button variant="outline" size="default" onClick={handleToday} className="h-9 px-4 text-sm border-gray-300 text-gray-700 hover:bg-gray-50">
-                <Sun className="h-4 w-4 mr-2" />
-                Hôm nay
-              </Button>
-            </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant={showLunar ? "secondary" : "outline"} 
+              size="sm" 
+              onClick={() => setShowLunar(!showLunar)}
+              className="h-8 px-3 text-xs"
+            >
+              <Moon className="h-3 w-3 mr-1" />
+              Âm lịch
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleToday} 
+              className="h-8 px-3 text-xs"
+            >
+              <Sun className="h-3 w-3 mr-1" />
+              Hôm nay
+            </Button>
+          </div>
         </div>
         
-        {/* Enhanced View Mode Filter */}
-        <div className="flex gap-2 mt-4">
+        {/* View mode filter - ultra compact */}
+        <div className="flex gap-1 justify-center bg-gray-50 p-1 rounded">
           {([
             { key: 'all', label: 'Tất cả', icon: Calendar },
             { key: 'transactions', label: 'Thu chi', icon: TrendingUp },
@@ -483,83 +475,105 @@ export function TransactionCalendar({ onUploadSuccess }: TransactionCalendarProp
           ] as const).map(({ key, label, icon: Icon }) => (
             <Button
               key={key}
-              variant={viewMode === key ? "secondary" : "ghost"}
-              size="default"
+              variant={viewMode === key ? "default" : "ghost"}
+              size="sm"
               onClick={() => setViewMode(key)}
-              className="h-9 px-4 text-sm text-gray-700 hover:bg-gray-200 transition-all duration-200"
+              className="h-7 px-3 text-xs min-w-[80px]"
             >
-              <Icon className="h-4 w-4 mr-2" />
+              <Icon className="h-3 w-3 mr-1" />
               {label}
             </Button>
           ))}
         </div>
         
-        {/* Month Navigation */}
-        <div className="flex items-center justify-between mt-6">
-          <Button variant="ghost" size="lg" onClick={handlePrevMonth} className="h-12 w-12 p-0 text-gray-700 hover:bg-gray-200 rounded-xl">
-            <ChevronLeft className="h-6 w-6" />
+        {/* Month navigation - ultra compact */}
+        <div className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 rounded p-2">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={handlePrevMonth} 
+            className="h-8 w-8 p-0 rounded-full hover:bg-white/80"
+          >
+            <ChevronLeft className="h-4 w-4" />
           </Button>
           
           <div className="text-center">
-            <h3 className="text-2xl font-bold">
+            <h3 className="text-lg font-bold text-gray-800">
               {format(currentDate, 'MMMM yyyy', { locale: vi })}
             </h3>
             {showLunar && (
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-xs text-gray-600">
                 Tháng {solarToLunar(currentDate).month} Âm lịch
               </p>
             )}
           </div>
           
-          <Button variant="ghost" size="lg" onClick={handleNextMonth} className="h-12 w-12 p-0 text-gray-700 hover:bg-gray-200 rounded-xl">
-            <ChevronRight className="h-6 w-6" />
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={handleNextMonth} 
+            className="h-8 w-8 p-0 rounded-full hover:bg-white/80"
+          >
+            <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
 
-        {/* Quick Add Buttons */}
-        <div className="flex gap-3 mt-6">
-          <Button variant="secondary" size="lg" onClick={handleAddEvent} className="h-11 px-6 text-sm flex-1 font-semibold">
-            <Plus className="h-4 w-4 mr-2" />
-            Thêm Sự Kiện
-          </Button>
-          <Button variant="outline" size="lg" onClick={handleAddWork} className="h-11 px-6 text-sm flex-1 text-gray-700 border-gray-300 hover:bg-gray-50 font-semibold">
-            <Plus className="h-4 w-4 mr-2" />
-            Thêm Công Việc
+        {/* Quick actions - ultra compact */}
+        <div className="flex gap-2 justify-center">
+          <Button 
+            variant="default" 
+            size="sm" 
+            onClick={handleAddEvent} 
+            className="h-8 px-3 text-xs bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            Sự Kiện
           </Button>
           <Button 
             variant="outline" 
-            size="lg" 
-            onClick={() => setIsUploadModalOpen(true)} 
-            className="h-11 px-4 text-sm text-blue-700 border-blue-300 hover:bg-blue-50 font-semibold"
-            title="Nhập lịch làm việc thủ công"
+            size="sm" 
+            onClick={handleAddWork} 
+            className="h-8 px-3 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
           >
-            <Camera className="h-4 w-4 mr-2" />
+            <Plus className="h-3 w-3 mr-1" />
+            Công Việc
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setIsUploadModalOpen(true)} 
+            className="h-8 px-3 text-xs border-green-300 text-green-700 hover:bg-green-50"
+            title="Nhập lịch làm việc"
+          >
+            <Camera className="h-3 w-3 mr-1" />
             Nhập Lịch
           </Button>
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="p-0">
-        {/* Calendar Grid */}
-        <div className="grid grid-cols-7">
-          {/* Week headers - Enhanced styling */}
+      {/* Calendar Grid - optimized for Full HD */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-lg">
+        {/* Week headers */}
+        <div className="grid grid-cols-7 bg-gradient-to-r from-gray-100 to-gray-50">
           {weekDays.map((day, index) => (
             <div 
               key={day} 
               className={cn(
-                "h-16 flex items-center justify-center text-lg font-bold bg-gradient-to-b from-gray-50 to-gray-100 border-b-2 border-r border-gray-200 shadow-sm",
-                index === 6 && "text-red-600", // Sunday in red
-                index === 5 && "text-blue-600", // Saturday in blue
-                index < 5 && "text-gray-700" // Weekdays in gray
+                "h-8 flex items-center justify-center text-sm font-bold border-r border-gray-200 last:border-r-0",
+                index === 6 && "text-red-600", // Sunday
+                index === 5 && "text-blue-600", // Saturday  
+                index < 5 && "text-gray-700" // Weekdays
               )}
             >
               {day}
             </div>
           ))}
-          
-          {/* Calendar days */}
+        </div>
+        
+        {/* Calendar days */}
+        <div className="grid grid-cols-7">
           {calendarDays.map((day, index) => (
-            <CompactCalendarDayCell 
+            <ModalCalendarDayCell 
               key={index} 
               day={day} 
               viewMode={viewMode}
@@ -568,7 +582,7 @@ export function TransactionCalendar({ onUploadSuccess }: TransactionCalendarProp
             />
           ))}
         </div>
-      </CardContent>
+      </div>
 
       {/* Event Modal */}
       <CalendarEventModal
@@ -642,18 +656,19 @@ export function TransactionCalendar({ onUploadSuccess }: TransactionCalendarProp
           </div>
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
-interface CompactCalendarDayCellProps {
+// Modal component for full modal display
+interface ModalCalendarDayCellProps {
   day: CalendarDay;
   viewMode: 'all' | 'transactions' | 'events' | 'work';
   showLunar: boolean;
   onDayClick: (date: Date) => void;
 }
 
-function CompactCalendarDayCell({ day, viewMode, showLunar, onDayClick }: CompactCalendarDayCellProps) {
+function ModalCalendarDayCell({ day, viewMode, showLunar, onDayClick }: ModalCalendarDayCellProps) {
   const isToday = isSameDay(day.date, new Date());
   const hasTransactions = day.transactions.length > 0;
   const hasEvents = day.events.length > 0;
@@ -666,153 +681,126 @@ function CompactCalendarDayCell({ day, viewMode, showLunar, onDayClick }: Compac
 
   const getEventIcon = (type: string) => {
     switch (type) {
-      case 'birthday': return <Cake className="h-4 w-4" />;
-      case 'death_anniversary': return <Flower className="h-4 w-4" />;
-      case 'wedding': return <Heart className="h-4 w-4" />;
-      case 'anniversary': return <Gift className="h-4 w-4" />;
-      case 'meeting': return <Users className="h-4 w-4" />;
-      case 'reminder': return <Bell className="h-4 w-4" />;
-      default: return <Calendar className="h-4 w-4" />;
+      case 'birthday': return <Cake className="h-3 w-3" />;
+      case 'death_anniversary': return <Flower className="h-3 w-3" />;
+      case 'wedding': return <Heart className="h-3 w-3" />;
+      case 'anniversary': return <Gift className="h-3 w-3" />;
+      case 'meeting': return <Users className="h-3 w-3" />;
+      case 'reminder': return <Bell className="h-3 w-3" />;
+      default: return <Calendar className="h-3 w-3" />;
     }
   };
 
   return (
     <div 
       className={cn(
-        "relative h-32 p-3 border-r border-b border-gray-200 hover:bg-gray-50 transition-all duration-200 cursor-pointer bg-white hover:shadow-md",
-        !day.isCurrentMonth && "bg-gray-50/50 text-gray-400",
-        isToday && "bg-gradient-to-br from-blue-50 to-blue-100 border-blue-300 border-2 shadow-md ring-1 ring-blue-200",
-        hasAnyActivity && "bg-gradient-to-br from-green-50 to-emerald-50 border-green-200"
+        "relative h-24 p-2 border-r border-b border-gray-200 hover:bg-gray-50 transition-all duration-200 cursor-pointer",
+        !day.isCurrentMonth && "bg-gray-50/30 text-gray-400",
+        isToday && "bg-gradient-to-br from-blue-50 to-blue-100 border-blue-300 ring-1 ring-blue-300",
+        hasAnyActivity && "bg-gradient-to-br from-green-50/40 to-emerald-50/40"
       )}
       onClick={() => onDayClick(day.date)}
-      title="Click để xem chi tiết ngày này"
     >
-      {/* Date header - Enhanced */}
-      <div className="flex justify-between items-start mb-2">
+      {/* Date header */}
+      <div className="flex justify-between items-start mb-1">
         <div className={cn(
-          "text-lg font-bold w-8 h-8 flex items-center justify-center rounded-full transition-all duration-200",
-          isToday && "bg-blue-500 text-white shadow-lg font-extrabold",
+          "text-base font-bold w-6 h-6 flex items-center justify-center rounded-full",
+          isToday && "bg-blue-500 text-white shadow-md text-sm",
           !isToday && !day.isCurrentMonth && "text-gray-400",
-          !isToday && day.isCurrentMonth && "text-gray-700 hover:bg-gray-100"
+          !isToday && day.isCurrentMonth && "text-gray-700"
         )}>
           {format(day.date, 'd')}
         </div>
         {showLunar && (
-          <div className="text-xs text-gray-500 font-medium bg-gray-100 px-2 py-1 rounded-full">
+          <div className="text-xs text-gray-500 bg-gray-100 px-1 py-0.5 rounded">
             {day.lunarDate.day}/{day.lunarDate.month}
-            {day.lunarDate.isLeapMonth && '*'}
           </div>
         )}
       </div>
 
-      {/* Content area - spacious */}
-      <div className="space-y-1.5 text-sm">
+      {/* Content - ultra compact */}
+      <div className="space-y-0.5 text-xs">
         {/* Transactions */}
         {shouldShowTransactions && hasTransactions && (
-          <div className="space-y-1">
+          <>
             {day.totalIncome > 0 && (
-              <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
-                <TrendingUp className="h-4 w-4" />
-                <span className="font-bold text-sm">
-                  {formatExpandedCurrency(day.totalIncome)}
+              <div className="flex items-center gap-1 text-green-600 bg-green-50 px-1.5 py-0.5 rounded text-xs">
+                <TrendingUp className="h-3 w-3 flex-shrink-0" />
+                <span className="font-bold truncate">
+                  {formatCompactCurrency(day.totalIncome)}
                 </span>
               </div>
             )}
             {day.totalExpense > 0 && (
-              <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
-                <TrendingDown className="h-4 w-4" />
-                <span className="font-bold text-sm">
-                  {formatExpandedCurrency(day.totalExpense)}
+              <div className="flex items-center gap-1 text-red-600 bg-red-50 px-1.5 py-0.5 rounded text-xs">
+                <TrendingDown className="h-3 w-3 flex-shrink-0" />
+                <span className="font-bold truncate">
+                  {formatCompactCurrency(day.totalExpense)}
                 </span>
               </div>
             )}
-          </div>
+          </>
         )}
 
-        {/* Events - with text */}
+        {/* Events */}
         {shouldShowEvents && hasEvents && (
-          <div className="space-y-1">
-            {day.events.slice(0, 2).map((event) => (
-              <TooltipProvider key={event.id}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div 
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-white text-sm cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-                      style={{ backgroundColor: event.color || '#8B5CF6' }}
-                    >
-                      {getEventIcon(event.type)}
-                      <span className="truncate font-semibold">{event.title}</span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <div className="space-y-1">
-                      <p className="font-medium">{event.title}</p>
-                      {event.description && <p className="text-sm">{event.description}</p>}
-                      <p className="text-sm">👤 {event.createdBy}</p>
-                      {event.isLunarDate && <p className="text-sm">🌙 Theo âm lịch</p>}
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+          <div className="space-y-0.5">
+            {day.events.slice(0, 1).map((event) => (
+              <div 
+                key={event.id}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-white text-xs"
+                style={{ backgroundColor: event.color || '#8B5CF6' }}
+                title={event.title}
+              >
+                {getEventIcon(event.type)}
+                <span className="truncate font-medium">{event.title}</span>
+              </div>
             ))}
-            {day.events.length > 2 && (
-              <div className="text-sm text-muted-foreground font-semibold">
-                +{day.events.length - 2} sự kiện
+            {day.events.length > 1 && (
+              <div className="text-xs text-gray-500 px-1">
+                +{day.events.length - 1}
               </div>
             )}
           </div>
         )}
 
-        {/* Work schedules - with more detail */}
+        {/* Work schedules */}
         {shouldShowWork && hasWork && (
-          <div className="space-y-1">
-            {day.workSchedules.slice(0, 2).map((schedule) => (
-              <TooltipProvider key={schedule.id}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div 
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-white text-sm cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-                      style={{ backgroundColor: schedule.color || '#6366F1' }}
-                    >
-                      <Briefcase className="h-4 w-4" />
-                      <span className="truncate font-semibold">{schedule.title}</span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <div className="space-y-1">
-                      <p className="font-medium">{schedule.title}</p>
-                      <p className="text-sm">⏰ {schedule.startTime} - {schedule.endTime}</p>
-                      <p className="text-sm">👤 {schedule.employeeName}</p>
-                      {schedule.location && <p className="text-sm">📍 {schedule.location}</p>}
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+          <div className="space-y-0.5">
+            {day.workSchedules.slice(0, 1).map((schedule) => (
+              <div 
+                key={schedule.id}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-white text-xs"
+                style={{ backgroundColor: schedule.color || '#6366F1' }}
+                title={`${schedule.title} (${schedule.startTime})`}
+              >
+                <Briefcase className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate font-medium">{schedule.title}</span>
+              </div>
             ))}
-            {day.workSchedules.length > 2 && (
-              <div className="text-sm text-muted-foreground font-semibold">
-                +{day.workSchedules.length - 2} việc
+            {day.workSchedules.length > 1 && (
+              <div className="text-xs text-gray-500 px-1">
+                +{day.workSchedules.length - 1}
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* Today indicator - bigger */}
+      {/* Indicators */}
       {isToday && (
-        <div className="absolute top-2 right-2 w-3 h-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse shadow-lg"></div>
+        <div className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
       )}
-
-      {/* Priority indicator - more prominent */}
+      
       {day.events.some(e => e.priority === 'high') && (
-        <div className="absolute bottom-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-md"></div>
+        <div className="absolute bottom-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full"></div>
       )}
     </div>
   );
 }
 
-// Expanded currency formatting - more readable
-const formatExpandedCurrency = (amount: number): string => {
+// Ultra compact currency formatting
+const formatCompactCurrency = (amount: number): string => {
   if (amount >= 1000000) {
     return `${(amount / 1000000).toFixed(1)}M`;
   } else if (amount >= 1000) {

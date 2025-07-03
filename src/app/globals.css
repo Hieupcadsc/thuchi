@@ -668,3 +668,187 @@ html, body {
     min-height: 44px;
   }
 }
+
+/* Full HD Optimization - Better visibility for 1920x1080 screens */
+@media (min-width: 1920px) {
+  /* Base font size increase for better readability */
+  html {
+    font-size: 18px; /* Increase from default 16px */
+  }
+  
+  body {
+    @apply text-lg; /* Larger base text */
+  }
+
+  /* Enhanced button sizes for Full HD */
+  .btn-fhd {
+    @apply text-lg px-6 py-4 min-h-[48px] font-semibold;
+  }
+  
+  .btn-fhd-large {
+    @apply text-xl px-8 py-5 min-h-[56px] font-semibold;
+  }
+
+  /* Card improvements for Full HD */
+  .card-fhd {
+    @apply p-8 rounded-2xl shadow-lg border-2;
+  }
+  
+  .card-header-fhd {
+    @apply pb-6 mb-6;
+  }
+  
+  .card-title-fhd {
+    @apply text-2xl font-bold mb-3;
+  }
+  
+  .card-content-fhd {
+    @apply text-lg space-y-4;
+  }
+
+  /* Dashboard grid optimization */
+  .dashboard-grid-fhd {
+    @apply grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-8;
+  }
+  
+  .summary-card-fhd {
+    @apply p-8 rounded-2xl;
+  }
+  
+  .summary-card-title-fhd {
+    @apply text-lg font-semibold mb-3;
+  }
+  
+  .summary-card-value-fhd {
+    @apply text-3xl font-bold mb-2;
+  }
+
+  /* Form improvements */
+  .input-fhd {
+    @apply text-lg px-6 py-4 min-h-[52px] rounded-xl;
+  }
+  
+  .label-fhd {
+    @apply text-lg font-semibold mb-3;
+  }
+  
+  .select-fhd {
+    @apply text-lg px-6 py-4 min-h-[52px] rounded-xl;
+  }
+
+  /* Navigation improvements */
+  .nav-link-fhd {
+    @apply text-lg px-6 py-4 font-medium;
+  }
+  
+  .nav-button-fhd {
+    @apply text-lg px-6 py-4 min-h-[48px];
+  }
+
+  /* Table improvements */
+  .table-fhd {
+    @apply text-lg;
+  }
+  
+  .table-header-fhd {
+    @apply text-lg font-semibold py-5 px-6;
+  }
+  
+  .table-cell-fhd {
+    @apply text-lg py-5 px-6;
+  }
+
+  /* Modal improvements */
+  .modal-fhd {
+    @apply max-w-4xl;
+  }
+  
+  .modal-header-fhd {
+    @apply text-2xl font-bold mb-6;
+  }
+  
+  .modal-content-fhd {
+    @apply text-lg space-y-6;
+  }
+
+  /* Enhanced spacing for Full HD */
+  .container-fhd {
+    @apply max-w-7xl mx-auto px-8 py-8;
+  }
+  
+  .section-spacing-fhd {
+    @apply space-y-12;
+  }
+  
+  .element-spacing-fhd {
+    @apply space-y-6;
+  }
+
+  /* High contrast colors for better visibility */
+  .high-contrast {
+    filter: contrast(1.25) saturate(1.1);
+  }
+  
+  /* Enhanced focus states */
+  .focus-fhd:focus {
+    @apply ring-4 ring-primary/50 ring-offset-4;
+  }
+
+  /* Icon sizing for Full HD */
+  .icon-sm-fhd {
+    @apply w-6 h-6;
+  }
+  
+  .icon-md-fhd {
+    @apply w-8 h-8;
+  }
+  
+  .icon-lg-fhd {
+    @apply w-10 h-10;
+  }
+  
+  .icon-xl-fhd {
+    @apply w-12 h-12;
+  }
+
+  /* Chart improvements */
+  .chart-container-fhd {
+    @apply h-[600px];
+  }
+  
+  /* Better visibility shadows */
+  .shadow-fhd {
+    box-shadow: 
+      0 10px 15px -3px rgba(0, 0, 0, 0.15),
+      0 4px 6px -2px rgba(0, 0, 0, 0.1);
+  }
+  
+  .dark .shadow-fhd {
+    box-shadow: 
+      0 10px 15px -3px rgba(0, 0, 0, 0.4),
+      0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Ultra-wide screen optimization (2560px+) */
+@media (min-width: 2560px) {
+  html {
+    font-size: 20px;
+  }
+  
+  .container-uhd {
+    @apply max-w-screen-2xl mx-auto px-12 py-12;
+  }
+  
+  .btn-uhd {
+    @apply text-xl px-10 py-6 min-h-[64px];
+  }
+  
+  .card-uhd {
+    @apply p-12 rounded-3xl;
+  }
+  
+  .summary-card-value-uhd {
+    @apply text-4xl font-bold;
+  }
+}

@@ -188,7 +188,7 @@ export default function SmartHubPage() {
             
             <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg">
               <div className="text-3xl font-bold text-green-600 mb-2">-12%</div>
-              <p className="text-sm font-medium text-green-700">Tiết kiệm điện dự kiến</p>
+              <p className="text-sm font-medium text-green-700">Nhờ thời tiết mát mẻ và smart control</p>
               <p className="text-xs text-green-600 mt-1">Nhờ thời tiết mát mẻ và smart control</p>
             </div>
             

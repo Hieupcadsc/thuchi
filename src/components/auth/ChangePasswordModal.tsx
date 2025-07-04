@@ -76,7 +76,7 @@ export function ChangePasswordModal({ isOpen, onClose, isForced = false, onPassw
       }
 
       // Show success message
-      alert('✅ Đổi mật khẩu thành công!');
+      alert('✅ Đổi mật khẩu thành công!\nBạn hãy đăng nhập lại bằng mật khẩu mới. Nếu đây là lần đầu đổi mật khẩu cho tài khoản này, tài khoản sẽ được lưu vào hệ thống và chỉ đăng nhập được bằng mật khẩu mới.');
       
       // Update localStorage for immediate UI feedback
       localStorage.setItem(`password_strength_${currentUser}`, 'strong');

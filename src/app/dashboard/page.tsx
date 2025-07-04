@@ -28,7 +28,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from "@/components/ui/chart"
 import { Bar, BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import type { Transaction } from '@/types';
-import { MONTH_NAMES, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID } from '@/lib/constants';
+import { MONTH_NAMES, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID } from '@/lib/constants';
 import { format, subMonths } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import {
@@ -87,6 +87,7 @@ export default function DashboardPage() {
   const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadNotifications, setUploadNotifications] = useState<any[]>([]);
+  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
 
   useEffect(() => {
     const now = new Date();
@@ -161,50 +162,30 @@ export default function DashboardPage() {
 
   // OPTIMIZED: Memoize calculations to avoid recalculating on every render
   const calculatedSummary = useMemo(() => {
-    if (!currentUser || !familyId || transactions.length === 0) {
-      return initialSummary;
-    }
+    if (!currentUser || transactions.length === 0) return initialSummary;
 
-    // Calculate all-time totals from ALL transactions in the store
-    let allTimeTotalIncome = 0;
-    let allTimeTotalExpense = 0;
-    let allTimeIncomeBank = 0;
-    let allTimeExpenseBank = 0;
-    let allTimeIncomeCash = 0;
-    let allTimeExpenseCash = 0;
+    // Tính từ toàn bộ transactions (all-time) để có số dư chính xác
+    const allTxs = transactions
+      .filter(t => ![RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId));
 
-    transactions.forEach(t => {
-      // Skip internal transfers for total income/expense calculation
-      if (t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID) {
-        if (t.type === 'income') {
-          allTimeTotalIncome += t.amount;
-        } else {
-          allTimeTotalExpense += t.amount;
-        }
-      }
+    const sumBy = (txs: any[], type: 'income' | 'expense', src?: 'bank' | 'cash') =>
+      txs.filter(t => t.type === type && (src ? t.paymentSource === src : true))
+         .reduce((s, t) => s + t.amount, 0);
 
-      // Calculate by payment source for balance breakdown
-      if (t.type === 'income') {
-        if (t.paymentSource === 'bank') allTimeIncomeBank += t.amount;
-        else if (t.paymentSource === 'cash') allTimeIncomeCash += t.amount;
-      } else { // expense
-        if (t.paymentSource === 'bank') allTimeExpenseBank += t.amount;
-        else if (t.paymentSource === 'cash') allTimeExpenseCash += t.amount;
-      }
-    });
-
-    const allTimeBalanceBank = allTimeIncomeBank - allTimeExpenseBank;
-    const allTimeBalanceCash = allTimeIncomeCash - allTimeExpenseCash;
-    const allTimeTotalBalance = allTimeBalanceBank + allTimeBalanceCash;
-
+    // Tính số dư all-time (cộng dồn tất cả giao dịch)
+    const totalIncome = sumBy(allTxs, 'income');
+    const totalExpense = sumBy(allTxs, 'expense');
+    const balanceBank = sumBy(allTxs, 'income', 'bank') - sumBy(allTxs, 'expense', 'bank');
+    const balanceCash = sumBy(allTxs, 'income', 'cash') - sumBy(allTxs, 'expense', 'cash');
+    
     return {
-      totalIncome: allTimeTotalIncome,
-      totalExpense: allTimeTotalExpense,
-      balanceBank: allTimeBalanceBank,
-      balanceCash: allTimeBalanceCash,
-      totalBalance: allTimeTotalBalance,
-    };
-  }, [currentUser, familyId, transactions]);
+      totalIncome,
+      totalExpense,
+      balanceBank,
+      balanceCash,
+      totalBalance: balanceBank + balanceCash,
+    } as any;
+  }, [currentUser, transactions]);
 
   // OPTIMIZED: Memoize chart data calculation
   const calculatedChartData = useMemo(() => {
@@ -237,6 +218,16 @@ export default function DashboardPage() {
     return chartData;
   }, [currentUser, familyId, currentMonthYear, getTransactionsForFamilyByMonth]);
 
+  // Thu / Chi của tháng hiện tại
+  const monthlyTotals = useMemo(() => {
+    if (!currentUser || transactions.length === 0) return { income: 0, expense: 0 };
+    const monthKey = format(new Date(), 'yyyy-MM');
+    const txs = transactions.filter(t => t.date.startsWith(monthKey) && ![RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId));
+    const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    return { income, expense };
+  }, [currentUser, transactions]);
+
   // Update state when memoized values change
   useEffect(() => {
     setSummary(calculatedSummary);
@@ -245,6 +236,17 @@ export default function DashboardPage() {
   useEffect(() => {
     setMonthlyChartData(calculatedChartData);
   }, [calculatedChartData]);
+
+  // Force re-render khi transactions thay đổi
+  useEffect(() => {
+    if (transactions.length > 0) {
+      // Trigger một re-render nhỏ để đảm bảo UI cập nhật
+      const timer = setTimeout(() => {
+        setSummary(prev => ({ ...prev }));
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [transactions.length]);
 
   const handleRefreshDashboard = useCallback(async () => {
     // OPTIMIZED: Debounce refresh to prevent rapid successive calls
@@ -289,7 +291,23 @@ export default function DashboardPage() {
           onAddFromBill={() => window.location.href = '/transactions?mode=bill'}
           onSearch={() => window.location.href = '/transactions'}
           onFilter={() => window.location.href = '/transactions'}
+          onCalendar={() => setIsCalendarModalOpen(true)}
         />
+
+        {/* Calendar Modal for mobile */}
+        <Dialog open={isCalendarModalOpen} onOpenChange={setIsCalendarModalOpen}>
+          <DialogContent className="max-w-[98vw] max-h-[98vh] w-full h-full overflow-y-auto p-0">
+            <DialogHeader className="px-4 py-2 border-b bg-gradient-to-r from-emerald-50 to-teal-50">
+              <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-emerald-600" />
+                Lịch Gia Đình Thông Minh
+              </DialogTitle>
+            </DialogHeader>
+            <div className="p-2">
+              <TransactionCalendar onUploadSuccess={addUploadNotification} />
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -322,7 +340,7 @@ export default function DashboardPage() {
     }
   };
 
-  const addUploadNotification = (result: any) => {
+  function addUploadNotification(result: any) {
     const notification = {
       id: `upload-${Date.now()}`,
       type: 'success',
@@ -333,15 +351,12 @@ export default function DashboardPage() {
       priority: 'high',
       details: result.notifications || []
     };
-    
-    setUploadNotifications(prev => [notification, ...prev.slice(0, 4)]); // Keep max 5 notifications
-    
-    // Show toast notification
+    setUploadNotifications(prev => [notification, ...prev.slice(0, 4)]);
     toast({
-      title: "🎉 Upload lịch thành công!",
+      title: '🎉 Upload lịch thành công!',
       description: `Đã thêm ${result.summary?.totalShifts || 0} ca làm việc tháng ${result.summary?.month}/${result.summary?.year}`,
     });
-  };
+  }
 
   return (
     <div className="space-y-6 section-spacing-fhd container-fhd">
@@ -449,27 +464,25 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 xl:gap-8 animate-slide-up dashboard-grid-fhd">
-              <SummaryCard 
-                title={`Tổng thu nhập`} 
-                value={formatCurrency(summary.totalIncome)} 
+            <div key={`summary-${transactions.length}-${JSON.stringify(monthlyTotals)}`} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 xl:gap-8 animate-slide-up dashboard-grid-fhd">
+              <SummaryCard
+                title="Tổng thu nhập (tháng này)"
+                value={isLoading && transactions.length === 0 ? "Đang tải..." : formatCurrency(monthlyTotals.income)}
                 variant="income"
-                trend={summary.totalIncome > 0 ? { value: 12.5, isPositive: true } : undefined}
               />
-              <SummaryCard 
-                title={`Tổng chi tiêu`} 
-                value={formatCurrency(summary.totalExpense)} 
+              <SummaryCard
+                title="Tổng chi tiêu (tháng này)"
+                value={isLoading && transactions.length === 0 ? "Đang tải..." : formatCurrency(monthlyTotals.expense)}
                 variant="expense"
-                trend={summary.totalExpense > 0 ? { value: 8.2, isPositive: false } : undefined}
               />
               <SummaryCard 
                 title="Ngân hàng"
-                value={formatCurrency(summary.balanceBank)} 
+                value={isLoading && transactions.length === 0 ? "Đang tải..." : formatCurrency(summary.balanceBank)} 
                 variant="bank"
               />
               <SummaryCard 
                 title="Tổng số dư"
-                value={formatCurrency(summary.totalBalance)} 
+                value={isLoading && transactions.length === 0 ? "Đang tải..." : formatCurrency(summary.totalBalance)} 
                 variant="balance"
               />
             </div>
@@ -487,7 +500,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="card-content-fhd">
                   <div className="text-2xl xl:text-4xl 2xl:text-5xl font-bold bg-gradient-to-r from-purple-700 to-violet-600 bg-clip-text text-transparent mb-3 summary-card-value-fhd">
-                    {formatCurrency(summary.balanceCash)}
+                    {isLoading && transactions.length === 0 ? "Đang tải..." : formatCurrency(summary.balanceCash)}
                   </div>
                 </CardContent>
               </Card>

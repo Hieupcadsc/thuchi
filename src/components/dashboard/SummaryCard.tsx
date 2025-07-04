@@ -77,15 +77,15 @@ export function SummaryCard({
   const getDefaultIcon = () => {
     switch (variant) {
       case 'income':
-        return <TrendingUp className="h-5 w-5 xl:h-8 xl:w-8 icon-md-fhd" />;
+        return <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6" />;
       case 'expense':
-        return <TrendingDown className="h-5 w-5 xl:h-8 xl:w-8 icon-md-fhd" />;
+        return <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6" />;
       case 'cash':
-        return <Wallet className="h-5 w-5 xl:h-8 xl:w-8 icon-md-fhd" />;
+        return <Wallet className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6" />;
       case 'bank':
-        return <Landmark className="h-5 w-5 xl:h-8 xl:w-8 icon-md-fhd" />;
+        return <Landmark className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6" />;
       default:
-        return <PiggyBank className="h-5 w-5 xl:h-8 xl:w-8 icon-md-fhd" />;
+        return <PiggyBank className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6" />;
     }
   };
 
@@ -100,14 +100,14 @@ export function SummaryCard({
       {/* Gradient overlay effect */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       
-      <CardContent className="p-6 xl:p-8 2xl:p-10 relative z-10 card-content-fhd">
+      <CardContent className="p-4 sm:p-5 lg:p-6 relative z-10">
         <div className="flex items-center justify-between">
-          <div className="space-y-3 xl:space-y-4">
-            <p className="text-sm xl:text-lg 2xl:text-xl font-medium text-muted-foreground/80 uppercase tracking-wide summary-card-title-fhd">
+          <div className="space-y-2 sm:space-y-3">
+            <p className="text-xs sm:text-sm lg:text-base font-medium text-muted-foreground/80 uppercase tracking-wide">
               {title}
             </p>
             <p className={cn(
-              "text-lg sm:text-xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-bold bg-gradient-to-r bg-clip-text text-transparent transition-all duration-300 group-hover:scale-105 summary-card-value-fhd",
+              "text-base sm:text-lg lg:text-xl xl:text-2xl font-bold bg-gradient-to-r bg-clip-text text-transparent transition-all duration-300 group-hover:scale-105",
               variant === 'income' ? "from-green-600 to-emerald-500" :
               variant === 'expense' ? "from-red-600 to-rose-500" :
               variant === 'cash' ? "from-purple-600 to-violet-500" :
@@ -139,7 +139,7 @@ export function SummaryCard({
           </div>
           
           <div className={cn(
-            "p-4 xl:p-6 2xl:p-8 rounded-2xl transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 animate-float",
+            "flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-xl shrink-0 transition-all duration-300 group-hover:scale-105",
             "bg-gradient-to-br shadow-lg shadow-fhd",
             variant === 'income' ? "from-green-500 to-emerald-600 shadow-green-500/25" :
             variant === 'expense' ? "from-red-500 to-rose-600 shadow-red-500/25" :

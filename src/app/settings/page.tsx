@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch'; // Assuming you might want a switch for theme
 import { useTheme } from '@/contexts/ThemeContext';
-import { APP_NAME, FAMILY_MEMBERS } from '@/lib/constants';
-import { Sun, Moon, Info, Palette, Download, Shield, Loader2, CheckCircle, Database, Cloud, Upload, FileText, Calendar, RotateCcw, AlertCircle } from 'lucide-react';
+import { APP_NAME, FAMILY_MEMBERS, DIEU_CHINH_SO_DU_CATEGORY_ID } from '@/lib/constants';
+import { Sun, Moon, Info, Palette, Download, Shield, Loader2, CheckCircle, Database, Cloud, Upload, FileText, Calendar, RotateCcw, AlertCircle, Banknote } from 'lucide-react';
 import { useAuthStore } from '@/hooks/useAuth';
 import { BackupService } from '@/lib/backup';
 import { useToast } from '@/hooks/use-toast';
@@ -17,11 +17,12 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { firestoreService } from '@/lib/firestore-service';
 import { format } from 'date-fns';
+import { Input } from '@/components/ui/input';
 
 
 export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme();
-  const { currentUser, familyId } = useAuthStore();
+  const { currentUser, familyId, transactions, addTransaction } = useAuthStore();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -34,6 +35,21 @@ export default function SettingsPage() {
   const [autoBackupStatus, setAutoBackupStatus] = useState<{ next: string; afterNext: string } | null>(null);
   const [localBackups, setLocalBackups] = useState<Array<{ key: string; date: string; data: any }>>([]);
   const [isTestingDelete, setIsTestingDelete] = useState(false);
+  const [bankTarget, setBankTarget] = useState(0);
+  const [cashTarget, setCashTarget] = useState(0);
+  const [isAdjusting, setIsAdjusting] = useState(false);
+
+  const balances = useMemo(() => {
+    let bank = 0, cash = 0;
+    transactions.forEach(t => {
+      if (t.paymentSource === 'bank') {
+        bank += t.type === 'income' ? t.amount : -t.amount;
+      } else if (t.paymentSource === 'cash') {
+        cash += t.type === 'income' ? t.amount : -t.amount;
+      }
+    });
+    return { bank, cash };
+  }, [transactions]);
 
   useEffect(() => {
     if (familyId) {
@@ -280,6 +296,89 @@ export default function SettingsPage() {
       });
     } finally {
       setIsTestingDelete(false);
+    }
+  };
+
+  const handleAdjustBalance = async () => {
+    if (!currentUser || !familyId) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng đăng nhập trước khi điều chỉnh số dư",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsAdjusting(true);
+    try {
+      // Tính chênh lệch cần điều chỉnh
+      const bankDiff = bankTarget - balances.bank;
+      const cashDiff = cashTarget - balances.cash;
+      
+      if (bankDiff === 0 && cashDiff === 0) {
+        toast({
+          title: "Không có gì thay đổi",
+          description: "Số dư hiện tại đã trùng với số dư mong muốn",
+        });
+        return;
+      }
+      
+      const today = format(new Date(), 'yyyy-MM-dd');
+      let successCount = 0;
+
+      // Điều chỉnh số dư ngân hàng
+      if (bankDiff !== 0) {
+        const bankTxData = {
+          description: `Điều chỉnh số dư ngân hàng ${bankDiff > 0 ? '+' : ''}${bankDiff.toLocaleString('vi-VN')}₫`,
+          amount: Math.abs(bankDiff),
+          date: today,
+          type: bankDiff > 0 ? 'income' : 'expense',
+          categoryId: DIEU_CHINH_SO_DU_CATEGORY_ID,
+          performedBy: currentUser,
+          paymentSource: 'bank',
+        } as const;
+        
+        const bankResult = await addTransaction(bankTxData);
+        if (bankResult) successCount++;
+      }
+
+      // Điều chỉnh số dư tiền mặt
+      if (cashDiff !== 0) {
+        const cashTxData = {
+          description: `Điều chỉnh số dư tiền mặt ${cashDiff > 0 ? '+' : ''}${cashDiff.toLocaleString('vi-VN')}₫`,
+          amount: Math.abs(cashDiff),
+          date: today,
+          type: cashDiff > 0 ? 'income' : 'expense',
+          categoryId: DIEU_CHINH_SO_DU_CATEGORY_ID,
+          performedBy: currentUser,
+          paymentSource: 'cash',
+        } as const;
+        
+        const cashResult = await addTransaction(cashTxData);
+        if (cashResult) successCount++;
+      }
+
+      if (successCount > 0) {
+        toast({
+          title: '✅ Điều chỉnh số dư thành công',
+          description: `Đã tạo ${successCount} giao dịch điều chỉnh. Refresh dashboard để xem kết quả.`,
+        });
+        
+        // Reset form
+        setBankTarget(balances.bank);
+        setCashTarget(balances.cash);
+      } else {
+        throw new Error('Không thể tạo giao dịch điều chỉnh');
+      }
+    } catch (error) {
+      console.error('Adjust balance failed:', error);
+      toast({
+        title: "❌ Điều chỉnh số dư thất bại",
+        description: error instanceof Error ? error.message : "Lỗi không xác định. Vui lòng thử lại.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsAdjusting(false);
     }
   };
 
@@ -590,6 +689,186 @@ export default function SettingsPage() {
           🧪 Test Delete Function
         </button>
       </div>
+
+      {/* Check Database Section */}
+      <div className="space-y-4 p-6 bg-blue-50 border-l-4 border-blue-400 rounded-lg">
+        <h3 className="text-lg font-medium text-blue-800">🔍 Kiểm Tra Database</h3>
+        <p className="text-sm text-blue-700">
+          Kiểm tra dữ liệu giao dịch trong Firestore database
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={async () => {
+              if (!currentUser || !familyId) return;
+              try {
+                console.log('🔍 Checking database transactions...');
+                const allTransactions = await firestoreService.getAllTransactions(familyId);
+                console.log(`📊 Total transactions in database: ${allTransactions.length}`);
+                
+                // Tính số dư tiền mặt từ database
+                const cashTransactions = allTransactions.filter(t => t.paymentSource === 'cash');
+                const cashIncome = cashTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+                const cashExpense = cashTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+                const cashBalance = cashIncome - cashExpense;
+                
+                // Tính số dư ngân hàng từ database
+                const bankTransactions = allTransactions.filter(t => t.paymentSource === 'bank');
+                const bankIncome = bankTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+                const bankExpense = bankTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+                const bankBalance = bankIncome - bankExpense;
+                
+                const message = `
+📊 KIỂM TRA DATABASE FIRESTORE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📈 Tổng giao dịch: ${allTransactions.length}
+
+💵 TIỀN MẶT:
+  • Thu nhập: ${cashIncome.toLocaleString('vi-VN')}₫
+  • Chi tiêu: ${cashExpense.toLocaleString('vi-VN')}₫
+  • SỐ DƯ: ${cashBalance.toLocaleString('vi-VN')}₫
+
+🏦 NGÂN HÀNG:
+  • Thu nhập: ${bankIncome.toLocaleString('vi-VN')}₫
+  • Chi tiêu: ${bankExpense.toLocaleString('vi-VN')}₫
+  • SỐ DƯ: ${bankBalance.toLocaleString('vi-VN')}₫
+
+💰 TỔNG SỐ DƯ: ${(cashBalance + bankBalance).toLocaleString('vi-VN')}₫
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                `;
+                
+                alert(message);
+                console.log(message);
+                
+                toast({
+                  title: "✅ Kiểm tra database hoàn tất",
+                  description: `Tiền mặt: ${cashBalance.toLocaleString('vi-VN')}₫ | Ngân hàng: ${bankBalance.toLocaleString('vi-VN')}₫`,
+                });
+              } catch (error: any) {
+                console.error('❌ Error checking database:', error);
+                alert('❌ Lỗi kiểm tra database: ' + error.message);
+              }
+            }}
+            className="px-4 py-2 bg-blue-100 border border-blue-300 text-blue-800 hover:bg-blue-200 rounded-md"
+          >
+            🔍 Kiểm tra số dư trong Database
+          </button>
+          
+          <button
+            onClick={async () => {
+              if (!currentUser || !familyId) return;
+              try {
+                const allTransactions = await firestoreService.getAllTransactions(familyId);
+                const last10 = allTransactions.slice(0, 10);
+                
+                console.log('📋 Last 10 transactions:');
+                last10.forEach((t, index) => {
+                  console.log(`${index + 1}. ${t.date} - ${t.description} - ${t.amount.toLocaleString('vi-VN')}₫ (${t.type} - ${t.paymentSource})`);
+                });
+                
+                const message = `📋 10 GIAO DỊCH GẦN NHẤT:\n${last10.map((t, i) => 
+                  `${i + 1}. ${t.date} - ${t.description}\n   ${t.amount.toLocaleString('vi-VN')}₫ (${t.type === 'income' ? 'Thu' : 'Chi'} - ${t.paymentSource === 'cash' ? 'Tiền mặt' : 'Ngân hàng'})`
+                ).join('\n\n')}`;
+                
+                alert(message);
+              } catch (error: any) {
+                alert('❌ Lỗi: ' + error.message);
+              }
+            }}
+            className="px-4 py-2 bg-green-100 border border-green-300 text-green-800 hover:bg-green-200 rounded-md"
+          >
+            📋 Xem 10 giao dịch mới nhất
+          </button>
+        </div>
+      </div>
+
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Banknote className="h-5 w-5" />
+            Điều Chỉnh Số Dư
+          </CardTitle>
+          <CardDescription>Nhập số dư mong muốn để hệ thống tự tạo giao dịch điều chỉnh.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Hiển thị số dư hiện tại */}
+          <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border">
+            <h4 className="font-semibold text-slate-800 dark:text-slate-200 mb-2">Số dư hiện tại:</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-600 dark:text-slate-400">Ngân hàng:</span>
+                <span className="font-medium text-slate-800 dark:text-slate-200">
+                  {balances.bank.toLocaleString('vi-VN')}₫
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-600 dark:text-slate-400">Tiền mặt:</span>
+                <span className="font-medium text-slate-800 dark:text-slate-200">
+                  {balances.cash.toLocaleString('vi-VN')}₫
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Số dư Ngân hàng mong muốn</Label>
+              <Input 
+                type="number" 
+                placeholder={balances.bank.toString()} 
+                value={bankTarget} 
+                onChange={e=>setBankTarget(Number(e.target.value))}
+                className="text-right"
+              />
+              <p className="text-xs text-muted-foreground">
+                Chênh lệch: {(bankTarget - balances.bank).toLocaleString('vi-VN')}₫
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Số dư Tiền mặt mong muốn</Label>
+              <Input 
+                type="number" 
+                placeholder={balances.cash.toString()} 
+                value={cashTarget} 
+                onChange={e=>setCashTarget(Number(e.target.value))}
+                className="text-right"
+              />
+              <p className="text-xs text-muted-foreground">
+                Chênh lệch: {(cashTarget - balances.cash).toLocaleString('vi-VN')}₫
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex gap-3">
+            <Button 
+              onClick={() => {
+                setBankTarget(balances.bank);
+                setCashTarget(balances.cash);
+              }}
+              variant="outline"
+              className="flex-1"
+              disabled={isAdjusting}
+            >
+              Reset về số dư hiện tại
+            </Button>
+            <Button 
+              onClick={handleAdjustBalance} 
+              disabled={isAdjusting || !currentUser || (bankTarget === balances.bank && cashTarget === balances.cash)} 
+              className="flex-1 bg-primary text-white"
+            >
+              {isAdjusting ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : null}
+              Lưu điều chỉnh
+            </Button>
+          </div>
+          
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-sm">
+              <strong>Lưu ý:</strong> Chức năng này sẽ tạo giao dịch điều chỉnh để đưa số dư về mức mong muốn. 
+              Các giao dịch này sẽ có danh mục "Điều chỉnh số dư" và không ảnh hưởng thống kê thu/chi.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
     </div>
   );
 }

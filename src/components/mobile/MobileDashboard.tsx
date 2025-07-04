@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 // formatCurrency is defined locally as formatMobileCurrency
 import { WithdrawCashModal } from '@/components/dashboard/WithdrawCashModal';
+import { NotificationCenter } from '@/components/dashboard/NotificationCenter';
+import { SharedNotes } from '@/components/dashboard/SharedNotes';
 
 interface MobileDashboardProps {
   summary: {
@@ -198,6 +200,12 @@ export function MobileDashboard({
           </Button>
         </CardContent>
       </Card>
+
+      {/* Family Shared Notes */}
+      <SharedNotes />
+
+      {/* Notification Center */}
+      <NotificationCenter />
 
       <WithdrawCashModal 
         isOpen={isWithdrawModalOpen} 

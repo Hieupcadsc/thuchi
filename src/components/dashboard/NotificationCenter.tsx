@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/hooks/useAuth';
+import { RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID } from '@/lib/constants';
 
 interface Notification {
   id: string;
@@ -58,12 +59,16 @@ export function NotificationCenter({ workSchedules = [], uploadNotifications = [
     // Get current month and last month transactions
     const currentMonthTransactions = transactions.filter(t => {
       const tDate = new Date(t.date);
-      return tDate >= currentMonth && tDate <= endOfMonth(now);
+      return tDate >= currentMonth && tDate <= endOfMonth(now)
+        && t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID
+        && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID;
     });
     
     const lastMonthTransactions = transactions.filter(t => {
       const tDate = new Date(t.date);
-      return tDate >= lastMonth && tDate < currentMonth;
+      return tDate >= lastMonth && tDate < currentMonth
+        && t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID
+        && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID;
     });
 
     const realNotifications: Notification[] = [];
@@ -157,7 +162,9 @@ export function NotificationCenter({ workSchedules = [], uploadNotifications = [
     const recentLargeTransactions = transactions.filter(t => {
       const tDate = new Date(t.date);
       const diffDays = differenceInDays(now, tDate);
-      return diffDays <= 3 && t.amount > 1000000; // > 1M VND
+      return diffDays <= 3 && t.amount > 1000000
+        && t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID
+        && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID;
     });
 
     recentLargeTransactions.forEach(t => {

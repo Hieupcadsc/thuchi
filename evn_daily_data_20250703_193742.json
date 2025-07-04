@@ -1,0 +1,61 @@
+{
+  "status": "mock_data",
+  "timestamp": "2025-07-03T19:33:51.707851",
+  "customer_info": {
+    "ten_khachhang": "Khách hàng TPHCM Demo",
+    "dia_chi": "TP Hồ Chí Minh",
+    "ma_congto": "CT123456",
+    "ma_khachhang": "PE0400065097"
+  },
+  "daily_consumption": {
+    "data": [
+      {
+        "ngay": "03/07/2025",
+        "san_luong": 12.0,
+        "chi_so": 1450,
+        "tien_uoc_tinh": 30000.0
+      },
+      {
+        "ngay": "02/07/2025",
+        "san_luong": 12.5,
+        "chi_so": 1462,
+        "tien_uoc_tinh": 31250.0
+      },
+      {
+        "ngay": "01/07/2025",
+        "san_luong": 13.0,
+        "chi_so": 1474,
+        "tien_uoc_tinh": 32500.0
+      },
+      {
+        "ngay": "30/06/2025",
+        "san_luong": 13.5,
+        "chi_so": 1486,
+        "tien_uoc_tinh": 33750.0
+      },
+      {
+        "ngay": "29/06/2025",
+        "san_luong": 14.0,
+        "chi_so": 1498,
+        "tien_uoc_tinh": 35000.0
+      },
+      {
+        "ngay": "28/06/2025",
+        "san_luong": 14.5,
+        "chi_so": 1510,
+        "tien_uoc_tinh": 36250.0
+      },
+      {
+        "ngay": "27/06/2025",
+        "san_luong": 15.0,
+        "chi_so": 1522,
+        "tien_uoc_tinh": 37500.0
+      }
+    ],
+    "tong_san_luong_thang": 94.5,
+    "tong_tien_uoc_tinh": 236250.0
+  },
+  "region": "EVNHCMC",
+  "customer_id": "PE0400065097",
+  "note": "Đây là dữ liệu giả vì không thể kết nối tới EVN!"
+}

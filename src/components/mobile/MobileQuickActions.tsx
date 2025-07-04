@@ -10,7 +10,8 @@ import {
   Filter, 
   ChevronUp,
   ChevronDown,
-  Zap
+  Zap,
+  Calendar
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -19,6 +20,7 @@ interface MobileQuickActionsProps {
   onAddFromBill: () => void;
   onSearch: () => void;
   onFilter: () => void;
+  onCalendar: () => void;
   className?: string;
 }
 
@@ -27,6 +29,7 @@ export function MobileQuickActions({
   onAddFromBill,
   onSearch,
   onFilter,
+  onCalendar,
   className
 }: MobileQuickActionsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -38,6 +41,12 @@ export function MobileQuickActions({
       onClick: onAddTransaction,
       color: 'bg-green-500 hover:bg-green-600',
       primary: true
+    },
+    {
+      icon: Calendar,
+      label: 'Lịch',
+      onClick: onCalendar,
+      color: 'bg-teal-500 hover:bg-teal-600'
     },
     {
       icon: Camera,

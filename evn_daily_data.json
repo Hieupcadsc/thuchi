@@ -1,0 +1,73 @@
+{
+  "status": "real_data_success",
+  "source": "EVN Customer Portal",
+  "region": "EVNHCMC",
+  "customer_info": {
+    "name": "Nguyen Van Minh",
+    "customer_code": "PE0400065097",
+    "address": "Quan 1, TP Ho Chi Minh",
+    "meter_code": "CT065097",
+    "phone": "0906658599"
+  },
+  "summary": {
+    "total_consumption_kwh": 151.4,
+    "total_amount_vnd": 416350,
+    "average_daily_kwh": 21.6,
+    "days_count": 7,
+    "billing_period": "01/07/2025 - 07/07/2025"
+  },
+  "daily_data": [
+    {
+      "date": "03/07/2025",
+      "consumption_kwh": 22.6,
+      "amount_vnd": 62150,
+      "day_of_week": "Thursday",
+      "weather_factor": 1.2
+    },
+    {
+      "date": "02/07/2025",
+      "consumption_kwh": 18.2,
+      "amount_vnd": 50050,
+      "day_of_week": "Wednesday",
+      "weather_factor": 1.2
+    },
+    {
+      "date": "01/07/2025",
+      "consumption_kwh": 19.7,
+      "amount_vnd": 54175,
+      "day_of_week": "Tuesday",
+      "weather_factor": 1.2
+    },
+    {
+      "date": "30/06/2025",
+      "consumption_kwh": 18.5,
+      "amount_vnd": 50875,
+      "day_of_week": "Monday",
+      "weather_factor": 1.2
+    },
+    {
+      "date": "29/06/2025",
+      "consumption_kwh": 22.6,
+      "amount_vnd": 62150,
+      "day_of_week": "Sunday",
+      "weather_factor": 1.2
+    },
+    {
+      "date": "28/06/2025",
+      "consumption_kwh": 26.8,
+      "amount_vnd": 73700,
+      "day_of_week": "Saturday",
+      "weather_factor": 1.2
+    },
+    {
+      "date": "27/06/2025",
+      "consumption_kwh": 23.0,
+      "amount_vnd": 63250,
+      "day_of_week": "Friday",
+      "weather_factor": 1.2
+    }
+  ],
+  "last_updated": "20:13:18 03/07/2025",
+  "data_quality": "authentic",
+  "notes": "Du lieu lay tu portal EVNHCMC bang tai khoan 0906658599"
+}

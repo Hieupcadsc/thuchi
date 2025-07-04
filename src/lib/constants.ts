@@ -1,4 +1,3 @@
-
 import type { Category, FamilyMember, PaymentSource, UserType } from '@/types';
 import { Utensils, ShoppingCart, Car, Home, Receipt, Film, HeartPulse, BookOpen, MoreHorizontal, TrendingUp, TrendingDown, LayoutDashboard, ArrowRightLeft, LineChart, Settings, LogOut, CircleDollarSign, Moon, Sun, Landmark, Wallet, ArrowDownUp, ArrowUpDown, HandCoins, PiggyBank, Sparkles } from 'lucide-react'; // Added Settings and Sparkles
 import type { LucideIcon } from 'lucide-react';
@@ -31,6 +30,7 @@ export const CATEGORIES: Category[] = [
   { id: 'nap_tien_mat_tu_nh', name: 'Nạp tiền mặt (từ NH)', icon: ArrowUpDown, type: 'income' }, // To Cash
   { id: 'cho_muon_tien', name: 'Cho mượn tiền', icon: HandCoins, type: 'expense' }, // Lending money
   { id: 'thu_no', name: 'Thu nợ', icon: PiggyBank, type: 'income' }, // Collecting debt
+  { id: 'dieu_chinh_so_du', name: 'Điều chỉnh số dư', icon: MoreHorizontal, type: 'income' },
 ];
 
 export const NAV_LINKS = [
@@ -57,6 +57,7 @@ export const RUT_TIEN_MAT_CATEGORY_ID = 'rut_tien_mat';
 export const NAP_TIEN_MAT_CATEGORY_ID = 'nap_tien_mat_tu_nh';
 export const CHO_MUON_TIEN_CATEGORY_ID = 'cho_muon_tien';
 export const THU_NO_CATEGORY_ID = 'thu_no';
+export const DIEU_CHINH_SO_DU_CATEGORY_ID = 'dieu_chinh_so_du';
 
 // For Shared Notes feature - SQLite doesn't need these for sheet interaction
 // export const SHARED_NOTES_SHEET_NAME = "SharedNotes";

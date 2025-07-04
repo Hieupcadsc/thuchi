@@ -164,19 +164,22 @@ export default function DashboardPage() {
   const calculatedSummary = useMemo(() => {
     if (!currentUser || transactions.length === 0) return initialSummary;
 
-    // Tính từ toàn bộ transactions (all-time) để có số dư chính xác
-    const allTxs = transactions
+    // Tách riêng: giao dịch cho tổng thu/chi vs giao dịch cho số dư
+    const statsTransactions = transactions
       .filter(t => ![RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId));
+    
+    const balanceTransactions = transactions
+      .filter(t => ![RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID].includes(t.categoryId)); // Bao gồm DIEU_CHINH_SO_DU
 
     const sumBy = (txs: any[], type: 'income' | 'expense', src?: 'bank' | 'cash') =>
       txs.filter(t => t.type === type && (src ? t.paymentSource === src : true))
          .reduce((s, t) => s + t.amount, 0);
 
     // Tính số dư all-time (cộng dồn tất cả giao dịch)
-    const totalIncome = sumBy(allTxs, 'income');
-    const totalExpense = sumBy(allTxs, 'expense');
-    const balanceBank = sumBy(allTxs, 'income', 'bank') - sumBy(allTxs, 'expense', 'bank');
-    const balanceCash = sumBy(allTxs, 'income', 'cash') - sumBy(allTxs, 'expense', 'cash');
+    const totalIncome = sumBy(statsTransactions, 'income');
+    const totalExpense = sumBy(statsTransactions, 'expense');
+    const balanceBank = sumBy(balanceTransactions, 'income', 'bank') - sumBy(balanceTransactions, 'expense', 'bank');
+    const balanceCash = sumBy(balanceTransactions, 'income', 'cash') - sumBy(balanceTransactions, 'expense', 'cash');
     
     return {
       totalIncome,

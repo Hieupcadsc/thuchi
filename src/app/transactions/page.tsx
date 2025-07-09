@@ -35,6 +35,14 @@ import {
   AlertDialogTrigger, // Added AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
 
+// Helper function để sort transactions theo thời gian tạo chính xác  
+const sortTransactionsByCreationTime = (a: Transaction, b: Transaction): number => {
+  // Ưu tiên createdAt nếu có, fallback về date nếu không có createdAt
+  const aTime = a.createdAt ? new Date(a.createdAt).getTime() : parseISO(a.date).getTime();
+  const bTime = b.createdAt ? new Date(b.createdAt).getTime() : parseISO(b.date).getTime();
+  return bTime - aTime; // Mới nhất trước
+};
+
 
 
 export default function TransactionsPage() {
@@ -205,7 +213,7 @@ export default function TransactionsPage() {
       filtered = filtered.filter(t => t.performedBy === filterPerformedBy);
     }
     
-    return filtered.sort((a,b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
+    return filtered.sort(sortTransactionsByCreationTime);
 
   }, [currentUser, familyId, transactions, currentMonthYear, getTransactionsForFamilyByMonth, searchTerm, filterCategory, filterPerformedBy, filterStartDate, filterEndDate, isDateFilterActive]);
 

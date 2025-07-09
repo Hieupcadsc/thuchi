@@ -107,7 +107,7 @@ export function SummaryCard({
               {title}
             </p>
             <p className={cn(
-              "text-base sm:text-lg lg:text-xl xl:text-2xl font-bold bg-gradient-to-r bg-clip-text text-transparent transition-all duration-300 group-hover:scale-105",
+              "text-base sm:text-lg lg:text-xl xl:text-2xl font-bold bg-gradient-to-r bg-clip-text text-transparent transition-all duration-300 group-hover:scale-105 text-currency",
               variant === 'income' ? "from-green-600 to-emerald-500" :
               variant === 'expense' ? "from-red-600 to-rose-500" :
               variant === 'cash' ? "from-purple-600 to-violet-500" :

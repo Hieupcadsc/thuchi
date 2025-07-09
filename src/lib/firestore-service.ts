@@ -12,12 +12,20 @@ import {
   getDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Transaction, SharedNote, CalendarEvent, WorkSchedule } from '@/types';
+import type { Transaction, SharedNote, CalendarEvent, WorkSchedule, StickyNote } from '@/types';
 
 const TRANSACTIONS_COLLECTION = 'transactions';
 const SHARED_NOTES_COLLECTION = 'shared_notes';
 const CALENDAR_EVENTS_COLLECTION = 'calendar_events';
 const WORK_SCHEDULES_COLLECTION = 'work_schedules';
+
+// Helper function để sort transactions theo thời gian tạo chính xác  
+const sortTransactionsByCreationTime = (a: Transaction, b: Transaction): number => {
+  // Ưu tiên createdAt nếu có, fallback về date nếu không có createdAt
+  const aTime = a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.date).getTime();
+  const bTime = b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.date).getTime();
+  return bTime - aTime; // Mới nhất trước
+};
 
 // Helper function to remove undefined values from object
 const cleanData = (obj: any) => {
@@ -56,7 +64,7 @@ export const firestoreService = {
         return { id: doc.id, ...otherData } as Transaction;
       })
       .filter(transaction => transaction.monthYear === monthYear)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort(sortTransactionsByCreationTime);
   },
 
   // Update transaction
@@ -202,8 +210,8 @@ export const firestoreService = {
         } as Transaction;
       });
       
-      // Sort client-side
-      const sortedTransactions = transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // Sort client-side theo thời gian tạo chính xác
+      const sortedTransactions = transactions.sort(sortTransactionsByCreationTime);
       console.log('✅ [firestoreService.getAllTransactions] Returning', sortedTransactions.length, 'sorted transactions');
       
       return sortedTransactions;
@@ -369,6 +377,113 @@ export const firestoreService = {
       
     } catch (error) {
       console.error(`❌ [firestoreService] Error deleting work schedules for ${employeeName} in ${year}/${month}:`, error);
+      throw error;
+    }
+  },
+
+  // Sticky Notes operations
+  async getStickyNotes(familyId: string): Promise<StickyNote[]> {
+    try {
+      console.log('📌 [firestoreService.getStickyNotes] Starting fetch for familyId:', familyId);
+      
+      const q = query(
+        collection(db, 'sticky_notes'),
+        where('familyId', '==', familyId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      console.log('📊 [firestoreService.getStickyNotes] Found', querySnapshot.docs.length, 'sticky notes');
+      
+      const notes = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as StickyNote));
+      
+      // Sort by updatedAt, pinned notes first
+      const sortedNotes = notes.sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
+      
+      console.log('✅ [firestoreService.getStickyNotes] Returning', sortedNotes.length, 'sorted sticky notes');
+      return sortedNotes;
+    } catch (error) {
+      console.error('💥 [firestoreService.getStickyNotes] Error getting sticky notes:', error);
+      throw error;
+    }
+  },
+
+  async addStickyNote(note: Omit<StickyNote, 'id'>): Promise<StickyNote> {
+    try {
+      console.log('📝 [firestoreService.addStickyNote] Creating new sticky note');
+      const cleanedNote = cleanData(note);
+      const docRef = await addDoc(collection(db, 'sticky_notes'), cleanedNote);
+      console.log('✅ [firestoreService.addStickyNote] Created sticky note with ID:', docRef.id);
+      return { id: docRef.id, ...cleanedNote };
+    } catch (error) {
+      console.error('💥 [firestoreService.addStickyNote] Error adding sticky note:', error);
+      throw error;
+    }
+  },
+
+  async updateStickyNote(id: string, updates: Partial<StickyNote>): Promise<void> {
+    try {
+      console.log('✏️ [firestoreService.updateStickyNote] Updating sticky note:', id);
+      const docRef = doc(db, 'sticky_notes', id);
+      const cleanedUpdates = cleanData(updates);
+      await updateDoc(docRef, cleanedUpdates);
+      console.log('✅ [firestoreService.updateStickyNote] Updated sticky note successfully');
+    } catch (error) {
+      console.error('💥 [firestoreService.updateStickyNote] Error updating sticky note:', error);
+      throw error;
+    }
+  },
+
+  async deleteStickyNote(noteId: string): Promise<void> {
+    try {
+      console.log('🗑️ [firestoreService.deleteStickyNote] Deleting sticky note:', noteId);
+      const docRef = doc(db, 'sticky_notes', noteId);
+      
+      // Check if document exists before delete
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) {
+        console.warn('⚠️ [firestoreService.deleteStickyNote] Sticky note does not exist:', noteId);
+        return;
+      }
+      
+      await deleteDoc(docRef);
+      console.log('✅ [firestoreService.deleteStickyNote] Deleted sticky note successfully');
+    } catch (error) {
+      console.error('💥 [firestoreService.deleteStickyNote] Error deleting sticky note:', error);
+      throw error;
+    }
+  },
+
+  // Bulk operations for sticky notes
+  async bulkDeleteStickyNotes(noteIds: string[]): Promise<void> {
+    try {
+      console.log('🔄 [firestoreService.bulkDeleteStickyNotes] Bulk deleting sticky notes:', noteIds);
+      
+      if (noteIds.length === 0) {
+        console.log('⚠️ No sticky note IDs provided, skipping delete');
+        return;
+      }
+
+      const batch = writeBatch(db);
+      
+      noteIds.forEach((id, index) => {
+        console.log(`📝 Adding delete operation ${index + 1}/${noteIds.length} for sticky note ID: ${id}`);
+        const docRef = doc(db, 'sticky_notes', id);
+        batch.delete(docRef);
+      });
+      
+      console.log('💾 Committing batch delete operation for sticky notes...');
+      await batch.commit();
+      console.log('✅ Batch delete committed successfully for sticky notes');
+      
+    } catch (error) {
+      console.error('❌ Error in bulkDeleteStickyNotes:', error);
       throw error;
     }
   }

@@ -705,13 +705,13 @@ export default function SettingsPage() {
                 const allTransactions = await firestoreService.getAllTransactions(familyId);
                 console.log(`📊 Total transactions in database: ${allTransactions.length}`);
                 
-                // Tính số dư tiền mặt từ database
+                // Tính số dư tiền mặt từ database (bao gồm TẤT CẢ)
                 const cashTransactions = allTransactions.filter(t => t.paymentSource === 'cash');
                 const cashIncome = cashTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
                 const cashExpense = cashTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
                 const cashBalance = cashIncome - cashExpense;
                 
-                // Tính số dư ngân hàng từ database
+                // Tính số dư ngân hàng từ database (bao gồm TẤT CẢ)
                 const bankTransactions = allTransactions.filter(t => t.paymentSource === 'bank');
                 const bankIncome = bankTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
                 const bankExpense = bankTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
@@ -781,64 +781,89 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <Card className="shadow-lg">
+      {/* ENHANCED Balance Adjustment Section */}
+      <Card className="shadow-lg border-orange-200 dark:border-orange-800">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Banknote className="h-5 w-5" />
-            Điều Chỉnh Số Dư
+          <CardTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+            <Banknote className="h-6 w-6" />
+            ⚖️ Điều Chỉnh Số Dư Thực Tế
           </CardTitle>
-          <CardDescription>Nhập số dư mong muốn để hệ thống tự tạo giao dịch điều chỉnh.</CardDescription>
+          <CardDescription className="text-orange-600 dark:text-orange-400">
+            🎯 <strong>Mục đích:</strong> Chỉnh số dư trong app cho khớp với thực tế (ví, ngân hàng). 
+            Dùng khi phát hiện sai số do lỗi nhập liệu hoặc thiếu giao dịch.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Hiển thị số dư hiện tại */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border">
-            <h4 className="font-semibold text-slate-800 dark:text-slate-200 mb-2">Số dư hiện tại:</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              <div className="flex justify-between items-center">
-                <span className="text-slate-600 dark:text-slate-400">Ngân hàng:</span>
-                <span className="font-medium text-slate-800 dark:text-slate-200">
+        <CardContent className="space-y-6">
+          
+          {/* Current Balance Display */}
+          <div className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-xl border border-blue-200 dark:border-blue-800">
+            <h4 className="font-bold text-blue-800 dark:text-blue-200 mb-4 flex items-center gap-2">
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+              📊 Số dư hiện tại trong APP:
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-lg border text-center">
+                <div className="text-xs text-slate-500 mb-1">🏦 NGÂN HÀNG</div>
+                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 text-currency">
                   {balances.bank.toLocaleString('vi-VN')}₫
-                </span>
+                </div>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-slate-600 dark:text-slate-400">Tiền mặt:</span>
-                <span className="font-medium text-slate-800 dark:text-slate-200">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-lg border text-center">
+                <div className="text-xs text-slate-500 mb-1">💵 TIỀN MẶT</div>
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400 text-currency">
                   {balances.cash.toLocaleString('vi-VN')}₫
-                </span>
+                </div>
+              </div>
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-lg border text-center">
+                <div className="text-xs text-slate-500 mb-1">💰 TỔNG</div>
+                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 text-currency">
+                  {(balances.bank + balances.cash).toLocaleString('vi-VN')}₫
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Số dư Ngân hàng mong muốn</Label>
-              <Input 
-                type="number" 
-                placeholder={balances.bank.toString()} 
-                value={bankTarget} 
-                onChange={e=>setBankTarget(Number(e.target.value))}
-                className="text-right"
-              />
-              <p className="text-xs text-muted-foreground">
-                Chênh lệch: {(bankTarget - balances.bank).toLocaleString('vi-VN')}₫
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label>Số dư Tiền mặt mong muốn</Label>
-              <Input 
-                type="number" 
-                placeholder={balances.cash.toString()} 
-                value={cashTarget} 
-                onChange={e=>setCashTarget(Number(e.target.value))}
-                className="text-right"
-              />
-              <p className="text-xs text-muted-foreground">
-                Chênh lệch: {(cashTarget - balances.cash).toLocaleString('vi-VN')}₫
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex gap-3">
+          {/* Quick Check Database Button */}
+          <div className="flex gap-2">
+            <Button 
+              onClick={async () => {
+                if (!currentUser || !familyId) return;
+                try {
+                  const allTransactions = await firestoreService.getAllTransactions(familyId);
+                  
+                                     // Tính số dư thực từ database (bao gồm TẤT CẢ để khớp với logic mới)
+                   const realTransactions = allTransactions;
+                  
+                  const cashIncome = realTransactions.filter(t => t.type === 'income' && t.paymentSource === 'cash').reduce((sum, t) => sum + t.amount, 0);
+                  const cashExpense = realTransactions.filter(t => t.type === 'expense' && t.paymentSource === 'cash').reduce((sum, t) => sum + t.amount, 0);
+                  const realCashBalance = cashIncome - cashExpense;
+                  
+                  const bankIncome = realTransactions.filter(t => t.type === 'income' && t.paymentSource === 'bank').reduce((sum, t) => sum + t.amount, 0);
+                  const bankExpense = realTransactions.filter(t => t.type === 'expense' && t.paymentSource === 'bank').reduce((sum, t) => sum + t.amount, 0);
+                  const realBankBalance = bankIncome - bankExpense;
+                  
+                  // Tự động điền vào form
+                  setBankTarget(realBankBalance);
+                  setCashTarget(realCashBalance);
+                  
+                  toast({
+                    title: "🔍 Đã tính toán số dư thực từ database",
+                    description: `Bank: ${realBankBalance.toLocaleString('vi-VN')}₫ | Cash: ${realCashBalance.toLocaleString('vi-VN')}₫`,
+                  });
+                } catch (error: any) {
+                  toast({
+                    title: "❌ Lỗi kiểm tra database",
+                    description: error.message,
+                    variant: "destructive"
+                  });
+                }
+              }}
+              variant="outline"
+              className="flex-1 border-blue-200 hover:bg-blue-50"
+            >
+              🔍 Tính toán số dư thực từ Database
+            </Button>
+            
             <Button 
               onClick={() => {
                 setBankTarget(balances.bank);
@@ -848,23 +873,110 @@ export default function SettingsPage() {
               className="flex-1"
               disabled={isAdjusting}
             >
-              Reset về số dư hiện tại
+              🔄 Reset form
             </Button>
+          </div>
+
+          {/* Adjustment Form */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <Label className="text-base font-semibold flex items-center gap-2">
+                🏦 Số dư Ngân hàng THỰC TẾ
+              </Label>
+              <Input 
+                type="number" 
+                placeholder="Nhập số dư thực tế trong ngân hàng" 
+                value={bankTarget || ''} 
+                onChange={e=>setBankTarget(Number(e.target.value))}
+                className="text-right text-lg h-12 border-blue-300 focus:border-blue-500"
+              />
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-slate-600">Chênh lệch:</span>
+                <span className={`font-bold text-currency ${
+                  (bankTarget - balances.bank) > 0 ? 'text-green-600' : 
+                  (bankTarget - balances.bank) < 0 ? 'text-red-600' : 'text-slate-600'
+                }`}>
+                  {bankTarget - balances.bank > 0 ? '+' : ''}{(bankTarget - balances.bank).toLocaleString('vi-VN')}₫
+                </span>
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              <Label className="text-base font-semibold flex items-center gap-2">
+                💵 Số dư Tiền mặt THỰC TẾ
+              </Label>
+              <Input 
+                type="number" 
+                placeholder="Nhập số dư thực tế trong ví" 
+                value={cashTarget || ''} 
+                onChange={e=>setCashTarget(Number(e.target.value))}
+                className="text-right text-lg h-12 border-green-300 focus:border-green-500"
+              />
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-slate-600">Chênh lệch:</span>
+                <span className={`font-bold text-currency ${
+                  (cashTarget - balances.cash) > 0 ? 'text-green-600' : 
+                  (cashTarget - balances.cash) < 0 ? 'text-red-600' : 'text-slate-600'
+                }`}>
+                  {cashTarget - balances.cash > 0 ? '+' : ''}{(cashTarget - balances.cash).toLocaleString('vi-VN')}₫
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Preset Buttons */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium text-slate-600">⚡ Quick Actions:</Label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <Button variant="outline" size="sm" onClick={() => { setBankTarget(0); setCashTarget(0); }}>
+                🏁 Reset về 0
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => { setBankTarget(1000000); setCashTarget(500000); }}>
+                💰 1M + 500K
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => { setBankTarget(5000000); setCashTarget(1000000); }}>
+                💎 5M + 1M
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => { setBankTarget(10000000); setCashTarget(2000000); }}>
+                🚀 10M + 2M
+              </Button>
+            </div>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex gap-4">
             <Button 
               onClick={handleAdjustBalance} 
               disabled={isAdjusting || !currentUser || (bankTarget === balances.bank && cashTarget === balances.cash)} 
-              className="flex-1 bg-primary text-white"
+              className="flex-1 bg-orange-600 hover:bg-orange-700 text-white h-12 text-lg font-semibold"
             >
-              {isAdjusting ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : null}
-              Lưu điều chỉnh
+              {isAdjusting ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin"/>
+                  Đang điều chỉnh...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  ⚖️ Điều chỉnh số dư ngay
+                </div>
+              )}
             </Button>
           </div>
           
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="text-sm">
-              <strong>Lưu ý:</strong> Chức năng này sẽ tạo giao dịch điều chỉnh để đưa số dư về mức mong muốn. 
-              Các giao dịch này sẽ có danh mục "Điều chỉnh số dư" và không ảnh hưởng thống kê thu/chi.
+          {/* Enhanced Alert */}
+          <Alert className="border-orange-200 bg-orange-50 dark:bg-orange-950/20">
+            <AlertCircle className="h-4 w-4 text-orange-600" />
+            <AlertDescription className="text-sm text-orange-800 dark:text-orange-200">
+              <div className="space-y-2">
+                               <div><strong>📝 Cách thức hoạt động:</strong></div>
+               <div>• Hệ thống sẽ tạo giao dịch điều chỉnh với category <code>DIEU_CHINH_SO_DU</code></div>
+               <div>• Giao dịch này <strong>SẼ</strong> được tính vào số dư hiển thị trên dashboard</div>
+               <div>• Nhưng <strong>KHÔNG</strong> ảnh hưởng thống kê thu/chi hàng tháng</div>
+               <div>• Chỉ dùng để sync số dư app với thực tế</div>
+                <div className="pt-2 border-t border-orange-200 dark:border-orange-800">
+                  <strong>⚠️ Lưu ý:</strong> Nên kiểm tra kỹ số dư thực tế trước khi điều chỉnh!
+                </div>
+              </div>
             </AlertDescription>
           </Alert>
         </CardContent>

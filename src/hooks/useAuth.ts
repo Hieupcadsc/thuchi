@@ -11,6 +11,14 @@ import { firestoreService } from '@/lib/firestore-service';
 const HIGH_EXPENSE_THRESHOLD = 1000000;
 const SHARED_PASSWORD = "123456";
 
+// Helper function để sort transactions theo thời gian tạo chính xác
+const sortTransactionsByCreationTime = (a: Transaction, b: Transaction): number => {
+  // Ưu tiên createdAt nếu có, fallback về date nếu không có createdAt
+  const aTime = a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.date).getTime();
+  const bTime = b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.date).getTime();
+  return bTime - aTime; // Mới nhất trước
+};
+
 interface AuthState {
   currentUser: FamilyMember | null;
   familyId: UserType | null;
@@ -134,6 +142,7 @@ export const useAuthStore = create<AuthState>()(
           note: transactionData.note || undefined,
           performedBy: loggedInUser, 
           paymentSource: transactionData.paymentSource,
+          createdAt: new Date().toISOString(), // Timestamp để sắp xếp chính xác theo thời gian tạo
         };
 
         const originalTransactions = get().transactions;
@@ -141,7 +150,7 @@ export const useAuthStore = create<AuthState>()(
         console.log("🔧 [useAuth] Adding transaction to state:", newTransaction);
         console.log("🔧 [useAuth] Current transactions in state:", get().transactions.length);
         set((state) => ({ 
-          transactions: [...state.transactions, newTransaction].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
+          transactions: [...state.transactions, newTransaction].sort(sortTransactionsByCreationTime) 
         }));
         console.log("🔧 [useAuth] After adding, transactions in state:", get().transactions.length);
 
@@ -152,7 +161,7 @@ export const useAuthStore = create<AuthState>()(
           
           set((state) => ({
             transactions: state.transactions.map(t => t.id === newTransaction.id ? savedTransaction : t)
-                                       .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                       .sort(sortTransactionsByCreationTime)
           }));
           showAppToast({ title: "Thành công!", description: "Đã thêm giao dịch mới." });
 
@@ -206,7 +215,7 @@ export const useAuthStore = create<AuthState>()(
         
         set(state => ({
             transactions: state.transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t)
-                                            .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                            .sort(sortTransactionsByCreationTime)
         }));
         try {
             await firestoreService.updateTransaction(updatedTransaction.id, updatedTransaction);
@@ -288,26 +297,10 @@ export const useAuthStore = create<AuthState>()(
           const fetchedTransactions = await firestoreService.getTransactionsByMonth(familyIdToFetch, monthYear);
           console.log(`[useAuthStore fetchTransactionsByMonth] Successfully fetched ${fetchedTransactions.length} transactions from Firestore`);
           
-          // Check if we have localStorage backup for comparison
+          // *** SỬA LỖI: ƯU TIÊN FIRESTORE HƠN LOCALSTORAGE ***
+          // localStorage chỉ dùng làm backup khi Firestore lỗi, không ưu tiên hơn server data
           const localStorageKey = `transactions_${familyIdToFetch}`;
-          const localBackup = localStorage.getItem(localStorageKey);
-          
-          if (localBackup) {
-            try {
-              const localTransactions = JSON.parse(localBackup);
-              const localForMonth = localTransactions.filter((t: Transaction) => t.monthYear === monthYear);
-              console.log(`💾 Found ${localForMonth.length} transactions in localStorage for ${monthYear}`);
-              
-              // If localStorage has more transactions than Firestore, it might have recent data not yet synced
-              if (localForMonth.length > fetchedTransactions.length) {
-                console.log('🔄 Using localStorage data (has more recent data)');
-                set({ transactions: localTransactions });
-                return;
-              }
-            } catch (e) {
-              console.warn('Failed to parse localStorage backup:', e);
-            }
-          }
+          console.log(`💾 Always prioritizing Firestore data over localStorage for consistency`);
           
           // Use Firestore data and update local storage
           set((state) => {
@@ -325,7 +318,7 @@ export const useAuthStore = create<AuthState>()(
             );
             
             const updatedTransactions = [...otherTransactions, ...fetchedTransactions]
-                                      .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                                      .sort(sortTransactionsByCreationTime);
             
             console.log(`[useAuthStore fetchTransactionsByMonth] Updated local state with ${updatedTransactions.length} total transactions after fetching for ${monthYear}.`);
             
@@ -375,7 +368,7 @@ export const useAuthStore = create<AuthState>()(
         console.log(`[useAuthStore] getTransactionsForFamilyByMonth for ${monthYear} (familyId: ${familyIdToFilter}): Found ${filtered.length} of ${allTransactions.length} total transactions in state.`);
         console.log(`🔧 [useAuth] All transactions:`, allTransactions.map(t => ({id: t.id, desc: t.description, monthYear: t.monthYear, familyId: t.familyId})));
         console.log(`🔧 [useAuth] Filtered transactions:`, filtered.map(t => ({id: t.id, desc: t.description, monthYear: t.monthYear})));
-        return filtered.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return filtered.sort(sortTransactionsByCreationTime);
       },
 
       markAlertAsViewedBySpouse: (alertId: string) => {
@@ -443,22 +436,21 @@ export const useAuthStore = create<AuthState>()(
       forceRefreshTransactions: async () => {
         const state = get();
         const familyId = state.familyId || FAMILY_ACCOUNT_ID;
-        const currentMonth = format(new Date(), 'yyyy-MM');
         
-        console.log('🔄 Force refreshing transactions from Firestore...');
+        console.log('🔄 Force refreshing ALL transactions from Firestore...');
         
         // Clear ALL caches
         localStorage.removeItem(`transactions_${familyId}`);
         set({ transactions: [] });
         
-        // Direct fetch from Firestore bypassing all cache logic
+        // *** SỬA LỖI: Lấy TẤT CẢ transactions, không chỉ tháng hiện tại ***
         try {
-          const freshTransactions = await firestoreService.getTransactionsByMonth(familyId, currentMonth);
-          console.log(`🔄 Force refresh: Got ${freshTransactions.length} fresh transactions from Firestore`);
+          const freshTransactions = await firestoreService.getAllTransactions(familyId);
+          console.log(`🔄 Force refresh: Got ${freshTransactions.length} fresh transactions from Firestore (ALL months)`);
           
           // Debug: Log the actual IDs we're getting
-          freshTransactions.forEach((t, index) => {
-            console.log(`🔍 Fresh transaction ${index + 1}: ID=${t.id}, desc="${t.description}", amount=${t.amount}`);
+          freshTransactions.slice(0, 5).forEach((t, index) => {
+            console.log(`🔍 Fresh transaction ${index + 1}: ID=${t.id}, desc="${t.description}", amount=${t.amount}, date=${t.date}`);
           });
           
           // Set directly without merging
@@ -467,11 +459,16 @@ export const useAuthStore = create<AuthState>()(
           // Verify what's actually in store after setting
           const storeAfterSet = get().transactions;
           console.log(`🔍 Store after set: ${storeAfterSet.length} transactions`);
-          storeAfterSet.forEach((t, index) => {
-            console.log(`🔍 Store transaction ${index + 1}: ID=${t.id}, desc="${t.description}"`);
-          });
           
-          console.log('✅ Force refresh completed with fresh Firestore data');
+          // Group by month for verification
+          const monthGroups = storeAfterSet.reduce((acc, t) => {
+            const monthYear = t.date.substring(0, 7);
+            acc[monthYear] = (acc[monthYear] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>);
+          console.log('🔍 Transactions by month:', monthGroups);
+          
+          console.log('✅ Force refresh completed with ALL fresh Firestore data');
         } catch (error) {
           console.error('❌ Force refresh failed:', error);
           set({ transactions: [] });

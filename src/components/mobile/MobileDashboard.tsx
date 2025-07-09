@@ -63,7 +63,7 @@ export function MobileDashboard({
       {/* Mobile Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 heading-clear text-enhanced">
             Chào {currentUser}! 👋
           </h1>
           <p className="text-base text-muted-foreground mt-1">
@@ -102,7 +102,7 @@ export function MobileDashboard({
             <span className="text-base opacity-90 font-medium">Tổng số dư</span>
             <Wallet className="h-6 w-6 opacity-90" />
           </div>
-          <div className="text-4xl font-bold mb-4">
+          <div className="text-4xl font-bold mb-4 text-currency">
             {showBalances ? formatMobileCurrency(summary.totalBalance) : '••••••'}
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -110,7 +110,7 @@ export function MobileDashboard({
               <CreditCard className="h-4 w-4" />
               <div>
                 <div className="text-xs opacity-80">Ngân hàng</div>
-                <div className="font-semibold">
+                <div className="font-semibold text-currency">
                   {showBalances ? formatMobileCurrency(summary.balanceBank) : '••••'}
                 </div>
               </div>
@@ -119,7 +119,7 @@ export function MobileDashboard({
               <Wallet className="h-4 w-4" />
               <div>
                 <div className="text-xs opacity-80">Tiền mặt</div>
-                <div className="font-semibold">
+                <div className="font-semibold text-currency">
                   {showBalances ? formatMobileCurrency(summary.balanceCash) : '••••'}
                 </div>
               </div>
@@ -157,7 +157,7 @@ export function MobileDashboard({
               </div>
               <span className="text-sm text-green-700 dark:text-green-300 font-semibold">Thu nhập</span>
             </div>
-            <div className="text-2xl font-bold text-green-800 dark:text-green-200">
+            <div className="text-2xl font-bold text-green-800 dark:text-green-200 text-currency">
               {showBalances ? formatMobileCurrency(summary.totalIncome) : '••••••'}
             </div>
           </CardContent>
@@ -170,7 +170,7 @@ export function MobileDashboard({
               </div>
               <span className="text-sm text-red-700 dark:text-red-300 font-semibold">Chi tiêu</span>
             </div>
-            <div className="text-2xl font-bold text-red-800 dark:text-red-200">
+            <div className="text-2xl font-bold text-red-800 dark:text-red-200 text-currency">
               {showBalances ? formatMobileCurrency(summary.totalExpense) : '••••••'}
             </div>
           </CardContent>

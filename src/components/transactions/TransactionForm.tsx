@@ -35,8 +35,9 @@ const formSchema = z.object({
   performedBy: z.enum(FAMILY_MEMBERS as [FamilyMember, ...FamilyMember[]], {
     required_error: "Vui lòng chọn người thực hiện",
   }),
-  paymentSource: z.custom<PaymentSource>((val) => PAYMENT_SOURCE_OPTIONS.map(p => p.id).includes(val as PaymentSource), {
-    message: "Vui lòng chọn nguồn tiền",
+  paymentSource: z.enum(['cash', 'bank'], {
+    required_error: "Vui lòng chọn nguồn tiền",
+    invalid_type_error: "Vui lòng chọn một trong hai: tiền mặt hoặc ngân hàng",
   }),
   note: z.string().optional(),
 });
@@ -89,7 +90,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
       type: transactionToEdit.type,
       categoryId: transactionToEdit.categoryId,
       performedBy: transactionToEdit.performedBy,
-      paymentSource: transactionToEdit.paymentSource || 'bank',
+      paymentSource: transactionToEdit.paymentSource || 'cash', // Default cash nếu không có
       note: transactionToEdit.note || "",
     } : {
       description: "",
@@ -98,7 +99,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
       type: "expense",
       categoryId: "",
       performedBy: currentUser || FAMILY_MEMBERS[0],
-      paymentSource: 'bank',
+      paymentSource: 'cash', // Mặc định là tiền mặt cho cả income và expense
       note: "",
     },
   });
@@ -127,7 +128,11 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
     }
     if (transactionType === "income") {
       form.setValue("note", "");
-      form.setValue("paymentSource", "bank");
+      // Chỉ gợi ý, không tự động thay đổi nếu user đã chọn
+      const currentPaymentSource = form.getValues("paymentSource");
+      if (!currentPaymentSource) {
+        form.setValue("paymentSource", "cash"); // Chỉ set nếu chưa có gì
+      }
     }
      }, [transactionType, transactionToEdit, form]);
 
@@ -141,7 +146,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
         setBillProcessingError(null);
         if (!transactionToEdit) {
             form.setValue("type", "expense", { shouldValidate: true });
-            form.setValue("paymentSource", "bank", { shouldValidate: true });
+            form.setValue("paymentSource", "bank", { shouldValidate: true }); // Bill thường là expense từ bank
         }
       };
       reader.readAsDataURL(file);
@@ -196,7 +201,9 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
           toast({ title: "Lưu ý ngày tháng", description: `AI trả về ngày: "${transactionDate}". Không thể tự động điền, vui lòng kiểm tra và chọn thủ công. Mặc định là ngày hôm nay.`, variant: "default", duration: 7000 });
         }
         form.setValue("date", dateToSet, { shouldValidate: true });
-        form.setValue("paymentSource", "bank", { shouldValidate: true });
+        // Nếu là expense thì default bank, nếu income thì cash
+        const currentType = form.getValues("type");
+        form.setValue("paymentSource", currentType === "income" ? "cash" : "bank", { shouldValidate: true });
         if (result.warning) {
           toast({ title: "⚠️ Cảnh báo AI", description: result.warning, variant: "default", duration: 8000 });
         } else if (Object.keys(result.data).length === 0){
@@ -264,7 +271,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
             type: "expense",
             categoryId: "",
             performedBy: currentUser || FAMILY_MEMBERS[0],
-            paymentSource: 'bank',
+            paymentSource: 'cash', // Mặc định là tiền mặt
             note: "",
         });
       }
@@ -339,13 +346,20 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
             name="paymentSource"
             render={({ field }) => (
               <FormItem className="space-y-2">
-                <FormLabel>Nguồn tiền</FormLabel>
+                <FormLabel>
+                  Nguồn tiền 
+                  {transactionType === "income" && (
+                    <span className="text-xs text-emerald-600 ml-2 font-medium">
+                      (Thu nhập khuyến khích dùng tiền mặt)
+                    </span>
+                  )}
+                </FormLabel>
                 <FormControl>
                   <RadioGroup
                     onValueChange={field.onChange}
-                    value={field.value}
+                    value={field.value || 'cash'} // Đảm bảo luôn có giá trị
                     className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0"
-                    disabled={isSubmitting || (transactionType === "income")}
+                    disabled={isSubmitting}
                   >
                     {PAYMENT_SOURCE_OPTIONS.map((source) => (
                       <FormItem key={source.id} className="flex items-center space-x-2 space-y-0">

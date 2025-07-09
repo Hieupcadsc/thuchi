@@ -26,6 +26,7 @@ export interface Transaction {
   monthYear: string; // YYYY-MM, for sheet organization
   note?: string; // Optional note, primarily for expenses
   paymentSource?: PaymentSource; // New: Source of the payment
+  createdAt?: string; // ISO timestamp - thời điểm tạo giao dịch để sắp xếp chính xác
 }
 
 export interface MonthlySummary {
@@ -49,6 +50,23 @@ export interface SharedNote {
   content: string;
   lastModified: string; // ISO timestamp
   modifiedBy: FamilyMember;
+}
+
+// Windows-style Sticky Notes
+export interface StickyNote {
+  id: string;
+  familyId: UserType;
+  title: string;
+  content: string; // HTML content from rich editor
+  color: 'yellow' | 'pink' | 'green' | 'blue' | 'purple' | 'orange';
+  position?: { x: number; y: number }; // Position on screen
+  size?: { width: number; height: number }; // Note size
+  isMinimized: boolean;
+  isPinned: boolean;
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+  createdBy: FamilyMember;
+  lastModifiedBy: FamilyMember;
 }
 
 // Calendar Event Types

@@ -6,7 +6,7 @@ import { MonthlyComparisonChart } from '@/components/reports/MonthlyComparisonCh
 import { CategoryBreakdownChart } from '@/components/reports/CategoryBreakdownChart';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { useAuthStore } from '@/hooks/useAuth';
-import { FAMILY_MEMBERS, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID } from '@/lib/constants'; // Import FAMILY_MEMBERS from constants
+import { FAMILY_MEMBERS, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID } from '@/lib/constants'; // Import FAMILY_MEMBERS from constants
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { CATEGORIES, MONTH_NAMES } from '@/lib/constants';
@@ -125,11 +125,12 @@ export default function ReportsPage() {
         const monthYearKey = format(date, 'yyyy-MM');
         const monthTransactions = getTransactionsForFamilyByMonth(familyId, monthYearKey); 
         
+        // *** SỬA LỖI: Consistency với dashboard - loại bỏ internal transfers và adjustments ***
         const income = monthTransactions
-          .filter(t => t.type === 'income' && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID)
+          .filter(t => t.type === 'income' && ![NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId))
           .reduce((sum, t) => sum + t.amount, 0);
         const expense = monthTransactions
-          .filter(t => t.type === 'expense' && t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID)
+          .filter(t => t.type === 'expense' && ![RUT_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId))
           .reduce((sum, t) => sum + t.amount, 0);
         
         comparisonData.push({
@@ -144,7 +145,7 @@ export default function ReportsPage() {
         const transactionsForSelectedMonth = getTransactionsForFamilyByMonth(familyId, selectedMonth);
 
         // Family-wide breakdown and summary (excluding internal transfers)
-        const familyExpenseTransactions = transactionsForSelectedMonth.filter(t => t.type === 'expense' && t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID);
+        const familyExpenseTransactions = transactionsForSelectedMonth.filter(t => t.type === 'expense' && ![RUT_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId));
         const familyBreakdown: { [key: string]: number } = {};
         familyExpenseTransactions.forEach(t => {
           const categoryName = CATEGORIES.find(c => c.id === t.categoryId)?.name || 'Khác';
@@ -156,7 +157,7 @@ export default function ReportsPage() {
         setCategoryBreakdownDataFamily(familyCategoryData);
 
         const familyTotalIncome = transactionsForSelectedMonth
-            .filter(t => t.type === 'income' && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID)
+            .filter(t => t.type === 'income' && ![NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId))
             .reduce((sum, t) => sum + t.amount, 0);
         const familyTotalExpense = familyExpenseTransactions.reduce((sum, t) => sum + t.amount, 0); // Already filtered
         setFamilyMonthlySummary({
@@ -177,8 +178,8 @@ export default function ReportsPage() {
           const memberExpenseBreakdown: { [key: string]: number } = {};
 
           memberTransactions.forEach(t => {
-            if (t.type === 'income' && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID) totalIncome += t.amount;
-            else if (t.type === 'expense' && t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID) {
+            if (t.type === 'income' && ![NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId)) totalIncome += t.amount;
+            else if (t.type === 'expense' && ![RUT_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId)) {
               totalExpense += t.amount;
               const categoryName = CATEGORIES.find(c => c.id === t.categoryId)?.name || 'Khác';
               memberExpenseBreakdown[categoryName] = (memberExpenseBreakdown[categoryName] || 0) + t.amount;

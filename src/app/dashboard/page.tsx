@@ -168,8 +168,9 @@ export default function DashboardPage() {
     const statsTransactions = transactions
       .filter(t => ![RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId));
     
-    const balanceTransactions = transactions
-      .filter(t => ![RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID].includes(t.categoryId)); // Bao gồm DIEU_CHINH_SO_DU
+    // *** SỬA LỖI: Tính số dư THỰC như Settings để nhất quán ***
+    // Bao gồm TẤT CẢ giao dịch để có số dư thực tế chính xác
+    const balanceTransactions = transactions;
 
     const sumBy = (txs: any[], type: 'income' | 'expense', src?: 'bank' | 'cash') =>
       txs.filter(t => t.type === type && (src ? t.paymentSource === src : true))
@@ -204,11 +205,13 @@ export default function DashboardPage() {
       const monthYearKey = format(date, 'yyyy-MM');
       const monthTransactionsForChart = getTransactionsForFamilyByMonth(familyId, monthYearKey);
 
+      // *** SỬA LỖI: Đảm bảo chart dùng CÙNG LOGIC với balance calculation ***
+      // Loại bỏ: rút tiền, nạp tiền, điều chỉnh số dư (giống statsTransactions)
       const incomeForChart = monthTransactionsForChart
-        .filter(t => t.type === 'income' && t.categoryId !== NAP_TIEN_MAT_CATEGORY_ID)
+        .filter(t => t.type === 'income' && ![NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId))
         .reduce((sum, t) => sum + t.amount, 0);
       const expenseForChart = monthTransactionsForChart
-        .filter(t => t.type === 'expense' && t.categoryId !== RUT_TIEN_MAT_CATEGORY_ID)
+        .filter(t => t.type === 'expense' && ![RUT_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId))
         .reduce((sum, t) => sum + t.amount, 0);
 
       chartData.push({
@@ -367,8 +370,8 @@ export default function DashboardPage() {
       <div className="space-y-6 element-spacing-fhd">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl xl:text-4xl 2xl:text-5xl font-bold tracking-tight">Chào {currentUser}!</h1>
-          <p className="text-muted-foreground text-base xl:text-lg 2xl:text-xl">{format(new Date(), 'EEEE, dd MMMM yyyy', { locale: vi })}</p>
+          <h1 className="text-3xl xl:text-4xl 2xl:text-5xl font-bold tracking-tight heading-clear text-enhanced">Chào {currentUser}!</h1>
+          <p className="text-muted-foreground text-base xl:text-lg 2xl:text-xl text-readable">{format(new Date(), 'EEEE, dd MMMM yyyy', { locale: vi })}</p>
         </div>
         <div className="flex gap-3">
           {/* Calendar Button with Modal */}
@@ -502,7 +505,7 @@ export default function DashboardPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="card-content-fhd">
-                  <div className="text-2xl xl:text-4xl 2xl:text-5xl font-bold bg-gradient-to-r from-purple-700 to-violet-600 bg-clip-text text-transparent mb-3 summary-card-value-fhd">
+                  <div className="text-2xl xl:text-4xl 2xl:text-5xl font-bold bg-gradient-to-r from-purple-700 to-violet-600 bg-clip-text text-transparent mb-3 summary-card-value-fhd text-currency">
                     {isLoading && transactions.length === 0 ? "Đang tải..." : formatCurrency(summary.balanceCash)}
                   </div>
                 </CardContent>
@@ -589,13 +592,13 @@ export default function DashboardPage() {
 
             <Card className="shadow-2xl bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/50 border-2 border-blue-100/50 hover:shadow-3xl transition-all duration-500 hover-lift">
               <CardHeader className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-t-xl border-b border-blue-100/50">
-                <CardTitle className="text-2xl xl:text-3xl 2xl:text-4xl font-bold bg-gradient-to-r from-blue-700 to-indigo-600 bg-clip-text text-transparent flex items-center gap-4">
+                <CardTitle className="text-2xl xl:text-3xl 2xl:text-4xl font-bold bg-gradient-to-r from-blue-700 to-indigo-600 bg-clip-text text-transparent flex items-center gap-4 heading-clear">
                   <div className="p-3 xl:p-4 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-lg">
                     <BarChart className="h-7 w-7 xl:h-9 xl:w-9 text-white" />
                   </div>
                   📊 Tổng Quan Thu Chi 6 Tháng
                 </CardTitle>
-                <CardDescription className="text-base xl:text-lg text-blue-700/80 font-medium">
+                <CardDescription className="text-base xl:text-lg text-blue-700/80 font-medium text-readable">
                   Biểu đồ so sánh thu nhập và chi tiêu của gia đình qua các tháng (không tính giao dịch nội bộ)
                 </CardDescription>
               </CardHeader>
@@ -644,7 +647,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 xl:gap-8 mt-8">
               <Card className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border-2 border-indigo-200/50 shadow-xl hover:shadow-2xl transition-all duration-300 hover-lift">
                 <CardHeader className="pb-6">
-                  <CardTitle className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-indigo-700 to-purple-600 bg-clip-text text-transparent flex items-center gap-4">
+                  <CardTitle className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-indigo-700 to-purple-600 bg-clip-text text-transparent flex items-center gap-4 heading-clear">
                     <div className="p-3 xl:p-4 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg">
                       <TrendingUp className="h-6 w-6 xl:h-8 xl:w-8 text-white" />
                     </div>
@@ -657,7 +660,7 @@ export default function DashboardPage() {
                 <CardContent className="space-y-4 xl:space-y-6">
                   <div className="flex justify-between items-center p-4 xl:p-5 bg-gradient-to-r from-white/80 to-indigo-50/80 rounded-xl border border-indigo-100">
                     <span className="text-base xl:text-lg font-semibold text-indigo-800">💰 Tỷ lệ tiết kiệm</span>
-                    <span className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                    <span className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-currency">
                       {summary.totalIncome > 0 ? 
                         `${((summary.totalIncome - summary.totalExpense) / summary.totalIncome * 100).toFixed(1)}%` 
                         : '0%'
@@ -666,7 +669,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex justify-between items-center p-4 xl:p-5 bg-gradient-to-r from-white/80 to-indigo-50/80 rounded-xl border border-indigo-100">
                     <span className="text-base xl:text-lg font-semibold text-indigo-800">📅 Chi tiêu/ngày</span>
-                    <span className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                    <span className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-currency">
                       {formatCurrency(Math.round(summary.totalExpense / 30))}
                     </span>
                   </div>

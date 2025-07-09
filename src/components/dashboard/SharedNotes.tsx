@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,8 +48,8 @@ const STICKY_COLORS = [
   { name: 'orange', bg: 'bg-orange-200', border: 'border-orange-300', text: 'text-orange-900', label: 'Cam' },
 ] as const;
 
-// Individual Sticky Note Component
-function StickyNoteCard({ 
+// Individual Sticky Note Component - Memoized để tránh re-render
+const StickyNoteCard = React.memo(function StickyNoteCard({ 
   note, 
   onUpdate, 
   onDelete, 
@@ -499,7 +499,7 @@ function StickyNoteCard({
       </div>
     </div>
   );
-}
+});
 
 // Main Sticky Notes Manager
 export function SharedNotes() {
@@ -521,7 +521,7 @@ export function SharedNotes() {
       const fetchedNotes = await firestoreService.getStickyNotes(FAMILY_ACCOUNT_ID);
       setNotes(fetchedNotes);
       setError(null);
-      console.log(`📌 Loaded ${fetchedNotes.length} sticky notes from Firestore`);
+      // Loaded sticky notes successfully
     } catch (err) {
       console.error('Error loading sticky notes:', err);
       setError('Không thể tải sticky notes');
@@ -591,10 +591,8 @@ export function SharedNotes() {
           : note
       ));
       
-      // Save to Firestore
+      // Save to Firestore (silent - no toast spam)
       await firestoreService.updateStickyNote(id, updatedData);
-      
-      toast({ title: "💾 Đã lưu", description: "Sticky note đã được cập nhật", duration: 1000 });
     } catch (error) {
       console.error('Error updating sticky note:', error);
       // Revert optimistic update
@@ -676,23 +674,28 @@ export function SharedNotes() {
 
     // Optional: Update order in Firestore
     // Could add a 'sortOrder' field to notes and update it
-    console.log(`📝 Moved note "${draggedNote.title}" to position of "${targetNote.title}"`);
     
     toast({ 
       title: "📦 Đã di chuyển", 
       description: `Sticky note "${draggedNote.title || 'Untitled'}" đã được di chuyển`, 
-      duration: 2000 
+      duration: 1500 
     });
   };
 
-  const filteredNotes = notes.filter(note => 
-    note.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    note.content.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Memoize filter operations để tránh re-compute mỗi render
+  const { filteredNotes, pinnedNotes, regularNotes, minimizedNotes } = useMemo(() => {
+    const filtered = notes.filter(note => 
+      note.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      note.content.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
-  const pinnedNotes = filteredNotes.filter(n => n.isPinned && !n.isMinimized);
-  const regularNotes = filteredNotes.filter(n => !n.isPinned && !n.isMinimized);
-  const minimizedNotes = filteredNotes.filter(n => n.isMinimized);
+    return {
+      filteredNotes: filtered,
+      pinnedNotes: filtered.filter(n => n.isPinned && !n.isMinimized),
+      regularNotes: filtered.filter(n => !n.isPinned && !n.isMinimized),
+      minimizedNotes: filtered.filter(n => n.isMinimized)
+    };
+  }, [notes, searchTerm]);
 
   if (isLoading) {
     return (

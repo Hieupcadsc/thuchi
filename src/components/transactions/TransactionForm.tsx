@@ -17,7 +17,7 @@ import { AiCategorySuggestor } from "./AiCategorySuggestor";
 import { useAuthStore } from "@/hooks/useAuth";
 import { FAMILY_MEMBERS, PAYMENT_SOURCE_OPTIONS } from '@/lib/constants';
 import type { Transaction, FamilyMember, PaymentSource } from "@/types";
-import { CalendarIcon, Loader2, PlusCircle, XCircle, Camera, FileUp, UploadCloud, AlertTriangle } from "lucide-react";
+import { CalendarIcon, Loader2, PlusCircle, XCircle, Camera, FileUp, UploadCloud, AlertTriangle, Calculator, Trash2, Equal } from "lucide-react";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { format, parseISO, parse as parseDateFns, isValid as isValidDate } from 'date-fns';
@@ -78,6 +78,76 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
   const takePhotoInputRef = React.useRef<HTMLInputElement>(null);
   const uploadFileInputRef = React.useRef<HTMLInputElement>(null);
   const [shouldAutoTriggerCategorySuggestion, setShouldAutoTriggerCategorySuggestion] = useState(false);
+  
+  // Calculator state
+  const [showCalculator, setShowCalculator] = useState(false);
+  const [calcDisplay, setCalcDisplay] = useState('0');
+  const [calcPrevValue, setCalcPrevValue] = useState<number | null>(null);
+  const [calcOperation, setCalcOperation] = useState<string | null>(null);
+  const [calcWaitingForOperand, setCalcWaitingForOperand] = useState(false);
+
+  // Calculator functions
+  const calculate = (firstOperand: number, secondOperand: number, operation: string): number => {
+    switch (operation) {
+      case '+': return firstOperand + secondOperand;
+      case '-': return firstOperand - secondOperand;
+      case '*': return firstOperand * secondOperand;
+      case '/': return secondOperand !== 0 ? firstOperand / secondOperand : firstOperand;
+      default: return secondOperand;
+    }
+  };
+
+  const handleCalculatorNumber = (num: string) => {
+    if (calcWaitingForOperand) {
+      setCalcDisplay(num);
+      setCalcWaitingForOperand(false);
+    } else {
+      setCalcDisplay(calcDisplay === '0' ? num : calcDisplay + num);
+    }
+  };
+
+  const handleCalculatorOperation = (nextOperation: string) => {
+    const inputValue = parseFloat(calcDisplay);
+
+    if (calcPrevValue === null) {
+      setCalcPrevValue(inputValue);
+    } else if (calcOperation) {
+      const currentValue = calcPrevValue || 0;
+      const newValue = calculate(currentValue, inputValue, calcOperation);
+      
+      setCalcDisplay(String(newValue));
+      setCalcPrevValue(newValue);
+    }
+
+    setCalcWaitingForOperand(true);
+    setCalcOperation(nextOperation);
+  };
+
+  const handleCalculatorEquals = () => {
+    const inputValue = parseFloat(calcDisplay);
+
+    if (calcPrevValue !== null && calcOperation) {
+      const newValue = calculate(calcPrevValue, inputValue, calcOperation);
+      setCalcDisplay(String(newValue));
+      setCalcPrevValue(null);
+      setCalcOperation(null);
+      setCalcWaitingForOperand(true);
+    }
+  };
+
+  const handleCalculatorClear = () => {
+    setCalcDisplay('0');
+    setCalcPrevValue(null);
+    setCalcOperation(null);
+    setCalcWaitingForOperand(false);
+  };
+
+  const handleCalculatorApply = () => {
+    const value = parseFloat(calcDisplay);
+    form.setValue('amount', value);
+    setDisplayAmount(formatVnCurrency(value));
+    setShowCalculator(false);
+  };
 
 
 
@@ -496,25 +566,116 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
               <FormItem>
                 <FormLabel>Số tiền</FormLabel>
                 <FormControl>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="0"
-                    name={field.name}
-                    ref={field.ref}
-                    value={displayAmount}
-                    onChange={(e) => {
-                      const inputValue = e.target.value;
-                      const numericValue = parseVnCurrencyToNumber(inputValue);
-                      field.onChange(numericValue);
-                      setDisplayAmount(formatVnCurrency(inputValue));
-                    }}
-                    onBlur={(e) => {
-                      field.onBlur();
-                      setDisplayAmount(formatVnCurrency(form.getValues('amount')));
-                    }}
-                    disabled={isSubmitting}
-                  />
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0"
+                      name={field.name}
+                      ref={field.ref}
+                      value={displayAmount}
+                      onChange={(e) => {
+                        const inputValue = e.target.value;
+                        const numericValue = parseVnCurrencyToNumber(inputValue);
+                        field.onChange(numericValue);
+                        setDisplayAmount(formatVnCurrency(inputValue));
+                      }}
+                      onBlur={(e) => {
+                        field.onBlur();
+                        setDisplayAmount(formatVnCurrency(form.getValues('amount')));
+                      }}
+                      disabled={isSubmitting}
+                      className="pr-12"
+                    />
+                    <Popover open={showCalculator} onOpenChange={setShowCalculator}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200 text-emerald-700 hover:from-emerald-100 hover:to-green-100"
+                          title="Mở máy tính"
+                        >
+                          <Calculator className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64 p-0" align="end">
+                        <div className="bg-gradient-to-br from-gray-50 to-slate-100 dark:from-gray-900 dark:to-slate-800 p-4 rounded-lg">
+                          <div className="mb-3">
+                            <div className="bg-black text-white p-3 rounded text-right text-xl font-mono">
+                              {parseFloat(calcDisplay).toLocaleString('vi-VN')}
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-4 gap-2">
+                            {/* Row 1: Clear, Operations */}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-10 bg-red-100 hover:bg-red-200 text-red-700 border-red-300"
+                              onClick={handleCalculatorClear}
+                            >
+                              C
+                            </Button>
+                            <Button type="button" variant="outline" className="h-10" onClick={() => handleCalculatorOperation('/')}>/</Button>
+                            <Button type="button" variant="outline" className="h-10" onClick={() => handleCalculatorOperation('*')}>×</Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-10 bg-orange-100 hover:bg-orange-200 text-orange-700 border-orange-300"
+                              onClick={() => setCalcDisplay(calcDisplay.slice(0, -1) || '0')}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+
+                            {/* Row 2: 7,8,9,- */}
+                            <Button type="button" variant="outline" className="h-10 bg-white hover:bg-gray-50" onClick={() => handleCalculatorNumber('7')}>7</Button>
+                            <Button type="button" variant="outline" className="h-10 bg-white hover:bg-gray-50" onClick={() => handleCalculatorNumber('8')}>8</Button>
+                            <Button type="button" variant="outline" className="h-10 bg-white hover:bg-gray-50" onClick={() => handleCalculatorNumber('9')}>9</Button>
+                            <Button type="button" variant="outline" className="h-10" onClick={() => handleCalculatorOperation('-')}>-</Button>
+
+                            {/* Row 3: 4,5,6,+ */}
+                            <Button type="button" variant="outline" className="h-10 bg-white hover:bg-gray-50" onClick={() => handleCalculatorNumber('4')}>4</Button>
+                            <Button type="button" variant="outline" className="h-10 bg-white hover:bg-gray-50" onClick={() => handleCalculatorNumber('5')}>5</Button>
+                            <Button type="button" variant="outline" className="h-10 bg-white hover:bg-gray-50" onClick={() => handleCalculatorNumber('6')}>6</Button>
+                            <Button type="button" variant="outline" className="h-10" onClick={() => handleCalculatorOperation('+')}>+</Button>
+
+                            {/* Row 4: 1,2,3,= */}
+                            <Button type="button" variant="outline" className="h-10 bg-white hover:bg-gray-50" onClick={() => handleCalculatorNumber('1')}>1</Button>
+                            <Button type="button" variant="outline" className="h-10 bg-white hover:bg-gray-50" onClick={() => handleCalculatorNumber('2')}>2</Button>
+                            <Button type="button" variant="outline" className="h-10 bg-white hover:bg-gray-50" onClick={() => handleCalculatorNumber('3')}>3</Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-10 bg-blue-100 hover:bg-blue-200 text-blue-700 border-blue-300"
+                              onClick={handleCalculatorEquals}
+                            >
+                              =
+                            </Button>
+
+                            {/* Row 5: 0, ., Apply */}
+                            <Button type="button" variant="outline" className="h-10 col-span-2 bg-white hover:bg-gray-50" onClick={() => handleCalculatorNumber('0')}>0</Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-10 bg-green-100 hover:bg-green-200 text-green-700 border-green-300"
+                              onClick={handleCalculatorApply}
+                            >
+                              OK
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-10 bg-red-100 hover:bg-red-200 text-red-700 border-red-300"
+                              onClick={() => setShowCalculator(false)}
+                            >
+                              ✕
+                            </Button>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </FormControl>
                 <FormMessage />
               </FormItem>

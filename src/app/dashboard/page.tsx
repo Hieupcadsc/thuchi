@@ -21,7 +21,7 @@ const TransactionCalendar = dynamic(
     ssr: false
   }
 );
-import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera, PlusCircle, Landmark, Wallet, ArrowRightLeft, ChevronDown, RefreshCw, Sparkles, Calendar } from 'lucide-react';
+import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera, PlusCircle, Landmark, Wallet, ArrowRightLeft, ChevronDown, RefreshCw, Sparkles, Calendar, Eye, EyeOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -88,6 +88,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [uploadNotifications, setUploadNotifications] = useState<any[]>([]);
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
+  const [showBalances, setShowBalances] = useState(false); // Mặc định ẩn số dư
 
   useEffect(() => {
     const now = new Date();
@@ -374,6 +375,16 @@ export default function DashboardPage() {
           <p className="text-muted-foreground text-base xl:text-lg 2xl:text-xl text-readable">{format(new Date(), 'EEEE, dd MMMM yyyy', { locale: vi })}</p>
         </div>
         <div className="flex gap-3">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => setShowBalances(!showBalances)}
+            className="bg-gradient-to-r from-slate-50 to-gray-50 border-slate-200 text-slate-700 hover:from-slate-100 hover:to-gray-100 btn-fhd text-base xl:text-lg shadow-fhd"
+            title={showBalances ? "Ẩn số dư" : "Hiện số dư"}
+          >
+            {showBalances ? <Eye className="h-5 w-5 xl:h-6 xl:w-6 mr-2" /> : <EyeOff className="h-5 w-5 xl:h-6 xl:w-6 mr-2" />}
+            {showBalances ? "Ẩn" : "Hiện"}
+          </Button>
           {/* Calendar Button with Modal */}
           <Dialog>
             <DialogTrigger asChild>
@@ -473,22 +484,22 @@ export default function DashboardPage() {
             <div key={`summary-${transactions.length}-${JSON.stringify(monthlyTotals)}`} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 xl:gap-8 animate-slide-up dashboard-grid-fhd">
               <SummaryCard
                 title="Tổng thu nhập (tháng này)"
-                value={isLoading && transactions.length === 0 ? "Đang tải..." : formatCurrency(monthlyTotals.income)}
+                value={isLoading && transactions.length === 0 ? "Đang tải..." : (showBalances ? formatCurrency(monthlyTotals.income) : "••••••")}
                 variant="income"
               />
               <SummaryCard
                 title="Tổng chi tiêu (tháng này)"
-                value={isLoading && transactions.length === 0 ? "Đang tải..." : formatCurrency(monthlyTotals.expense)}
+                value={isLoading && transactions.length === 0 ? "Đang tải..." : (showBalances ? formatCurrency(monthlyTotals.expense) : "••••••")}
                 variant="expense"
               />
               <SummaryCard 
                 title="Ngân hàng"
-                value={isLoading && transactions.length === 0 ? "Đang tải..." : formatCurrency(summary.balanceBank)} 
+                value={isLoading && transactions.length === 0 ? "Đang tải..." : (showBalances ? formatCurrency(summary.balanceBank) : "••••••")} 
                 variant="bank"
               />
               <SummaryCard 
                 title="Tổng số dư"
-                value={isLoading && transactions.length === 0 ? "Đang tải..." : formatCurrency(summary.totalBalance)} 
+                value={isLoading && transactions.length === 0 ? "Đang tải..." : (showBalances ? formatCurrency(summary.totalBalance) : "••••••")} 
                 variant="balance"
               />
             </div>
@@ -506,7 +517,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="card-content-fhd">
                   <div className="text-2xl xl:text-4xl 2xl:text-5xl font-bold bg-gradient-to-r from-purple-700 to-violet-600 bg-clip-text text-transparent mb-3 summary-card-value-fhd text-currency">
-                    {isLoading && transactions.length === 0 ? "Đang tải..." : formatCurrency(summary.balanceCash)}
+                    {isLoading && transactions.length === 0 ? "Đang tải..." : (showBalances ? formatCurrency(summary.balanceCash) : "••••••")}
                   </div>
                 </CardContent>
               </Card>
@@ -661,16 +672,16 @@ export default function DashboardPage() {
                   <div className="flex justify-between items-center p-4 xl:p-5 bg-gradient-to-r from-white/80 to-indigo-50/80 rounded-xl border border-indigo-100">
                     <span className="text-base xl:text-lg font-semibold text-indigo-800">💰 Tỷ lệ tiết kiệm</span>
                     <span className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-currency">
-                      {summary.totalIncome > 0 ? 
+                      {showBalances ? (summary.totalIncome > 0 ? 
                         `${((summary.totalIncome - summary.totalExpense) / summary.totalIncome * 100).toFixed(1)}%` 
-                        : '0%'
+                        : '0%') : '••••'
                       }
                     </span>
                   </div>
                   <div className="flex justify-between items-center p-4 xl:p-5 bg-gradient-to-r from-white/80 to-indigo-50/80 rounded-xl border border-indigo-100">
                     <span className="text-base xl:text-lg font-semibold text-indigo-800">📅 Chi tiêu/ngày</span>
                     <span className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-currency">
-                      {formatCurrency(Math.round(summary.totalExpense / 30))}
+                      {showBalances ? formatCurrency(Math.round(summary.totalExpense / 30)) : "••••••"}
                     </span>
                   </div>
                   <Button 

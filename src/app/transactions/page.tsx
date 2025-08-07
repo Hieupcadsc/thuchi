@@ -151,7 +151,10 @@ export default function TransactionsPage() {
     setIsFormVisible(false);
     setEditingTransaction(null);
     setIsBillModeActive(false); 
-    await loadDataForCurrentFilters();
+    // ✅ OPTIMIZATION: Không cần reload data từ server
+    // Store đã được update optimistically bởi addTransaction/updateTransaction
+    // Chỉ cần làm mới state để trigger re-render với data mới
+    console.log("✅ Transaction saved successfully - using optimistic update, no server reload needed");
   };
 
   const handleEdit = (transaction: Transaction) => {
@@ -282,7 +285,8 @@ export default function TransactionsPage() {
       toast({ title: "Lỗi", description: "Không tìm thấy thông tin giao dịch để xóa.", variant: "destructive"});
     }
     setIsBulkDeleting(false);
-    await loadDataForCurrentFilters(); // Reload data after bulk delete
+    // ✅ OPTIMIZATION: Store đã được update bởi bulkDeleteTransactions, không cần reload
+    console.log("✅ Bulk delete completed - using optimistic update");
   };
 
   const hasActiveFilters = searchTerm || 
@@ -414,7 +418,8 @@ export default function TransactionsPage() {
                   const transaction = transactions.find(t => t.id === transactionId);
                   if (transaction) {
                     await deleteTransaction(transactionId, transaction.monthYear);
-                    await loadDataForCurrentFilters();
+                    // ✅ OPTIMIZATION: Store đã được update, không cần reload
+                    console.log("✅ Transaction deleted - using optimistic update");
                   }
                 }}
                 onSelect={handleToggleSelectTransaction}
@@ -874,7 +879,8 @@ export default function TransactionsPage() {
                     setSelectedTransactionIds(prev => prev.filter(id => id !== transactionId));
                     
                     await deleteTransaction(transactionId, monthYearToDelete); 
-                    await loadDataForCurrentFilters();
+                    // ✅ OPTIMIZATION: Store đã được update, không cần reload
+                    console.log("✅ Transaction deleted - using optimistic update");
                 }}
                 selectedIds={selectedTransactionIds}
                 onToggleSelect={handleToggleSelectTransaction}

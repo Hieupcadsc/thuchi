@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { UserNav } from '@/components/layout/UserNav';
 import { GlobalAlertToaster } from '@/components/layout/GlobalAlertToaster';
 import { WeakPasswordWarning } from '@/components/auth/WeakPasswordWarning';
+import { ChatBot } from '@/components/ui/ChatBot';
 import { useTheme } from '@/contexts/ThemeContext'; 
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useMobileFirst } from '@/hooks/use-mobile-detection';
@@ -171,6 +172,9 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
         
         {/* Mobile Bottom Navigation */}
         {showMobileUI && <MobileBottomNavigation />}
+        
+        {/* ChatBot - hiển thị trên tất cả trang */}
+        <ChatBot />
         
         <footer className="hidden md:block py-4 px-6 border-t border-border/50 bg-gradient-card text-center">
           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">

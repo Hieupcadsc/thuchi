@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/sqlite';
 import crypto from 'crypto';
+import { DEMO_USER, DEMO_ACCOUNT_ID } from '@/lib/constants';
 
 function verifyPassword(password: string, storedPassword: string): boolean {
   const [salt, hash] = storedPassword.split(':');
@@ -12,9 +13,29 @@ export async function POST(request: NextRequest) {
   try {
     const { username, password } = await request.json();
 
-    if (!username || !password) {
+    if (!username) {
       return NextResponse.json(
-        { error: 'Username and password are required' },
+        { error: 'Username is required' },
+        { status: 400 }
+      );
+    }
+
+    // Handle Demo user - no password required
+    if (username === DEMO_USER) {
+      return NextResponse.json({
+        success: true,
+        user: {
+          username: DEMO_USER,
+          familyId: DEMO_ACCOUNT_ID,
+          passwordStrength: 'demo'
+        },
+        isDemoUser: true
+      });
+    }
+
+    if (!password) {
+      return NextResponse.json(
+        { error: 'Password is required for non-demo users' },
         { status: 400 }
       );
     }

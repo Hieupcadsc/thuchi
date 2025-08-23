@@ -15,7 +15,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CategorySelector } from "./CategorySelector";
 import { AiCategorySuggestor } from "./AiCategorySuggestor";
 import { useAuthStore } from "@/hooks/useAuth";
-import { FAMILY_MEMBERS, PAYMENT_SOURCE_OPTIONS } from '@/lib/constants';
+import { FAMILY_MEMBERS, PAYMENT_SOURCE_OPTIONS, DEMO_USER } from '@/lib/constants';
 import type { Transaction, FamilyMember, PaymentSource } from "@/types";
 import { CalendarIcon, Loader2, PlusCircle, XCircle, Camera, FileUp, UploadCloud, AlertTriangle, Calculator, Trash2, Equal } from "lucide-react";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
@@ -26,23 +26,28 @@ import React from "react";
 import Image from 'next/image';
 import { processBillImage } from '@/app/transactions/billActions';
 
-const formSchema = z.object({
-  description: z.string().min(1, "Mô tả không được để trống"),
-  amount: z.coerce.number().positive("Số tiền phải là số dương"),
-  date: z.date({ required_error: "Ngày không được để trống" }),
-  type: z.enum(["income", "expense"], { required_error: "Vui lòng chọn loại giao dịch" }),
-  categoryId: z.string().min(1, "Vui lòng chọn danh mục"),
-  performedBy: z.enum(FAMILY_MEMBERS as [FamilyMember, ...FamilyMember[]], {
-    required_error: "Vui lòng chọn người thực hiện",
-  }),
-  paymentSource: z.enum(['cash', 'bank'], {
-    required_error: "Vui lòng chọn nguồn tiền",
-    invalid_type_error: "Vui lòng chọn một trong hai: tiền mặt hoặc ngân hàng",
-  }),
-  note: z.string().optional(),
-});
+// Dynamic schema based on current user
+const createFormSchema = (currentUser: FamilyMember | null) => {
+  const allowedUsers = currentUser === DEMO_USER ? [DEMO_USER] : FAMILY_MEMBERS;
+  
+  return z.object({
+    description: z.string().min(1, "Mô tả không được để trống"),
+    amount: z.coerce.number().positive("Số tiền phải là số dương"),
+    date: z.date({ required_error: "Ngày không được để trống" }),
+    type: z.enum(["income", "expense"], { required_error: "Vui lòng chọn loại giao dịch" }),
+    categoryId: z.string().min(1, "Vui lòng chọn danh mục"),
+    performedBy: z.enum(allowedUsers as [FamilyMember, ...FamilyMember[]], {
+      required_error: "Vui lòng chọn người thực hiện",
+    }),
+    paymentSource: z.enum(['cash', 'bank'], {
+      required_error: "Vui lòng chọn nguồn tiền",
+      invalid_type_error: "Vui lòng chọn một trong hai: tiền mặt hoặc ngân hàng",
+    }),
+    note: z.string().optional(),
+  });
+};
 
-type TransactionFormValues = z.infer<typeof formSchema>;
+type TransactionFormValues = z.infer<ReturnType<typeof createFormSchema>>;
 
 interface TransactionFormProps {
   onSuccess?: () => void;
@@ -68,6 +73,10 @@ const parseVnCurrencyToNumber = (value: string): number => {
 export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBillMode = false }: TransactionFormProps) {
   const { addTransaction, updateTransaction, currentUser } = useAuthStore();
   const { toast } = useToast();
+  
+  // Dynamic user options and schema based on current user
+  const availableUsers = currentUser === DEMO_USER ? [DEMO_USER] : FAMILY_MEMBERS;
+  const formSchema = createFormSchema(currentUser);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [displayAmount, setDisplayAmount] = useState<string>('');
   const [billImagePreview, setBillImagePreview] = useState<string | null>(null);
@@ -168,7 +177,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
       date: new Date(),
       type: "expense",
       categoryId: "",
-      performedBy: currentUser || FAMILY_MEMBERS[0],
+      performedBy: currentUser || availableUsers[0],
       paymentSource: 'cash', // Mặc định là tiền mặt cho cả income và expense
       note: "",
     },
@@ -340,7 +349,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
             date: new Date(),
             type: "expense",
             categoryId: "",
-            performedBy: currentUser || FAMILY_MEMBERS[0],
+            performedBy: currentUser || availableUsers[0],
             paymentSource: 'cash', // Mặc định là tiền mặt
             note: "",
         });
@@ -398,7 +407,7 @@ export function TransactionForm({ onSuccess, transactionToEdit, onCancel, isBill
                     className="flex space-x-6"
                     disabled={isSubmitting}
                   >
-                    {FAMILY_MEMBERS.map((member) => (
+                    {availableUsers.map((member) => (
                       <FormItem key={member} className="flex items-center space-x-2 space-y-0">
                         <FormControl><RadioGroupItem value={member} /></FormControl>
                         <FormLabel className="font-normal">{member}</FormLabel>

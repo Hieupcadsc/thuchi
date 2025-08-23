@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/sqlite';
 import crypto from 'crypto';
+import { DEMO_USER } from '@/lib/constants';
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,6 +11,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
+      );
+    }
+
+    // Block password change for Demo user
+    if (username === DEMO_USER) {
+      return NextResponse.json(
+        { error: 'Demo user cannot change password' },
+        { status: 403 }
       );
     }
 
@@ -112,6 +121,16 @@ export async function GET(request: NextRequest) {
         { error: 'Username is required' },
         { status: 400 }
       );
+    }
+
+    // Skip password check for Demo user
+    if (username === DEMO_USER) {
+      return NextResponse.json({
+        hasWeakPassword: false,
+        passwordStrength: 'demo',
+        isDefaultPassword: false,
+        isDemoUser: true
+      });
     }
 
     const getUserStmt = db.prepare('SELECT username, passwordStrength, passwordChangedAt FROM users WHERE username = ?');

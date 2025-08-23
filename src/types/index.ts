@@ -4,7 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 export type UserType = string;
 
 // Specific user roles within the family
-export type FamilyMember = 'Minh Đan' | 'Minh Hiếu';
+export type FamilyMember = 'Minh Đan' | 'Minh Hiếu' | 'Demo';
 export type PaymentSource = 'cash' | 'bank'; // Added PaymentSource type
 
 export interface Category {

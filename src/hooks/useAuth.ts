@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Transaction, UserType, FamilyMember, HighValueExpenseAlert, PaymentSource } from '@/types';
 import { toast as showAppToast } from './use-toast';
-import { FAMILY_MEMBERS, APP_NAME, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, FAMILY_ACCOUNT_ID } from '@/lib/constants';
+import { FAMILY_MEMBERS, APP_NAME, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, FAMILY_ACCOUNT_ID, DEMO_USER, DEMO_ACCOUNT_ID } from '@/lib/constants';
 import { format } from 'date-fns';
 import { firestoreService } from '@/lib/firestore-service';
 
@@ -45,7 +45,7 @@ export const useAuthStore = create<AuthState>()(
       transactions: [],
       highValueExpenseAlerts: [],
       login: async (user, pass) => {
-        if (!FAMILY_MEMBERS.includes(user as FamilyMember)) {
+        if (!FAMILY_MEMBERS.includes(user as FamilyMember) && user !== DEMO_USER) {
           showAppToast({
             title: "Đăng nhập thất bại",
             description: "Tài khoản không tồn tại.",
@@ -75,9 +75,12 @@ export const useAuthStore = create<AuthState>()(
               localStorage.setItem(`password_strength_${user}`, data.user.passwordStrength);
             }
 
+            // Set appropriate family ID based on user type
+            const familyId = user === DEMO_USER ? DEMO_ACCOUNT_ID : FAMILY_ACCOUNT_ID;
+            
             set({
               currentUser: user,
-              familyId: FAMILY_ACCOUNT_ID,
+              familyId: familyId,
             });
             return true;
           } else {
@@ -154,6 +157,50 @@ export const useAuthStore = create<AuthState>()(
         }));
         console.log("🔧 [useAuth] After adding, transactions in state:", get().transactions.length);
 
+        // Handle Demo user differently - save to localStorage only
+        if (loggedInUser === DEMO_USER) {
+          try {
+            // Save to localStorage for Demo user
+            const currentState = get();
+            localStorage.setItem(`transactions_${currentFamilyId}`, JSON.stringify(currentState.transactions));
+            
+            showAppToast({ title: "Thành công!", description: "Đã thêm giao dịch Demo." });
+
+            // Handle high value expense alerts for Demo too
+            if (newTransaction.type === 'expense' &&
+                newTransaction.categoryId !== RUT_TIEN_MAT_CATEGORY_ID && 
+                newTransaction.categoryId !== NAP_TIEN_MAT_CATEGORY_ID && 
+                newTransaction.amount > HIGH_EXPENSE_THRESHOLD
+               ) {
+              const alert: HighValueExpenseAlert = {
+                id: newTransaction.id,
+                performedBy: newTransaction.performedBy,
+                amount: newTransaction.amount,
+                description: newTransaction.description,
+                date: new Date().toISOString(),
+                spouseHasViewed: false,
+              };
+              set((state) => ({
+                highValueExpenseAlerts: [...state.highValueExpenseAlerts, alert],
+              }));
+              
+              showAppToast({
+                title: "Lưu ý chi tiêu Demo",
+                description: `Bạn vừa ghi nhận một khoản chi lớn: ${newTransaction.amount.toLocaleString('vi-VN')} VND cho "${newTransaction.description}".`,
+                variant: "default",
+                duration: 7000,
+              });
+            }
+            return newTransaction;
+          } catch (error: any) {
+            console.error("Failed to save Demo transaction to localStorage:", error);
+            showAppToast({ title: "Lỗi Demo", description: "Không thể lưu giao dịch Demo.", variant: "destructive" });
+            set({ transactions: originalTransactions }); 
+            return null;
+          }
+        }
+
+        // Regular users - save to Firestore
         try {
           // Remove id field for Firestore service
           const { id, ...transactionWithoutId } = newTransaction;
@@ -217,29 +264,60 @@ export const useAuthStore = create<AuthState>()(
             transactions: state.transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t)
                                             .sort(sortTransactionsByCreationTime)
         }));
-        try {
-            await firestoreService.updateTransaction(updatedTransaction.id, updatedTransaction);
-            showAppToast({ title: "Thành công!", description: "Đã cập nhật giao dịch." });
-        } catch (error: any) {
-            console.error("Failed to update transaction:", error);
-            showAppToast({ title: "Lỗi cập nhật", description: error.message, variant: "destructive" });
+
+        // Handle Demo user differently
+        if (loggedInUser === DEMO_USER) {
+          try {
+            const currentState = get();
+            localStorage.setItem(`transactions_${currentState.familyId}`, JSON.stringify(currentState.transactions));
+            showAppToast({ title: "Thành công!", description: "Đã cập nhật giao dịch Demo." });
+          } catch (error: any) {
+            console.error("Failed to update Demo transaction:", error);
+            showAppToast({ title: "Lỗi Demo", description: "Không thể cập nhật giao dịch Demo.", variant: "destructive" });
             set({ transactions: originalTransactions }); 
+          }
+        } else {
+          // Regular users - save to Firestore  
+          try {
+              await firestoreService.updateTransaction(updatedTransaction.id, updatedTransaction);
+              showAppToast({ title: "Thành công!", description: "Đã cập nhật giao dịch." });
+          } catch (error: any) {
+              console.error("Failed to update transaction:", error);
+              showAppToast({ title: "Lỗi cập nhật", description: error.message, variant: "destructive" });
+              set({ transactions: originalTransactions }); 
+          }
         }
       },
 
       deleteTransaction: async (transactionId, monthYear) => {
         const originalTransactions = get().transactions;
+        const loggedInUser = get().currentUser;
         
         set(state => ({
             transactions: state.transactions.filter(t => t.id !== transactionId)
         }));
-        try {
-            await firestoreService.deleteTransaction(transactionId);
-            showAppToast({ title: "Thành công!", description: "Đã xóa giao dịch." });
-        } catch (error: any) {
-            console.error("Failed to delete transaction:", error);
-            showAppToast({ title: "Lỗi xóa", description: error.message, variant: "destructive" });
+
+        // Handle Demo user differently
+        if (loggedInUser === DEMO_USER) {
+          try {
+            const currentState = get();
+            localStorage.setItem(`transactions_${currentState.familyId}`, JSON.stringify(currentState.transactions));
+            showAppToast({ title: "Thành công!", description: "Đã xóa giao dịch Demo." });
+          } catch (error: any) {
+            console.error("Failed to delete Demo transaction:", error);
+            showAppToast({ title: "Lỗi Demo", description: "Không thể xóa giao dịch Demo.", variant: "destructive" });
             set({ transactions: originalTransactions }); 
+          }
+        } else {
+          // Regular users - delete from Firestore
+          try {
+              await firestoreService.deleteTransaction(transactionId);
+              showAppToast({ title: "Thành công!", description: "Đã xóa giao dịch." });
+          } catch (error: any) {
+              console.error("Failed to delete transaction:", error);
+              showAppToast({ title: "Lỗi xóa", description: error.message, variant: "destructive" });
+              set({ transactions: originalTransactions }); 
+          }
         }
       },
 
@@ -247,6 +325,7 @@ export const useAuthStore = create<AuthState>()(
         if (transactionsToDelete.length === 0) return;
         const originalTransactions = get().transactions;
         const transactionIds = transactionsToDelete.map(t => t.id);
+        const loggedInUser = get().currentUser;
 
         console.log('🗑️ Starting bulk delete for transaction IDs:', transactionIds);
 
@@ -255,42 +334,83 @@ export const useAuthStore = create<AuthState>()(
             transactions: state.transactions.filter(t => !transactionIds.includes(t.id))
         }));
 
-        try {
-            console.log('🔄 Calling firestoreService.bulkDeleteTransactions...');
-            await firestoreService.bulkDeleteTransactions(transactionIds);
-            console.log('✅ Firestore bulk delete completed successfully');
-            
-            // Also save to localStorage for persistence (temporary fix)
+        // Handle Demo user differently
+        if (loggedInUser === DEMO_USER) {
+          try {
             const currentState = get();
             localStorage.setItem(`transactions_${currentState.familyId}`, JSON.stringify(currentState.transactions));
-            console.log('💾 Saved updated transactions to localStorage');
-            
-            showAppToast({ title: "Thành công!", description: `Đã xóa ${transactionsToDelete.length} giao dịch.` });
-        } catch (error: any) {
-            console.error("❌ Failed to bulk delete transactions:", error);
-            console.error("Error name:", error.name);
-            console.error("Error message:", error.message);
-            console.error("Error code:", error.code);
-            console.error("Full error object:", error);
-            
+            console.log('💾 Saved updated Demo transactions to localStorage');
+            showAppToast({ title: "Thành công!", description: `Đã xóa ${transactionsToDelete.length} giao dịch Demo.` });
+          } catch (error: any) {
+            console.error("❌ Failed to bulk delete Demo transactions:", error);
             showAppToast({ 
-              title: "Lỗi Xóa Hàng Loạt", 
-              description: `Chi tiết lỗi: ${error.message}`, 
+              title: "Lỗi Xóa Demo", 
+              description: "Không thể xóa giao dịch Demo.", 
               variant: "destructive" 
             });
-            
-            // Rollback UI changes
             set({ transactions: originalTransactions }); 
+          }
+        } else {
+          // Regular users - delete from Firestore
+          try {
+              console.log('🔄 Calling firestoreService.bulkDeleteTransactions...');
+              await firestoreService.bulkDeleteTransactions(transactionIds);
+              console.log('✅ Firestore bulk delete completed successfully');
+              
+              // Also save to localStorage for persistence (temporary fix)
+              const currentState = get();
+              localStorage.setItem(`transactions_${currentState.familyId}`, JSON.stringify(currentState.transactions));
+              console.log('💾 Saved updated transactions to localStorage');
+              
+              showAppToast({ title: "Thành công!", description: `Đã xóa ${transactionsToDelete.length} giao dịch.` });
+          } catch (error: any) {
+              console.error("❌ Failed to bulk delete transactions:", error);
+              console.error("Error name:", error.name);
+              console.error("Error message:", error.message);
+              console.error("Error code:", error.code);
+              console.error("Full error object:", error);
+              
+              showAppToast({ 
+                title: "Lỗi Xóa Hàng Loạt", 
+                description: `Chi tiết lỗi: ${error.message}`, 
+                variant: "destructive" 
+              });
+              
+              // Rollback UI changes
+              set({ transactions: originalTransactions }); 
+          }
         }
       },
 
       fetchTransactionsByMonth: async (familyIdToFetch, monthYear) => {
-        if (familyIdToFetch !== FAMILY_ACCOUNT_ID) {
+        // Normalize family ID - but keep Demo separate
+        if (familyIdToFetch !== FAMILY_ACCOUNT_ID && familyIdToFetch !== DEMO_ACCOUNT_ID) {
             familyIdToFetch = FAMILY_ACCOUNT_ID;
         }
         
         console.log(`[useAuthStore fetchTransactionsByMonth] Fetching transactions for familyId: ${familyIdToFetch}, monthYear: ${monthYear}`); 
 
+        // Handle Demo user - only use localStorage
+        if (familyIdToFetch === DEMO_ACCOUNT_ID) {
+          try {
+            console.log('🔄 Demo user - loading from localStorage only...');
+            const localStorageKey = `transactions_${DEMO_ACCOUNT_ID}`;
+            const localData = localStorage.getItem(localStorageKey);
+            
+            if (localData) {
+              const localTransactions = JSON.parse(localData);
+              set({ transactions: localTransactions });
+              console.log(`✅ Demo: Loaded ${localTransactions.length} transactions from localStorage`);
+            } else {
+              console.log('📄 Demo: No transactions in localStorage');
+            }
+          } catch (error) {
+            console.error('❌ Demo: Failed to load from localStorage:', error);
+          }
+          return;
+        }
+
+        // Regular users - use Firestore
         try {
           // Try Firestore first
           console.log('🔄 Trying Firestore...');
@@ -360,7 +480,8 @@ export const useAuthStore = create<AuthState>()(
       },
 
       getTransactionsForFamilyByMonth: (familyIdToFilter, monthYear) => {
-        if (familyIdToFilter !== FAMILY_ACCOUNT_ID) {
+        // Normalize family ID - but keep Demo separate
+        if (familyIdToFilter !== FAMILY_ACCOUNT_ID && familyIdToFilter !== DEMO_ACCOUNT_ID) {
             familyIdToFilter = FAMILY_ACCOUNT_ID;
         }
         const allTransactions = get().transactions;
@@ -381,7 +502,9 @@ export const useAuthStore = create<AuthState>()(
 
       processCashWithdrawal: async (amount: number, note?: string) => {
         const loggedInUser = get().currentUser;
-        if (!loggedInUser) {
+        const currentFamilyId = get().familyId;
+        
+        if (!loggedInUser || !currentFamilyId) {
           showAppToast({ title: "Lỗi", description: "Vui lòng đăng nhập để thực hiện.", variant: "destructive" });
           return false;
         }
@@ -437,7 +560,35 @@ export const useAuthStore = create<AuthState>()(
         const state = get();
         const familyId = state.familyId || FAMILY_ACCOUNT_ID;
         
-        console.log('🔄 Force refreshing ALL transactions from Firestore...');
+        console.log('🔄 Force refreshing ALL transactions...');
+        
+        // Handle Demo user differently
+        if (familyId === DEMO_ACCOUNT_ID) {
+          console.log('🔄 Demo user - refreshing from localStorage...');
+          // Clear state and reload from localStorage
+          set({ transactions: [] });
+          
+          try {
+            const localStorageKey = `transactions_${DEMO_ACCOUNT_ID}`;
+            const localData = localStorage.getItem(localStorageKey);
+            
+            if (localData) {
+              const localTransactions = JSON.parse(localData);
+              set({ transactions: localTransactions });
+              console.log(`✅ Demo: Refreshed ${localTransactions.length} transactions from localStorage`);
+            } else {
+              console.log('📄 Demo: No transactions in localStorage to refresh');
+            }
+          } catch (error) {
+            console.error('❌ Demo: Failed to refresh from localStorage:', error);
+            set({ transactions: [] });
+            throw error;
+          }
+          return;
+        }
+
+        // Regular users - refresh from Firestore
+        console.log('🔄 Regular user - refreshing from Firestore...');
         
         // Clear ALL caches
         localStorage.removeItem(`transactions_${familyId}`);

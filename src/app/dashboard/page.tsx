@@ -22,6 +22,8 @@ const TransactionCalendar = dynamic(
   }
 );
 import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera, PlusCircle, Landmark, Wallet, ArrowRightLeft, ChevronDown, RefreshCw, Sparkles, Calendar, Eye, EyeOff } from 'lucide-react';
+import { DemoIndicator } from '@/components/ui/demo-indicator';
+import { DEMO_USER } from '@/lib/constants';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -367,6 +369,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 section-spacing-fhd container-fhd">
+      {/* Demo Indicator for Demo Users */}
+      {currentUser === DEMO_USER && <DemoIndicator />}
+      
       {/* Main Content - Now takes full width */}
       <div className="space-y-6 element-spacing-fhd">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

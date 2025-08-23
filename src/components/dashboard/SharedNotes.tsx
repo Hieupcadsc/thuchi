@@ -33,7 +33,7 @@ import {
 import { firestoreService } from '@/lib/firestore-service';
 import { useAuthStore } from '@/hooks/useAuth';
 import type { FamilyMember, StickyNote as StickyNoteType } from '@/types';
-import { FAMILY_ACCOUNT_ID } from '@/lib/constants';
+import { FAMILY_ACCOUNT_ID, DEMO_USER, DEMO_ACCOUNT_ID } from '@/lib/constants';
 import { format, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -503,7 +503,7 @@ const StickyNoteCard = React.memo(function StickyNoteCard({
 
 // Main Sticky Notes Manager
 export function SharedNotes() {
-  const { currentUser } = useAuthStore();
+  const { currentUser, familyId } = useAuthStore();
   const { toast } = useToast();
   
   const [notes, setNotes] = useState<StickyNoteType[]>([]);
@@ -514,21 +514,37 @@ export function SharedNotes() {
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
   const [dragOverNoteId, setDragOverNoteId] = useState<string | null>(null);
 
-  // Load notes from Firestore
+  // Load notes - Demo user uses localStorage, regular users use Firestore
   const loadNotes = useCallback(async () => {
     setIsLoading(true);
     try {
-      const fetchedNotes = await firestoreService.getStickyNotes(FAMILY_ACCOUNT_ID);
-      setNotes(fetchedNotes);
-      setError(null);
-      // Loaded sticky notes successfully
+      if (currentUser === DEMO_USER) {
+        // Demo user - load from localStorage
+        const localKey = `sticky_notes_${DEMO_ACCOUNT_ID}`;
+        const localData = localStorage.getItem(localKey);
+        if (localData) {
+          const demoNotes = JSON.parse(localData);
+          setNotes(demoNotes);
+          console.log(`📝 Demo: Loaded ${demoNotes.length} sticky notes from localStorage`);
+        } else {
+          setNotes([]);
+          console.log('📝 Demo: No sticky notes in localStorage');
+        }
+        setError(null);
+      } else {
+        // Regular users - load from Firestore
+        const fetchedNotes = await firestoreService.getStickyNotes(FAMILY_ACCOUNT_ID);
+        setNotes(fetchedNotes);
+        setError(null);
+        console.log(`📝 Regular: Loaded ${fetchedNotes.length} sticky notes from Firestore`);
+      }
     } catch (err) {
       console.error('Error loading sticky notes:', err);
       setError('Không thể tải sticky notes');
       toast({ title: "❌ Lỗi", description: "Không thể tải sticky notes", variant: "destructive" });
     }
     setIsLoading(false);
-  }, [toast]);
+  }, [currentUser, toast]);
 
   useEffect(() => {
     loadNotes();
@@ -544,8 +560,10 @@ export function SharedNotes() {
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
     const now = new Date().toISOString();
     
+    const targetFamilyId = currentUser === DEMO_USER ? DEMO_ACCOUNT_ID : FAMILY_ACCOUNT_ID;
+    
     const newNoteData: Omit<StickyNoteType, 'id'> = {
-      familyId: FAMILY_ACCOUNT_ID,
+      familyId: targetFamilyId,
       title: '',
       content: '<p>Ghi chú mới...</p>',
       color: randomColor,
@@ -558,23 +576,44 @@ export function SharedNotes() {
     };
 
     try {
-      // Optimistic update
-      const tempNote: StickyNoteType = { id: 'temp-' + Date.now(), ...newNoteData };
-      setNotes(prev => [tempNote, ...prev]);
-      
-      // Save to Firestore
-      const savedNote = await firestoreService.addStickyNote(newNoteData);
-      
-      // Replace temp note with real note
-      setNotes(prev => prev.map(note => 
-        note.id === tempNote.id ? savedNote : note
-      ));
-      
-      toast({ title: "✅ Thành công", description: "Đã tạo sticky note mới!", duration: 2000 });
+      if (currentUser === DEMO_USER) {
+        // Demo user - save to localStorage
+        const newNote: StickyNoteType = { 
+          id: `demo-note-${Date.now()}`, 
+          ...newNoteData 
+        };
+        
+        const updatedNotes = [newNote, ...notes];
+        setNotes(updatedNotes);
+        
+        // Save to localStorage
+        const localKey = `sticky_notes_${DEMO_ACCOUNT_ID}`;
+        localStorage.setItem(localKey, JSON.stringify(updatedNotes));
+        
+        toast({ title: "✅ Thành công", description: "Đã tạo sticky note Demo!", duration: 2000 });
+        console.log('📝 Demo: Created sticky note:', newNote.id);
+      } else {
+        // Regular users - save to Firestore
+        // Optimistic update
+        const tempNote: StickyNoteType = { id: 'temp-' + Date.now(), ...newNoteData };
+        setNotes(prev => [tempNote, ...prev]);
+        
+        // Save to Firestore
+        const savedNote = await firestoreService.addStickyNote(newNoteData);
+        
+        // Replace temp note with real note
+        setNotes(prev => prev.map(note => 
+          note.id === tempNote.id ? savedNote : note
+        ));
+        
+        toast({ title: "✅ Thành công", description: "Đã tạo sticky note mới!", duration: 2000 });
+      }
     } catch (error) {
       console.error('Error creating sticky note:', error);
-      // Remove temp note on error
-      setNotes(prev => prev.filter(note => !note.id.startsWith('temp-')));
+      // Remove temp note on error for regular users
+      if (currentUser !== DEMO_USER) {
+        setNotes(prev => prev.filter(note => !note.id.startsWith('temp-')));
+      }
       toast({ title: "❌ Lỗi", description: "Không thể tạo sticky note", variant: "destructive" });
     }
   };
@@ -585,14 +624,22 @@ export function SharedNotes() {
     try {
       // Optimistic update
       const updatedData = { ...updates, lastModifiedBy: currentUser, updatedAt: new Date().toISOString() };
-      setNotes(prev => prev.map(note => 
+      const updatedNotes = notes.map(note => 
         note.id === id 
           ? { ...note, ...updatedData }
           : note
-      ));
+      );
+      setNotes(updatedNotes);
       
-      // Save to Firestore (silent - no toast spam)
-      await firestoreService.updateStickyNote(id, updatedData);
+      if (currentUser === DEMO_USER) {
+        // Demo user - save to localStorage
+        const localKey = `sticky_notes_${DEMO_ACCOUNT_ID}`;
+        localStorage.setItem(localKey, JSON.stringify(updatedNotes));
+        console.log('📝 Demo: Updated sticky note:', id);
+      } else {
+        // Regular users - save to Firestore (silent - no toast spam)
+        await firestoreService.updateStickyNote(id, updatedData);
+      }
     } catch (error) {
       console.error('Error updating sticky note:', error);
       // Revert optimistic update
@@ -606,12 +653,20 @@ export function SharedNotes() {
     
     try {
       // Optimistic update
-      setNotes(prev => prev.filter(note => note.id !== id));
+      const updatedNotes = notes.filter(note => note.id !== id);
+      setNotes(updatedNotes);
       
-      // Delete from Firestore
-      await firestoreService.deleteStickyNote(id);
-      
-      toast({ title: "🗑️ Đã xóa", description: "Sticky note đã được xóa", duration: 2000 });
+      if (currentUser === DEMO_USER) {
+        // Demo user - save to localStorage
+        const localKey = `sticky_notes_${DEMO_ACCOUNT_ID}`;
+        localStorage.setItem(localKey, JSON.stringify(updatedNotes));
+        console.log('📝 Demo: Deleted sticky note:', id);
+        toast({ title: "🗑️ Đã xóa", description: "Sticky note Demo đã được xóa", duration: 2000 });
+      } else {
+        // Regular users - delete from Firestore
+        await firestoreService.deleteStickyNote(id);
+        toast({ title: "🗑️ Đã xóa", description: "Sticky note đã được xóa", duration: 2000 });
+      }
     } catch (error) {
       console.error('Error deleting sticky note:', error);
       // Revert optimistic update

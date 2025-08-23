@@ -4,9 +4,15 @@ import React, { useState, useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { useAuthStore } from '@/hooks/useAuth';
+import { DEMO_USER } from '@/lib/constants';
 
 // Check if current user has weak password via API
 const checkUserPasswordStrength = async (username: string): Promise<boolean> => {
+  // Skip password check for Demo user
+  if (username === DEMO_USER) {
+    return false;
+  }
+
   try {
     // Check localStorage first for immediate feedback
     const passwordStrength = localStorage.getItem(`password_strength_${username}`);
@@ -27,7 +33,7 @@ const checkUserPasswordStrength = async (username: string): Promise<boolean> => 
     console.error('Error checking password strength:', error);
     
     // Fallback to default logic if API fails
-    const weakPasswordUsers = ['admin', 'test', 'demo', 'user'];
+    const weakPasswordUsers = ['admin', 'test', 'user']; // Removed 'demo' from list
     const isLikelyWeak = weakPasswordUsers.some(weak => 
       username.toLowerCase().includes(weak)
     );
@@ -46,6 +52,12 @@ export function WeakPasswordWarning() {
   useEffect(() => {
     const checkPassword = async () => {
       if (!currentUser || hasChecked) return;
+
+      // Skip password check completely for Demo user
+      if (currentUser === DEMO_USER) {
+        setHasChecked(true);
+        return;
+      }
 
       try {
         const isWeak = await checkUserPasswordStrength(currentUser);

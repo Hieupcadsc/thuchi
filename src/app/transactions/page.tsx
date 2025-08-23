@@ -12,7 +12,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuthStore } from '@/hooks/useAuth';
 import type { Transaction, FamilyMember } from '@/types';
-import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS, FAMILY_ACCOUNT_ID, ALL_CATEGORIES_VALUE, ALL_MEMBERS_VALUE, ALL_TRANSACTIONS_VALUE } from '@/lib/constants';
+import { CATEGORIES, MONTH_NAMES, FAMILY_MEMBERS, FAMILY_ACCOUNT_ID, ALL_CATEGORIES_VALUE, ALL_MEMBERS_VALUE, ALL_TRANSACTIONS_VALUE, DEMO_USER } from '@/lib/constants';
 import { PlusCircle, AlertTriangle, Loader2, Search, Filter, CalendarIcon, XCircle, Camera, Trash2, RefreshCw, Tag, User } from 'lucide-react';
 import { format, subMonths, isValid, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -49,6 +49,9 @@ export default function TransactionsPage() {
   const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth, addTransaction, updateTransaction, deleteTransaction, bulkDeleteTransactions } = useAuthStore();
   const { toast } = useToast();
   const { showMobileUI } = useMobileFirst();
+  
+  // Dynamic user options based on current user
+  const availableUsers = currentUser === DEMO_USER ? [DEMO_USER] : FAMILY_MEMBERS;
   
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -657,7 +660,7 @@ export default function TransactionsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={ALL_MEMBERS_VALUE}>👥 Tất cả thành viên</SelectItem>
-                    {FAMILY_MEMBERS.map(member => (
+                    {availableUsers.map(member => (
                       <SelectItem key={member} value={member}>
                         {member}
                       </SelectItem>

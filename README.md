@@ -19,6 +19,14 @@
 - ✅ **Mobile** - iPhone và Android phones
 - 🎨 **Modern UI** - Clean, professional, user-friendly
 
+## 🚀 **CI/CD Pipeline**
+
+- ✅ **GitHub Actions** - Automated build & deploy
+- ✅ **Docker** - Containerized application
+- ✅ **Kubernetes** - Production deployment
+- ✅ **GitHub Container Registry** - Image storage
+- ✅ **Self-hosted Runner** - Custom deployment environment
+
 ## FAQ (Câu hỏi thường gặp)
 
 ### Giao diện có tối ưu cho màn hình lớn không?
@@ -30,6 +38,46 @@
 ---
 
 ## 📝 Changelog
+
+### 🗓️ **07/01/2025** - 🚀 **CI/CD Pipeline & Big Update v2.1.0**
+
+#### 🎉 **MAJOR MILESTONE - CI/CD Pipeline Hoàn Thành**
+- ✅ **Automated Deployment** - Push code → Auto build → Auto deploy
+- ✅ **Docker Containerization** - Multi-stage build, optimized image
+- ✅ **Kubernetes Deployment** - Production-ready orchestration
+- ✅ **GitHub Actions** - Complete CI/CD workflow
+- ✅ **Self-hosted Runner** - Custom deployment environment
+- ✅ **GitHub Container Registry** - Secure image storage
+
+#### 🔐 **Bảo mật mật khẩu nâng cao**
+- 🛡️ **Weak Password Detection** - Tự động phát hiện mật khẩu yếu
+- 🔒 **Strong Password Enforcement** - Bắt buộc đổi mật khẩu mạnh
+- ⚡ **Real-time Validation** - Kiểm tra ngay lập tức khi nhập
+- 🎯 **Security Badge** - Hiển thị mức độ bảo mật
+
+#### 📅 **Nhập lịch làm việc thông minh**
+- ✨ **Simple Text Input** - Nhập ca làm việc bằng 1 dòng text
+- 🎯 **Smart Parsing** - Hiểu format: L2 D2 T2 OFF...
+- 🚀 **No Complex AI** - Đơn giản, nhanh, chính xác
+- 📱 **Mobile Friendly** - Tối ưu cho mobile input
+
+#### 🏠 **Smart Hub hoàn chỉnh**
+- 🎛️ **Control Center** - Trung tâm điều khiển thông minh
+- 🧭 **Full Navigation** - Điều hướng đầy đủ
+- 🌤️ **Weather Widget** - Hiển thị thời tiết real-time
+- 🏡 **Smart Home Controls** - Điều khiển thiết bị thông minh
+
+#### 🤖 **AI Processing cải tiến**
+- 📊 **Bill Processing Optimization** - Tối ưu xử lý hóa đơn
+- 🎯 **Name Reading Fix** - Loại bỏ lỗi đọc sai tên
+- ⏰ **Shift Recognition** - Cải thiện nhận diện ca làm việc
+- 📈 **Accuracy Improvement** - Tăng độ chính xác AI
+
+#### 🛠️ **Technical Improvements**
+- 🔧 **Module Resolution Fix** - Sửa lỗi @/ path aliases trong Docker
+- 📦 **Webpack Optimization** - Tối ưu build process
+- 🐳 **Docker Multi-stage** - Giảm image size
+- ⚡ **Build Performance** - Tăng tốc build time
 
 ### 🗓️ **09/07/2025** - Sticky Notes Enhancement
 

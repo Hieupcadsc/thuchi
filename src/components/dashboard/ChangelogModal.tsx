@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { X, Sparkles, Shield, Calendar, Bot, Home, Zap, CheckCircle, Star, Rocket, Docker, Server, GitBranch, Package } from 'lucide-react';
+import { X, Sparkles, Shield, Calendar, Bot, Home, Zap, CheckCircle, Star, Rocket, Box, Server, GitBranch, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,7 +24,7 @@ const changelogData = [
         type: "feature"
       },
       {
-        icon: Docker,
+        icon: Box,
         title: "🐳 Docker Containerization",
         description: "Multi-stage build, optimized image, production-ready container với Next.js 15",
         type: "improvement"

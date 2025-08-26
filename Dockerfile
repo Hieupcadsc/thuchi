@@ -23,11 +23,6 @@ RUN mkdir -p /app/data
 # Set environment variables for build
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
-ENV SKIP_ENV_VALIDATION=1
-
-# Skip TypeScript and ESLint errors during build
-ENV NEXT_SKIP_TYPECHECK=1
-ENV ESLINT_NO_DEV_ERRORS=true
 
 # Build Next.js application
 RUN npm run build

@@ -54,4 +54,15 @@ spec:
             name: nodeapp-service
             port:
               number: 80
+  # Direct external IP access for VLAN machines
+  - host: 192.168.100.170
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nodeapp-service
+            port:
+              number: 80
 

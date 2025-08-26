@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: thuchi-app-service
-  namespace: thuchi-app
+  name: nodeapp-service
+  namespace: app
   labels:
-    app: thuchi-app
+    app: nodeapp
 spec:
-  type: NodePort  # Có thể thay bằng LoadBalancer nếu có load balancer
+  type: NodePort
   selector:
-    app: thuchi-app
+    app: nodeapp
   ports:
   - name: http
     port: 80

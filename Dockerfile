@@ -24,6 +24,14 @@ RUN mkdir -p /app/data
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# Debug: List files to verify structure
+RUN echo "--- DEBUG: Checking file structure ---" && \
+    ls -la && \
+    ls -la src/ && \
+    ls -la src/hooks/ && \
+    ls -la src/components/dashboard/ && \
+    cat tsconfig.json | head -30
+
 # Build Next.js application
 RUN npm run build
 

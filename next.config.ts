@@ -57,9 +57,7 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-  experimental: {
-    serverComponentsExternalPackages: ['genkit', '@genkit-ai/googleai', '@genkit-ai/express'],
-  },
+  serverExternalPackages: ['genkit', '@genkit-ai/googleai', '@genkit-ai/express'],
 };
 
 export default withPWA(nextConfig);

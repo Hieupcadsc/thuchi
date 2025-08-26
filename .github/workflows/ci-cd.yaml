@@ -13,13 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions: { contents: read, packages: write }
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v5
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: true
@@ -31,13 +34,19 @@ jobs:
     needs: build
     runs-on: self-hosted   # chính là runner bạn vừa cài
     steps:
-      - uses: actions/checkout@v4
-      - run: kubectl create ns app --dry-run=client -o yaml | kubectl apply -f -
-      - run: |
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Create namespace
+        run: kubectl create ns app --dry-run=client -o yaml | kubectl apply -f -
+      - name: Apply Kubernetes manifests
+        run: |
           kubectl apply -f k8s/deployment.yaml
           kubectl apply -f k8s/service.yaml
-      - env: { IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }} }
+      - name: Update deployment image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
         run: |
           kubectl -n app set image deploy/nodeapp nodeapp=$IMAGE
           kubectl -n app rollout status deploy/nodeapp
-      - run: kubectl -n app get pods,svc -o wide
+      - name: Show deployment status
+        run: kubectl -n app get pods,svc -o wide

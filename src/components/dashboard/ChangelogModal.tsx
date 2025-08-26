@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { X, Sparkles, Shield, Calendar, Bot, Home, Zap, CheckCircle, Star } from 'lucide-react';
+import { X, Sparkles, Shield, Calendar, Bot, Home, Zap, CheckCircle, Star, Rocket, Docker, Server, GitBranch, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +17,36 @@ const changelogData = [
     date: "07/01/2025",
     tag: "latest",
     features: [
+      {
+        icon: Rocket,
+        title: "🚀 CI/CD Pipeline Hoàn Thành",
+        description: "Automated deployment với Docker + Kubernetes + GitHub Actions. Push code → Auto build → Auto deploy!",
+        type: "feature"
+      },
+      {
+        icon: Docker,
+        title: "🐳 Docker Containerization",
+        description: "Multi-stage build, optimized image, production-ready container với Next.js 15",
+        type: "improvement"
+      },
+      {
+        icon: Server,
+        title: "☸️ Kubernetes Deployment",
+        description: "Production-ready orchestration với auto-scaling, health checks, và rolling updates",
+        type: "improvement"
+      },
+      {
+        icon: GitBranch,
+        title: "⚡ GitHub Actions Automation",
+        description: "Complete CI/CD workflow: build, test, push image, deploy tự động",
+        type: "improvement"
+      },
+      {
+        icon: Package,
+        title: "📦 GitHub Container Registry",
+        description: "Secure image storage với private/public visibility control",
+        type: "improvement"
+      },
       {
         icon: Shield,
         title: "Bảo mật mật khẩu nâng cao",

@@ -15,10 +15,7 @@ RUN npm ci --omit=dev
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY package*.json tsconfig.json next.config.ts components.json tailwind.config.ts postcss.config.mjs ./
-COPY src/ ./src/
-COPY public/ ./public/
-COPY data/ ./data/
+COPY . .
 
 # Create data directory for SQLite database
 RUN mkdir -p /app/data

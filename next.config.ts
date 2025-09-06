@@ -34,6 +34,12 @@ const nextConfig: NextConfig = {
     ],
   },
   webpack: (config, { isServer }) => {
+    // Add path alias for @ symbol to ensure webpack resolves imports correctly
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      '@': require('path').join(__dirname, 'src'),
+    };
+
     if (!isServer) {
       // Exclude server-only modules from client bundle
       config.resolve.fallback = {
@@ -57,9 +63,7 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-  experimental: {
-    serverComponentsExternalPackages: ['genkit', '@genkit-ai/googleai', '@genkit-ai/express'],
-  },
+  serverExternalPackages: ['genkit', '@genkit-ai/googleai', '@genkit-ai/express'],
 };
 
 export default withPWA(nextConfig);

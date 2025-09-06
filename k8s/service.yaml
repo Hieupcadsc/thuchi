@@ -6,12 +6,11 @@ metadata:
   labels:
     app: nodeapp
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: nodeapp
   ports:
   - name: http
     port: 80
     targetPort: http
-    nodePort: 30080  # Port có thể truy cập từ bên ngoài
     protocol: TCP

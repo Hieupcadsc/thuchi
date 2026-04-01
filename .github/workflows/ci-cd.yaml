@@ -2,7 +2,7 @@ name: CI-CD to Minikube
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, thuchi ]
 
 env:
   REGISTRY: ghcr.io

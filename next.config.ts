@@ -8,14 +8,9 @@ const withPWA = withPWAInit({
   register: true,
   skipWaiting: true,
   disable: isDev,
-  // buildExcludes: [/middleware-manifest.json$/], // Example: exclude files from caching by service worker
-  // fallbacks: { // Example: fallback for offline pages
-  //   document: '/offline', // will be served when user is offline
-  // },
 });
 
 const nextConfig: NextConfig = {
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -34,14 +29,12 @@ const nextConfig: NextConfig = {
     ],
   },
   webpack: (config, { isServer }) => {
-    // Add path alias for @ symbol to ensure webpack resolves imports correctly
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
       '@': require('path').join(__dirname, 'src'),
     };
 
     if (!isServer) {
-      // Exclude server-only modules from client bundle
       config.resolve.fallback = {
         ...config.resolve.fallback,
         'async_hooks': false,
@@ -50,8 +43,7 @@ const nextConfig: NextConfig = {
         'tls': false,
         'child_process': false,
       };
-      
-      // Exclude genkit and AI-related packages from client bundle
+
       config.externals = config.externals || [];
       config.externals.push({
         'genkit': 'commonjs genkit',
@@ -59,11 +51,16 @@ const nextConfig: NextConfig = {
         '@genkit-ai/express': 'commonjs @genkit-ai/express',
         '@opentelemetry/api': 'commonjs @opentelemetry/api',
         '@opentelemetry/context-async-hooks': 'commonjs @opentelemetry/context-async-hooks',
+        'pg': 'commonjs pg',
+        'pg-native': 'commonjs pg-native',
       });
     }
     return config;
   },
   serverExternalPackages: ['genkit', '@genkit-ai/googleai', '@genkit-ai/express'],
+  experimental: {
+    instrumentationHook: true,
+  },
 };
 
 export default withPWA(nextConfig);

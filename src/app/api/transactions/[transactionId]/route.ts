@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { Transaction } from '@/types';
-import { firestoreService } from '@/lib/firestore-service';
+import { neonService as firestoreService } from '@/lib/neon-service';
 
 // PUT /api/transactions/[transactionId] - update transaction
 export async function PUT(

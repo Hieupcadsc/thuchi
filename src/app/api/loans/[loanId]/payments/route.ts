@@ -1,154 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/sqlite';
+import { getPool } from '@/lib/neon';
 import type { LoanPayment } from '@/types';
 import { THU_NO_CATEGORY_ID } from '@/lib/constants';
 
-// GET /api/loans/[loanId]/payments - Get all payments for a loan
+// GET /api/loans/[loanId]/payments
 export async function GET(
   request: NextRequest,
   { params }: { params: { loanId: string } }
 ) {
   try {
     const { loanId } = params;
+    if (!loanId) return NextResponse.json({ error: 'loanId is required' }, { status: 400 });
 
-    if (!loanId) {
-      return NextResponse.json({ error: 'loanId is required' }, { status: 400 });
-    }
-
-    const stmt = db.prepare('SELECT * FROM loan_payments WHERE loanId = ? ORDER BY paymentDate DESC');
-    const rows = stmt.all(loanId);
-
-    const payments: LoanPayment[] = rows.map((row: any) => ({
-      id: row.id,
-      loanId: row.loanId,
-      paymentAmount: row.paymentAmount,
-      paymentDate: row.paymentDate,
-      paymentMethod: row.paymentMethod,
-      note: row.note,
-      createdBy: row.createdBy,
-      createdAt: row.createdAt
-    }));
-
-    return NextResponse.json({ payments });
+    const pool = getPool();
+    const result = await pool.query(
+      'SELECT * FROM loan_payments WHERE "loanId" = $1 ORDER BY "paymentDate" DESC',
+      [loanId]
+    );
+    return NextResponse.json({ payments: result.rows });
   } catch (error) {
     console.error('Error fetching loan payments:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-// POST /api/loans/[loanId]/payments - Record a payment for a loan
+// POST /api/loans/[loanId]/payments
 export async function POST(
   request: NextRequest,
   { params }: { params: { loanId: string } }
 ) {
+  const pool = getPool();
+  const client = await pool.connect();
   try {
     const { loanId } = params;
     const body = await request.json();
-    const {
-      paymentAmount,
-      paymentDate,
-      paymentMethod,
-      note,
-      createdBy
-    } = body;
+    const { paymentAmount, paymentDate, paymentMethod, note, createdBy } = body;
 
-    // Validation
     if (!loanId || !paymentAmount || !paymentDate || !paymentMethod || !createdBy) {
-      return NextResponse.json({ 
-        error: 'Missing required fields: paymentAmount, paymentDate, paymentMethod, createdBy' 
-      }, { status: 400 });
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Check if loan exists
-    const loanStmt = db.prepare('SELECT * FROM loans WHERE id = ?');
-    const loan = loanStmt.get(loanId) as any;
+    const loanResult = await client.query('SELECT * FROM loans WHERE id = $1', [loanId]);
+    const loan = loanResult.rows[0];
+    if (!loan) return NextResponse.json({ error: 'Loan not found' }, { status: 404 });
 
-    if (!loan) {
-      return NextResponse.json({ error: 'Loan not found' }, { status: 404 });
-    }
-
-    // Validate payment amount
     if (paymentAmount <= 0 || paymentAmount > loan.remainingAmount) {
-      return NextResponse.json({ 
-        error: `Payment amount must be between 0 and ${loan.remainingAmount}` 
-      }, { status: 400 });
+      return NextResponse.json({ error: `Payment amount must be between 0 and ${loan.remainingAmount}` }, { status: 400 });
     }
 
     const paymentId = `payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const now = new Date().toISOString();
+    const newTotalPaid = loan.totalPaidAmount + paymentAmount;
+    const newRemainingAmount = loan.remainingAmount - paymentAmount;
+    const newStatus = newRemainingAmount <= 0 ? 'completed' :
+      loan.status === 'active' ? 'partially_paid' : loan.status;
 
-    // Start transaction
-    const transaction = db.transaction(() => {
-      // Insert payment record
-      const insertPaymentStmt = db.prepare(`
-        INSERT INTO loan_payments (
-          id, loanId, paymentAmount, paymentDate, paymentMethod, note, createdBy, createdAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
+    await client.query('BEGIN');
 
-      insertPaymentStmt.run(
-        paymentId, loanId, paymentAmount, paymentDate, paymentMethod, note, createdBy, now
-      );
+    await client.query(
+      `INSERT INTO loan_payments (id, "loanId", "paymentAmount", "paymentDate", "paymentMethod", note, "createdBy", "createdAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [paymentId, loanId, paymentAmount, paymentDate, paymentMethod, note || null, createdBy, now]
+    );
 
-      // Update loan totals
-      const newTotalPaid = loan.totalPaidAmount + paymentAmount;
-      const newRemainingAmount = loan.remainingAmount - paymentAmount;
-      
-      // Determine new status
-      let newStatus = loan.status;
-      if (newRemainingAmount <= 0) {
-        newStatus = 'completed';
-      } else if (newRemainingAmount < loan.remainingAmount) {
-        newStatus = loan.status === 'active' ? 'partially_paid' : loan.status;
-      }
+    await client.query(
+      `UPDATE loans SET "totalPaidAmount"=$1, "remainingAmount"=$2, status=$3, "updatedAt"=$4 WHERE id=$5`,
+      [newTotalPaid, newRemainingAmount, newStatus, now, loanId]
+    );
 
-      const updateLoanStmt = db.prepare(`
-        UPDATE loans 
-        SET totalPaidAmount = ?, remainingAmount = ?, status = ?, updatedAt = ?
-        WHERE id = ?
-      `);
+    // Create income transaction for payment received
+    const transactionId = `trans_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const monthYear = paymentDate.substring(0, 7);
+    await client.query(
+      `INSERT INTO transactions (id, "familyId", "performedBy", description, amount, date, type, "categoryId", "monthYear", note, "paymentSource", "createdAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [transactionId, loan.familyId, createdBy,
+       `Thu nợ từ: ${loan.borrowerName}`, paymentAmount,
+       paymentDate, 'income', THU_NO_CATEGORY_ID, monthYear,
+       `Thu ${Number(paymentAmount).toLocaleString('vi-VN')}₫ từ ${loan.borrowerName}${note ? ` - ${note}` : ''}`,
+       paymentMethod, now]
+    );
 
-      updateLoanStmt.run(newTotalPaid, newRemainingAmount, newStatus, now, loanId);
+    await client.query('COMMIT');
 
-      // Create transaction record for the payment (income)
-      const transactionId = `trans_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const monthYear = paymentDate.substring(0, 7); // YYYY-MM
-
-      const transactionStmt = db.prepare(`
-        INSERT INTO transactions (
-          id, userId, description, amount, date, type, categoryId, monthYear,
-          note, performedBy, paymentSource
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      transactionStmt.run(
-        transactionId, loan.familyId, `Thu nợ từ: ${loan.borrowerName}`, paymentAmount,
-        paymentDate, 'income', THU_NO_CATEGORY_ID, monthYear,
-        `Thu ${paymentAmount.toLocaleString('vi-VN')}₫ từ ${loan.borrowerName}${note ? ` - ${note}` : ''}`, 
-        createdBy, paymentMethod
-      );
-    });
-
-    transaction();
-
-    // Get the created payment
-    const selectStmt = db.prepare('SELECT * FROM loan_payments WHERE id = ?');
-    const row = selectStmt.get(paymentId) as any;
-
-    const payment: LoanPayment = {
-      id: row.id,
-      loanId: row.loanId,
-      paymentAmount: row.paymentAmount,
-      paymentDate: row.paymentDate,
-      paymentMethod: row.paymentMethod,
-      note: row.note,
-      createdBy: row.createdBy,
-      createdAt: row.createdAt
-    };
-
-    return NextResponse.json({ payment }, { status: 201 });
+    const paymentRow = await client.query('SELECT * FROM loan_payments WHERE id = $1', [paymentId]);
+    return NextResponse.json({ payment: paymentRow.rows[0] }, { status: 201 });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error creating loan payment:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  } finally {
+    client.release();
   }
-} 
+}

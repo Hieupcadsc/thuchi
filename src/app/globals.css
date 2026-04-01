@@ -312,7 +312,7 @@
   .nav-link-fhd   { /* no-op */ }
   .icon-sm-fhd    { @apply w-5 h-5; }
   .icon-md-fhd    { @apply w-7 h-7; }
-  .hover-lift     { @apply hover-lift; }
+  /* .hover-lift is defined above – no alias needed */
 }
 
 /* ── Global scrollbar ───────────────────────────────────────────────────────── */

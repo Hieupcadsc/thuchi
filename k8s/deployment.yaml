@@ -21,4 +21,10 @@ spec:
         ports:
         - containerPort: 3000
           name: http
-
+        env:
+        - name: DATABASE_URL
+          value: "postgresql://neondb_owner:npg_UZuEDWi6cy9G@ep-falling-salad-a1ds7wib-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+        - name: NODE_ENV
+          value: "production"
+        - name: GEMINI_API_KEY
+          value: "AIzaSyBerb8VJujQaSyb1WUnDLMqFYBRUWys0dg"

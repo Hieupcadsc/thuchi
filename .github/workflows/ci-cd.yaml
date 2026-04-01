@@ -36,8 +36,9 @@ jobs:
       - run: |
           kubectl apply -f k8s/deployment.yaml
           kubectl apply -f k8s/service.yaml
-      - env: { IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }} }
-        run: |
+      - run: |
           kubectl -n app set image deploy/nodeapp nodeapp=$IMAGE
           kubectl -n app rollout status deploy/nodeapp
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
       - run: kubectl -n app get pods,svc -o wide

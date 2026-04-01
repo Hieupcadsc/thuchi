@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { firestoreService } from '@/lib/firestore-service';
+import { neonService as firestoreService } from '@/lib/neon-service';
 
 export async function GET(request: NextRequest) {
   try {

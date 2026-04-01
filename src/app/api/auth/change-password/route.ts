@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/sqlite';
+import { query } from '@/lib/neon';
 import crypto from 'crypto';
 import { DEMO_USER } from '@/lib/constants';
 
@@ -8,21 +8,13 @@ export async function POST(request: NextRequest) {
     const { username, currentPassword, newPassword } = await request.json();
 
     if (!username || !currentPassword || !newPassword) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Block password change for Demo user
     if (username === DEMO_USER) {
-      return NextResponse.json(
-        { error: 'Demo user cannot change password' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'Demo user cannot change password' }, { status: 403 });
     }
 
-    // Validate new password strength
     const passwordValidation = validatePassword(newPassword);
     if (!passwordValidation.isValid) {
       return NextResponse.json(
@@ -31,83 +23,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user exists
-    const getUserStmt = db.prepare('SELECT * FROM users WHERE username = ?');
-    let user = getUserStmt.get(username) as any;
+    const result = await query('SELECT * FROM users WHERE username = $1', [username]);
+    let user = result.rows[0];
+    const now = new Date().toISOString();
 
-    // If user doesn't exist, create with default password check
     if (!user) {
-      const defaultPassword = '123456';
-      if (currentPassword !== defaultPassword) {
-        return NextResponse.json(
-          { error: 'Current password is incorrect' },
-          { status: 401 }
-        );
+      if (currentPassword !== '123456') {
+        return NextResponse.json({ error: 'Current password is incorrect' }, { status: 401 });
       }
-
-      // Create new user with hashed password
       const hashedPassword = hashPassword(newPassword);
-      const createUserStmt = db.prepare(`
-        INSERT INTO users (username, password, familyId, passwordStrength, passwordChangedAt, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `);
-      
-      const now = new Date().toISOString();
-      createUserStmt.run(
-        username,
-        hashedPassword,
-        1, // Default family ID
-        'strong',
-        now,
-        now,
-        now
+      await query(
+        `INSERT INTO users (username, password, "familyId", "passwordStrength", "passwordChangedAt", "createdAt", "updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [username, hashedPassword, 1, 'strong', now, now, now]
       );
-
-      return NextResponse.json({
-        success: true,
-        message: 'Password created successfully',
-        passwordStrength: 'strong'
-      });
+      return NextResponse.json({ success: true, message: 'Password created successfully', passwordStrength: 'strong' });
     }
 
-    // User exists, verify current password
     const isCurrentPasswordValid = verifyPassword(currentPassword, user.password);
     if (!isCurrentPasswordValid) {
-      return NextResponse.json(
-        { error: 'Current password is incorrect' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Current password is incorrect' }, { status: 401 });
     }
 
-    // Update password
     const hashedNewPassword = hashPassword(newPassword);
-    const updateUserStmt = db.prepare(`
-      UPDATE users 
-      SET password = ?, passwordStrength = ?, passwordChangedAt = ?, updatedAt = ?
-      WHERE username = ?
-    `);
-
-    const now = new Date().toISOString();
-    updateUserStmt.run(
-      hashedNewPassword,
-      'strong',
-      now,
-      now,
-      username
+    await query(
+      `UPDATE users SET password=$1, "passwordStrength"=$2, "passwordChangedAt"=$3, "updatedAt"=$4 WHERE username=$5`,
+      [hashedNewPassword, 'strong', now, now, username]
     );
 
-    return NextResponse.json({
-      success: true,
-      message: 'Password updated successfully',
-      passwordStrength: 'strong'
-    });
-
+    return NextResponse.json({ success: true, message: 'Password updated successfully', passwordStrength: 'strong' });
   } catch (error) {
     console.error('Error changing password:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -117,32 +64,21 @@ export async function GET(request: NextRequest) {
     const username = searchParams.get('username');
 
     if (!username) {
-      return NextResponse.json(
-        { error: 'Username is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Username is required' }, { status: 400 });
     }
 
-    // Skip password check for Demo user
     if (username === DEMO_USER) {
-      return NextResponse.json({
-        hasWeakPassword: false,
-        passwordStrength: 'demo',
-        isDefaultPassword: false,
-        isDemoUser: true
-      });
+      return NextResponse.json({ hasWeakPassword: false, passwordStrength: 'demo', isDefaultPassword: false, isDemoUser: true });
     }
 
-    const getUserStmt = db.prepare('SELECT username, passwordStrength, passwordChangedAt FROM users WHERE username = ?');
-    const user = getUserStmt.get(username) as any;
+    const result = await query(
+      'SELECT username, "passwordStrength", "passwordChangedAt" FROM users WHERE username = $1',
+      [username]
+    );
+    const user = result.rows[0];
 
     if (!user) {
-      // User not in database = using default password
-      return NextResponse.json({
-        hasWeakPassword: true,
-        passwordStrength: 'weak',
-        isDefaultPassword: true
-      });
+      return NextResponse.json({ hasWeakPassword: true, passwordStrength: 'weak', isDefaultPassword: true });
     }
 
     return NextResponse.json({
@@ -151,13 +87,9 @@ export async function GET(request: NextRequest) {
       isDefaultPassword: false,
       lastChanged: user.passwordChangedAt
     });
-
   } catch (error) {
     console.error('Error checking password strength:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -181,22 +113,18 @@ function validatePassword(password: string) {
     number: /\d/.test(password),
     special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
   };
-  
   const score = Object.values(checks).filter(Boolean).length;
-  const isWeak = password === '123456' || password === 'password' || password === '12345678';
+  const isWeak = ['123456', 'password', '12345678'].includes(password);
   const isValid = score >= 4 && !isWeak;
-
   return {
-    isValid,
-    score,
-    isWeak,
+    isValid, score, isWeak,
     errors: isValid ? [] : [
       !checks.length && 'Password must be at least 8 characters',
       !checks.uppercase && 'Password must contain uppercase letters',
-      !checks.lowercase && 'Password must contain lowercase letters', 
+      !checks.lowercase && 'Password must contain lowercase letters',
       !checks.number && 'Password must contain numbers',
       !checks.special && 'Password must contain special characters',
       isWeak && 'Password is too common'
     ].filter(Boolean)
   };
-} 
+}

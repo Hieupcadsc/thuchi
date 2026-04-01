@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/sqlite';
+import { query } from '@/lib/neon';
 import crypto from 'crypto';
 import { DEMO_USER, DEMO_ACCOUNT_ID } from '@/lib/constants';
 
@@ -14,81 +14,47 @@ export async function POST(request: NextRequest) {
     const { username, password } = await request.json();
 
     if (!username) {
-      return NextResponse.json(
-        { error: 'Username is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Username is required' }, { status: 400 });
     }
 
-    // Handle Demo user - no password required
     if (username === DEMO_USER) {
       return NextResponse.json({
         success: true,
-        user: {
-          username: DEMO_USER,
-          familyId: DEMO_ACCOUNT_ID,
-          passwordStrength: 'demo'
-        },
+        user: { username: DEMO_USER, familyId: DEMO_ACCOUNT_ID, passwordStrength: 'demo' },
         isDemoUser: true
       });
     }
 
     if (!password) {
-      return NextResponse.json(
-        { error: 'Password is required for non-demo users' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Password is required for non-demo users' }, { status: 400 });
     }
 
-    // Check if user exists in database
-    const getUserStmt = db.prepare('SELECT * FROM users WHERE username = ?');
-    const user = getUserStmt.get(username) as any;
+    const result = await query('SELECT * FROM users WHERE username = $1', [username]);
+    const user = result.rows[0];
 
     if (user) {
-      // User exists in database, verify hashed password
       const isPasswordValid = verifyPassword(password, user.password);
-      
       if (isPasswordValid) {
         return NextResponse.json({
           success: true,
-          user: {
-            username: user.username,
-            familyId: user.familyId,
-            passwordStrength: user.passwordStrength
-          }
+          user: { username: user.username, familyId: user.familyId, passwordStrength: user.passwordStrength }
         });
       } else {
-        return NextResponse.json(
-          { error: 'Invalid password' },
-          { status: 401 }
-        );
+        return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
       }
     } else {
-      // User not in database, check default password
-      const defaultPassword = '123456';
-      if (password === defaultPassword) {
+      if (password === '123456') {
         return NextResponse.json({
           success: true,
-          user: {
-            username,
-            familyId: 1, // Default family ID
-            passwordStrength: 'weak'
-          },
+          user: { username, familyId: 1, passwordStrength: 'weak' },
           isDefaultPassword: true
         });
       } else {
-        return NextResponse.json(
-          { error: 'Invalid username or password' },
-          { status: 401 }
-        );
+        return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 });
       }
     }
-
   } catch (error) {
     console.error('Error during login:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-} 
+}

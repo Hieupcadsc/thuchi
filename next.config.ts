@@ -53,12 +53,15 @@ const nextConfig: NextConfig = {
         '@genkit-ai/express': 'commonjs @genkit-ai/express',
         '@opentelemetry/api': 'commonjs @opentelemetry/api',
         '@opentelemetry/context-async-hooks': 'commonjs @opentelemetry/context-async-hooks',
+        'pg': 'commonjs pg',
+        'pg-native': 'commonjs pg-native',
       });
     }
     return config;
   },
   experimental: {
     serverComponentsExternalPackages: ['genkit', '@genkit-ai/googleai', '@genkit-ai/express'],
+    instrumentationHook: true,
   },
 };
 

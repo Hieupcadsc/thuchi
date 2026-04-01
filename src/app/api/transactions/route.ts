@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { Transaction } from '@/types';
-import { firestoreService } from '@/lib/firestore-service';
+import { neonService as firestoreService } from '@/lib/neon-service';
 
 // GET /api/transactions - get transactions by month/family
 export async function GET(request: NextRequest) {
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log('Calling firestoreService.getTransactionsByMonth...');
+    console.log('Calling neonService.getTransactionsByMonth...');
     const transactions = await firestoreService.getTransactionsByMonth(familyId, monthYear);
     console.log('Successfully fetched transactions:', transactions.length);
     

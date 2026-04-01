@@ -5,12 +5,11 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/hooks/useAuth';
 import { NAV_LINKS, APP_NAME } from '@/lib/constants';
-import { Button } from '@/components/ui/button';
 import { UserNav } from '@/components/layout/UserNav';
 import { GlobalAlertToaster } from '@/components/layout/GlobalAlertToaster';
 import { WeakPasswordWarning } from '@/components/auth/WeakPasswordWarning';
 import { ChatBot } from '@/components/ui/ChatBot';
-import { useTheme } from '@/contexts/ThemeContext'; 
+import { useTheme } from '@/contexts/ThemeContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useMobileFirst } from '@/hooks/use-mobile-detection';
 import { MobileBottomNavigation } from '@/components/mobile/MobileBottomNavigation';
@@ -24,166 +23,160 @@ import {
   SidebarMenuButton,
   SidebarInset,
   SidebarTrigger,
-  SidebarFooter
+  SidebarFooter,
 } from '@/components/ui/sidebar';
-import { LogOut, PiggyBank, Moon, Sun, Sparkles, Menu } from 'lucide-react';
-import { cn } from '@/lib/utils'; 
-
-
+import { LogOut, Wallet, Moon, Sun } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
-  const { currentUser } = useAuthStore((state) => ({
-    currentUser: state.currentUser,
-  }));
+  const { currentUser } = useAuthStore((state) => ({ currentUser: state.currentUser }));
   const logout = useAuthStore((state) => state.logout);
   const router = useRouter();
   const pathname = usePathname();
-  const { theme, toggleTheme } = useTheme(); 
+  const { theme, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
   const { showMobileUI } = useMobileFirst();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  console.log('[AuthenticatedLayout] Rendering. currentUser from store:', currentUser);
-
   useEffect(() => {
-    console.log('[AuthenticatedLayout] useEffect triggered. currentUser from store:', currentUser);
-    if (!currentUser) {
-      console.log('[AuthenticatedLayout] No currentUser in useEffect, redirecting to /login');
-      router.replace('/login');
-    }
+    if (!currentUser) router.replace('/login');
   }, [currentUser, router]);
 
-  // Close sidebar on mobile when navigating
   useEffect(() => {
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
+    if (isMobile) setSidebarOpen(false);
   }, [pathname, isMobile]);
 
   if (!currentUser) {
-    console.log('[AuthenticatedLayout] Render guard: currentUser is null/undefined, showing redirect message to /login.');
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-primary">
-        <div className="glass rounded-2xl p-8 text-center">
-          <Sparkles className="h-12 w-12 mx-auto mb-4 text-white" />
-          <p className="text-white text-lg font-medium">Đang chuyển hướng đến trang đăng nhập...</p>
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-sm text-muted-foreground">Đang tải...</p>
         </div>
       </div>
     );
   }
 
-  const handleLogout = () => {
-    logout();
-    // router.push('/login') is handled by the useEffect above
-  };
+  const handleLogout = () => logout();
+  const currentPageTitle = NAV_LINKS.find(
+    (link) => pathname === link.href || (link.href !== '/dashboard' && pathname.startsWith(link.href))
+  )?.label || APP_NAME;
 
-  const currentPageTitle = NAV_LINKS.find(link => pathname.startsWith(link.href))?.label || APP_NAME;
-  
   return (
     <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
       <GlobalAlertToaster />
       <WeakPasswordWarning />
-      <div className="flex min-h-screen flex-col overflow-x-hidden bg-gradient-to-br from-background via-background to-muted/20"> 
-        <div className="flex flex-1"> 
-          <Sidebar className="border-r border-border/50 !bg-white dark:!bg-slate-900 shadow-fhd" collapsible="icon">
-            <SidebarHeader className="p-4 xl:p-6 border-b border-sidebar-border/50 !bg-white dark:!bg-slate-900">
-              <Link href="/dashboard" className="flex items-center gap-3 xl:gap-4 group-data-[collapsible=icon]:justify-center hover-lift">
-                <div className="p-2 xl:p-3 bg-blue-500 rounded-xl">
-                  <PiggyBank className="h-6 w-6 xl:h-8 xl:w-8 text-white icon-md-fhd" />
-                </div>
-                <div className="group-data-[collapsible=icon]:hidden">
-                  <h1 className="text-xl xl:text-2xl 2xl:text-3xl font-bold text-slate-900 dark:text-slate-100">{APP_NAME}</h1>
-                  <p className="text-xs xl:text-base text-slate-600 dark:text-slate-400">Quản lý tài chính gia đình</p>
-                </div>
-              </Link>
-            </SidebarHeader>
-            <SidebarContent className="p-2 xl:p-4 !bg-white dark:!bg-slate-900">
-              <SidebarMenu className="space-y-2 xl:space-y-3">
-                {NAV_LINKS.map((link) => (
+
+      <div className="flex min-h-screen bg-background">
+        {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+        <Sidebar
+          collapsible="icon"
+          className="border-r-0 [&>div]:bg-sidebar [&>div]:text-sidebar-foreground"
+        >
+          {/* Logo */}
+          <SidebarHeader className="px-4 py-5 border-b border-sidebar-border/40">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center"
+            >
+              <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary shrink-0">
+                <Wallet className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <div className="group-data-[collapsible=icon]:hidden min-w-0">
+                <p className="font-bold text-sm text-sidebar-foreground truncate">{APP_NAME}</p>
+                <p className="text-[11px] text-sidebar-foreground/50">Tài chính gia đình</p>
+              </div>
+            </Link>
+          </SidebarHeader>
+
+          {/* Nav */}
+          <SidebarContent className="px-2 py-3">
+            <SidebarMenu className="space-y-0.5">
+              {NAV_LINKS.map((link) => {
+                const isActive =
+                  pathname === link.href ||
+                  (link.href !== '/dashboard' && pathname.startsWith(link.href));
+                return (
                   <SidebarMenuItem key={link.href}>
                     <SidebarMenuButton
                       asChild
-                      isActive={pathname === link.href || (link.href !== "/dashboard" && pathname.startsWith(link.href))}
-                      tooltip={{ children: link.label, className: "ml-2 text-base xl:text-lg" }}
-                      className="justify-start hover-lift rounded-xl mobile-friendly text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 data-[active=true]:bg-blue-100 dark:data-[active=true]:bg-blue-900 data-[active=true]:text-blue-700 dark:data-[active=true]:text-blue-300 nav-link-fhd py-3 xl:py-4 shadow-fhd"
+                      isActive={isActive}
+                      tooltip={{ children: link.label }}
+                      className={cn(
+                        'rounded-lg py-2.5 px-3 text-sm font-medium transition-colors',
+                        'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent',
+                        isActive && 'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary hover:text-sidebar-primary-foreground'
+                      )}
                     >
-                      <Link href={link.href} className="flex items-center gap-3 xl:gap-4">
-                        <link.icon className="h-4 w-4 xl:h-6 xl:w-6 icon-sm-fhd" />
-                        <span className="group-data-[collapsible=icon]:hidden font-medium text-base xl:text-lg">{link.label}</span>
+                      <Link href={link.href} className="flex items-center gap-3">
+                        <link.icon className="w-4 h-4 shrink-0" />
+                        <span className="group-data-[collapsible=icon]:hidden">{link.label}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarContent>
-            <SidebarFooter className="p-2 xl:p-4 border-t border-slate-200 dark:border-slate-700 !bg-white dark:!bg-slate-900">
-              <SidebarMenuButton 
-                  onClick={handleLogout}
-                  tooltip={{ children: "Đăng xuất", className: "ml-2 text-base xl:text-lg"}}
-                  className="justify-start w-full hover-lift rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 mobile-friendly nav-link-fhd py-3 xl:py-4 shadow-fhd"
-                  variant="outline"
-                >
-                  <LogOut className="h-4 w-4 xl:h-6 xl:w-6 icon-sm-fhd" />
-                  <span className="group-data-[collapsible=icon]:hidden font-medium text-base xl:text-lg">Đăng xuất</span>
-                </SidebarMenuButton>
-            </SidebarFooter>
-          </Sidebar>
-          <SidebarInset className="flex-1 flex flex-col overflow-x-hidden">
-            <header className="sticky top-0 z-20 glass border-b border-border/20 safe-area-top shadow-fhd">
-              <div className="flex items-center justify-between h-14 sm:h-16 xl:h-20 px-4 sm:px-6 xl:px-8">
-                <div className="flex items-center gap-4 xl:gap-6">
-                  <SidebarTrigger className="mobile-friendly p-2 xl:p-3 rounded-lg glass border-0 hover-lift nav-button-fhd" />
-                  <div className="flex items-center gap-3 xl:gap-4">
-                    <div className="hidden sm:block w-1 h-6 sm:h-8 xl:h-10 bg-gradient-primary rounded-full"></div>
-                    <div>
-                      <h2 className="text-base sm:text-lg xl:text-2xl 2xl:text-3xl font-bold text-foreground">{currentPageTitle}</h2>
-                      <p className="text-xs xl:text-base text-muted-foreground hidden sm:block">Xin chào, {currentUser}!</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 xl:gap-4"> 
-                  <button 
-                    onClick={toggleTheme} 
-                    aria-label="Toggle theme"
-                    className="mobile-friendly rounded-xl glass border-0 hover-lift p-2 xl:p-3 nav-button-fhd shadow-fhd"
-                  >
-                    {theme === 'light' ? <Moon className="h-5 w-5 xl:h-6 xl:w-6" /> : <Sun className="h-5 w-5 xl:h-6 xl:w-6" />}
-                  </button>
-                  <UserNav />
-                </div>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarContent>
+
+          {/* Footer */}
+          <SidebarFooter className="px-2 py-3 border-t border-sidebar-border/40">
+            <SidebarMenuButton
+              onClick={handleLogout}
+              tooltip={{ children: 'Đăng xuất' }}
+              className="rounded-lg py-2.5 px-3 text-sm font-medium text-sidebar-foreground/60 hover:text-rose-400 hover:bg-rose-500/10 transition-colors w-full"
+            >
+              <LogOut className="w-4 h-4 shrink-0" />
+              <span className="group-data-[collapsible=icon]:hidden">Đăng xuất</span>
+            </SidebarMenuButton>
+
+            {/* User info */}
+            <div className="group-data-[collapsible=icon]:hidden mt-2 px-3 py-2 rounded-lg bg-sidebar-accent/50">
+              <p className="text-xs font-semibold text-sidebar-foreground truncate">{currentUser}</p>
+              <p className="text-[11px] text-sidebar-foreground/50">Đang hoạt động</p>
+            </div>
+          </SidebarFooter>
+        </Sidebar>
+
+        {/* ── Main area ────────────────────────────────────────────────────── */}
+        <SidebarInset className="flex-1 flex flex-col min-w-0">
+          {/* Top header */}
+          <header className="sticky top-0 z-20 flex items-center justify-between h-14 px-4 sm:px-6 bg-background/95 backdrop-blur-sm border-b border-border/60">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" />
+              <div>
+                <h2 className="text-sm font-semibold text-foreground leading-none">{currentPageTitle}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">Xin chào, {currentUser}</p>
               </div>
-            </header>
-            <main className={cn(
-              "flex-1 overflow-y-auto overflow-x-hidden pb-20 md:pb-6",
-              showMobileUI 
-                ? "p-0" 
-                : "p-4 sm:p-6"
-            )}>
-              <div className={cn(
-                showMobileUI 
-                  ? "w-full" 
-                  : "max-w-7xl mx-auto"
-              )}>
-                {children}
-              </div>
-            </main>
-          </SidebarInset>
-        </div>
-        
-        {/* Mobile Bottom Navigation */}
-        {showMobileUI && <MobileBottomNavigation />}
-        
-        {/* ChatBot - hiển thị trên tất cả trang */}
-        <ChatBot />
-        
-        <footer className="hidden md:block py-4 px-6 border-t border-border/50 bg-gradient-card text-center">
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <span>Made with</span>
-            <span className="text-red-500">♥</span>
-            <span>by Hieu@hieungo.uk</span>
-          </div>
-        </footer>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={toggleTheme}
+                aria-label="Toggle theme"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                {theme === 'light'
+                  ? <Moon className="w-4 h-4" />
+                  : <Sun className="w-4 h-4" />}
+              </button>
+              <UserNav />
+            </div>
+          </header>
+
+          {/* Page content */}
+          <main className={cn(
+            'flex-1 overflow-y-auto overflow-x-hidden',
+            showMobileUI ? 'p-0 pb-20' : 'p-4 sm:p-6 pb-6'
+          )}>
+            <div className={showMobileUI ? 'w-full' : 'max-w-7xl mx-auto'}>
+              {children}
+            </div>
+          </main>
+        </SidebarInset>
       </div>
+
+      {showMobileUI && <MobileBottomNavigation />}
+      <ChatBot />
     </SidebarProvider>
   );
 }

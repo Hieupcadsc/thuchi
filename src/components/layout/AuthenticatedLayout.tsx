@@ -67,7 +67,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
       <GlobalAlertToaster />
       <WeakPasswordWarning />
 
-      <div className="flex min-h-screen bg-background">
+      <div className="flex min-h-screen w-full bg-background overflow-hidden">
         {/* ── Sidebar ──────────────────────────────────────────────────────── */}
         <Sidebar
           collapsible="icon"

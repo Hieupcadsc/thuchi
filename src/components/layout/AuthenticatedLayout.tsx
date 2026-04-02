@@ -168,7 +168,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
             'flex-1 overflow-y-auto overflow-x-hidden',
             showMobileUI ? 'p-0 pb-20' : 'p-4 sm:p-6 pb-6'
           )}>
-            <div className={showMobileUI ? 'w-full' : 'max-w-7xl mx-auto'}>
+            <div className="w-full">
               {children}
             </div>
           </main>

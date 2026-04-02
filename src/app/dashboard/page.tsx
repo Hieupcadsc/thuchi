@@ -4,43 +4,35 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/hooks/useAuth';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
-
 import { WithdrawCashModal } from '@/components/dashboard/WithdrawCashModal';
 import { SharedNotes } from '@/components/dashboard/SharedNotes';
 import { NotificationCenter } from '@/components/dashboard/NotificationCenter';
 import { ScheduleUploader } from '@/components/dashboard/ScheduleUploader';
 import { ChangelogModal } from '@/components/dashboard/ChangelogModal';
-
 import dynamic from 'next/dynamic';
 
-// OPTIMIZED: Lazy load calendar component to improve initial page load
 const TransactionCalendar = dynamic(
   () => import('@/components/dashboard/TransactionCalendar').then(mod => ({ default: mod.TransactionCalendar })),
-  {
-    loading: () => <div className="h-96 bg-gray-100 animate-pulse rounded-lg"></div>,
-    ssr: false
-  }
+  { loading: () => <div className="h-96 bg-muted animate-pulse rounded-xl" />, ssr: false }
 );
-import { BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2, Camera, PlusCircle, Landmark, Wallet, ArrowRightLeft, ChevronDown, RefreshCw, Sparkles, Calendar, Eye, EyeOff } from 'lucide-react';
+
+import {
+  BarChart, TrendingUp, TrendingDown, Banknote, AlertTriangle, Loader2,
+  Camera, PlusCircle, Landmark, Wallet, ArrowRightLeft, RefreshCw,
+  Sparkles, Calendar, Eye, EyeOff,
+} from 'lucide-react';
 import { DemoIndicator } from '@/components/ui/demo-indicator';
 import { DEMO_USER } from '@/lib/constants';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from "@/components/ui/chart"
-import { Bar, BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from "@/components/ui/chart";
+import { Bar, BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import type { Transaction } from '@/types';
 import { MONTH_NAMES, RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID } from '@/lib/constants';
 import { format, subMonths } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { cn } from '@/lib/utils';
-import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { BackupService } from '@/lib/backup';
 import { useToast } from '@/hooks/use-toast';
 import { useMobileFirst } from '@/hooks/use-mobile-detection';
@@ -49,35 +41,24 @@ import { MobileQuickActions, MobilePullToRefresh } from '@/components/mobile/Mob
 import { useWorkSchedules } from '@/hooks/useWorkSchedules';
 
 interface DashboardSummary {
-  totalIncome: number; // All-time total income
-  totalExpense: number; // All-time total expense
-  balanceBank: number; // Overall
-  balanceCash: number; // Overall
-  totalBalance: number; // Overall
+  totalIncome: number;
+  totalExpense: number;
+  balanceBank: number;
+  balanceCash: number;
+  totalBalance: number;
 }
 
 const initialSummary: DashboardSummary = {
-  totalIncome: 0,
-  totalExpense: 0,
-  balanceBank: 0,
-  balanceCash: 0,
-  totalBalance: 0,
+  totalIncome: 0, totalExpense: 0, balanceBank: 0, balanceCash: 0, totalBalance: 0,
 };
 
-// Utility function for formatting currency
-const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-};
+const formatCurrency = (amount: number): string =>
+  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
 export default function DashboardPage() {
   const { currentUser, familyId, transactions, getTransactionsForFamilyByMonth, fetchTransactionsByMonth, forceRefreshTransactions } = useAuthStore();
   const { toast } = useToast();
-  const { showMobileUI, isMobile } = useMobileFirst();
+  const { showMobileUI } = useMobileFirst();
   const { workSchedules } = useWorkSchedules();
   const [summary, setSummary] = useState<DashboardSummary>(initialSummary);
   const [monthlyChartData, setMonthlyChartData] = useState<any[]>([]);
@@ -87,270 +68,105 @@ export default function DashboardPage() {
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [uploadNotifications, setUploadNotifications] = useState<any[]>([]);
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
-  const [showBalances, setShowBalances] = useState(false); // Mặc định ẩn số dư
+  const [showBalances, setShowBalances] = useState(false);
+  const [uploadNotifications, setUploadNotifications] = useState<any[]>([]);
 
-  useEffect(() => {
-    const now = new Date();
-    setCurrentMonthYear(format(now, 'yyyy-MM'));
-  }, []);
+  useEffect(() => { setCurrentMonthYear(format(new Date(), 'yyyy-MM')); }, []);
 
   const loadAllDashboardData = useCallback(async () => {
     if (!currentUser || !familyId || !currentMonthYear) return;
-    
     setIsLoading(true);
-    
-    // Check and perform auto backup if needed (ngày 4 và 22 hàng tháng)
     try {
-      const checkAutoBackup = async () => {
-        if (currentUser && familyId) {
-          const isBackupDay = BackupService.isScheduledBackupDay();
-          const hasBackedUp = BackupService.hasAutoBackupToday();
-          
-          if (isBackupDay && !hasBackedUp) {
-            toast({
-              title: "🔄 Auto Backup",
-              description: "Đang thực hiện backup tự động...",
-            });
-            
-            const success = await BackupService.checkAndPerformAutoBackup(familyId, currentUser);
-            
-            if (success) {
-              toast({
-                title: "✅ Auto Backup hoàn thành",
-                description: "File backup đã được tải xuống tự động",
-              });
-            }
-          }
-        }
-      };
-
-      await checkAutoBackup();
-    } catch (error) {
-      console.warn('Auto backup failed, but continuing with data load:', error);
-    }
-    
-    // Fetch current month data first (priority)
-    await fetchTransactionsByMonth(familyId, currentMonthYear);
-
-    // OPTIMIZED: Fetch multiple months in parallel using Promise.all
-    // Split into chunks to avoid overwhelming the API
-    const currentDateObj = new Date(currentMonthYear + '-01');
-    const chunkSize = 12; // Fetch 12 months at a time
-    const totalMonths = 36; // Reduced from 60 to 36 months (3 years) for better performance
-    
-    for (let chunkStart = 1; chunkStart <= totalMonths; chunkStart += chunkSize) {
-      const chunkEnd = Math.min(chunkStart + chunkSize - 1, totalMonths);
-      const chunkPromises = [];
-      
-      for (let i = chunkStart; i <= chunkEnd; i++) {
-        const dateToFetch = subMonths(currentDateObj, i);
-        const monthYearToFetch = format(dateToFetch, 'yyyy-MM');
-        chunkPromises.push(fetchTransactionsByMonth(familyId, monthYearToFetch));
+      const isBackupDay = BackupService.isScheduledBackupDay();
+      const hasBackedUp = BackupService.hasAutoBackupToday();
+      if (isBackupDay && !hasBackedUp) {
+        await BackupService.checkAndPerformAutoBackup(familyId, currentUser);
       }
-      
-      // Process chunk in parallel
-      await Promise.all(chunkPromises);
+    } catch {}
+    await fetchTransactionsByMonth(familyId, currentMonthYear);
+    const base = new Date(currentMonthYear + '-01');
+    for (let start = 1; start <= 36; start += 12) {
+      await Promise.all(
+        Array.from({ length: Math.min(12, 36 - start + 1) }, (_, i) =>
+          fetchTransactionsByMonth(familyId, format(subMonths(base, start + i), 'yyyy-MM'))
+        )
+      );
     }
-
     setIsLoading(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, familyId, currentMonthYear]); // fetchTransactionsByMonth is stable
+  }, [currentUser, familyId, currentMonthYear]);
 
-  useEffect(() => {
-    loadAllDashboardData();
-  }, [loadAllDashboardData]); 
+  useEffect(() => { loadAllDashboardData(); }, [loadAllDashboardData]);
 
-  // OPTIMIZED: Memoize calculations to avoid recalculating on every render
   const calculatedSummary = useMemo(() => {
     if (!currentUser || transactions.length === 0) return initialSummary;
-
-    // Tách riêng: giao dịch cho tổng thu/chi vs giao dịch cho số dư
-    const statsTransactions = transactions
-      .filter(t => ![RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId));
-    
-    // *** SỬA LỖI: Tính số dư THỰC như Settings để nhất quán ***
-    // Bao gồm TẤT CẢ giao dịch để có số dư thực tế chính xác
-    const balanceTransactions = transactions;
-
-    const sumBy = (txs: any[], type: 'income' | 'expense', src?: 'bank' | 'cash') =>
-      txs.filter(t => t.type === type && (src ? t.paymentSource === src : true))
-         .reduce((s, t) => s + t.amount, 0);
-
-    // Tính số dư all-time (cộng dồn tất cả giao dịch)
-    const totalIncome = sumBy(statsTransactions, 'income');
-    const totalExpense = sumBy(statsTransactions, 'expense');
-    const balanceBank = sumBy(balanceTransactions, 'income', 'bank') - sumBy(balanceTransactions, 'expense', 'bank');
-    const balanceCash = sumBy(balanceTransactions, 'income', 'cash') - sumBy(balanceTransactions, 'expense', 'cash');
-    
+    const stats = transactions.filter(t => ![RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId));
+    const sum = (txs: any[], type: 'income' | 'expense', src?: 'bank' | 'cash') =>
+      txs.filter(t => t.type === type && (src ? t.paymentSource === src : true)).reduce((s, t) => s + t.amount, 0);
     return {
-      totalIncome,
-      totalExpense,
-      balanceBank,
-      balanceCash,
-      totalBalance: balanceBank + balanceCash,
-    } as any;
+      totalIncome: sum(stats, 'income'),
+      totalExpense: sum(stats, 'expense'),
+      balanceBank: sum(transactions, 'income', 'bank') - sum(transactions, 'expense', 'bank'),
+      balanceCash: sum(transactions, 'income', 'cash') - sum(transactions, 'expense', 'cash'),
+      totalBalance: sum(transactions, 'income', 'bank') - sum(transactions, 'expense', 'bank') +
+                    sum(transactions, 'income', 'cash') - sum(transactions, 'expense', 'cash'),
+    };
   }, [currentUser, transactions]);
 
-  // OPTIMIZED: Memoize chart data calculation
   const calculatedChartData = useMemo(() => {
-    if (!currentUser || !familyId || !currentMonthYear) {
-      return [];
-    }
-
-    const chartData = [];
-    const chartBaseDate = new Date(currentMonthYear + "-01T00:00:00");
-    
-    for (let i = 5; i >= 0; i--) {
-      const date = subMonths(chartBaseDate, i);
-      const monthYearKey = format(date, 'yyyy-MM');
-      const monthTransactionsForChart = getTransactionsForFamilyByMonth(familyId, monthYearKey);
-
-      // *** SỬA LỖI: Đảm bảo chart dùng CÙNG LOGIC với balance calculation ***
-      // Loại bỏ: rút tiền, nạp tiền, điều chỉnh số dư (giống statsTransactions)
-      const incomeForChart = monthTransactionsForChart
-        .filter(t => t.type === 'income' && ![NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId))
-        .reduce((sum, t) => sum + t.amount, 0);
-      const expenseForChart = monthTransactionsForChart
-        .filter(t => t.type === 'expense' && ![RUT_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId))
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      chartData.push({
-        month: MONTH_NAMES[date.getMonth()],
-        thu: incomeForChart,
-        chi: expenseForChart,
-      });
-    }
-    
-    return chartData;
+    if (!currentUser || !familyId || !currentMonthYear) return [];
+    const base = new Date(currentMonthYear + '-01T00:00:00');
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = subMonths(base, 5 - i);
+      const key = format(d, 'yyyy-MM');
+      const txs = getTransactionsForFamilyByMonth(familyId, key);
+      return {
+        month: MONTH_NAMES[d.getMonth()],
+        thu: txs.filter(t => t.type === 'income' && ![NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId)).reduce((s, t) => s + t.amount, 0),
+        chi: txs.filter(t => t.type === 'expense' && ![RUT_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId)).reduce((s, t) => s + t.amount, 0),
+      };
+    });
   }, [currentUser, familyId, currentMonthYear, getTransactionsForFamilyByMonth]);
 
-  // Thu / Chi của tháng hiện tại
   const monthlyTotals = useMemo(() => {
     if (!currentUser || transactions.length === 0) return { income: 0, expense: 0 };
-    const monthKey = format(new Date(), 'yyyy-MM');
-    const txs = transactions.filter(t => t.date.startsWith(monthKey) && ![RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId));
-    const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-    const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-    return { income, expense };
+    const key = format(new Date(), 'yyyy-MM');
+    const txs = transactions.filter(t => t.date.startsWith(key) && ![RUT_TIEN_MAT_CATEGORY_ID, NAP_TIEN_MAT_CATEGORY_ID, DIEU_CHINH_SO_DU_CATEGORY_ID].includes(t.categoryId));
+    return {
+      income: txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0),
+      expense: txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0),
+    };
   }, [currentUser, transactions]);
 
-  // Update state when memoized values change
-  useEffect(() => {
-    setSummary(calculatedSummary);
-  }, [calculatedSummary]);
-
-  useEffect(() => {
-    setMonthlyChartData(calculatedChartData);
-  }, [calculatedChartData]);
-
-  // Force re-render khi transactions thay đổi
-  useEffect(() => {
-    if (transactions.length > 0) {
-      // Trigger một re-render nhỏ để đảm bảo UI cập nhật
-      const timer = setTimeout(() => {
-        setSummary(prev => ({ ...prev }));
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [transactions.length]);
+  useEffect(() => { setSummary(calculatedSummary); }, [calculatedSummary]);
+  useEffect(() => { setMonthlyChartData(calculatedChartData); }, [calculatedChartData]);
 
   const handleRefreshDashboard = useCallback(async () => {
-    // OPTIMIZED: Debounce refresh to prevent rapid successive calls
     const now = Date.now();
-    if (now - lastRefreshTime < 2000) { // Prevent refresh if less than 2 seconds ago
-      toast({
-        title: "Thông báo",
-        description: "Vui lòng đợi 2 giây trước khi làm mới lại",
-        variant: "default",
-      });
+    if (now - lastRefreshTime < 2000) {
+      toast({ title: "Thông báo", description: "Vui lòng đợi 2 giây trước khi làm mới lại" });
       return;
     }
-    
     setIsRefreshing(true);
     setLastRefreshTime(now);
     await loadAllDashboardData();
     setIsRefreshing(false);
   }, [lastRefreshTime, loadAllDashboardData, toast]);
 
-  if (!currentUser) {
-    return <div className="text-center p-8"><AlertTriangle className="mx-auto h-12 w-12 text-destructive" /><p className="mt-4 text-lg">Vui lòng đăng nhập để xem dashboard.</p></div>;
-  }
-
-  // Mobile view
-  if (showMobileUI) {
-    return (
-      <div className="relative">
-        <MobilePullToRefresh 
-          onRefresh={handleRefreshDashboard} 
-          isRefreshing={isRefreshing}
-        />
-        
-        <MobileDashboard
-          summary={summary}
-          onRefresh={handleRefreshDashboard}
-          isRefreshing={isRefreshing}
-          currentUser={currentUser}
-        />
-
-        <MobileQuickActions
-          onAddTransaction={() => window.location.href = '/transactions'}
-          onAddFromBill={() => window.location.href = '/transactions?mode=bill'}
-          onSearch={() => window.location.href = '/transactions'}
-          onFilter={() => window.location.href = '/transactions'}
-          onCalendar={() => setIsCalendarModalOpen(true)}
-        />
-
-        {/* Calendar Modal for mobile */}
-        <Dialog open={isCalendarModalOpen} onOpenChange={setIsCalendarModalOpen}>
-          <DialogContent className="max-w-[98vw] max-h-[98vh] w-full h-full overflow-y-auto p-0">
-            <DialogHeader className="px-4 py-2 border-b bg-gradient-to-r from-emerald-50 to-teal-50">
-              <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-emerald-600" />
-                Lịch Gia Đình Thông Minh
-              </DialogTitle>
-            </DialogHeader>
-            <div className="p-2">
-              <TransactionCalendar onUploadSuccess={addUploadNotification} />
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-    );
-  }
-
-  const chartConfig = {
-    thu: { label: "Thu", color: "hsl(var(--chart-2))" },
-    chi: { label: "Chi", color: "hsl(var(--chart-1))" },
-  } satisfies ChartConfig;
-
-  const currentMonthName = currentMonthYear ? MONTH_NAMES[new Date(currentMonthYear + '-01T00:00:00').getMonth()] : '';
-
   const handleWithdrawSuccess = async () => {
     setIsWithdrawModalOpen(false);
-    if (currentUser && familyId && currentMonthYear) {
-        setIsLoading(true);
-        try {
-          // Force refresh all transactions from Firestore to ensure balance is updated
-          await forceRefreshTransactions();
-          // Then load all months data
-          await loadAllDashboardData();
-        } catch (error) {
-          console.error('Error refreshing after withdrawal:', error);
-          toast({
-            title: "Lỗi refresh",
-            description: "Có lỗi khi cập nhật số dư. Vui lòng thử refresh trang.",
-            variant: "destructive",
-          });
-        }
-        setIsLoading(false);
+    setIsLoading(true);
+    try {
+      await forceRefreshTransactions();
+      await loadAllDashboardData();
+    } catch {
+      toast({ title: "Lỗi refresh", description: "Có lỗi khi cập nhật số dư.", variant: "destructive" });
     }
+    setIsLoading(false);
   };
 
   function addUploadNotification(result: any) {
-    const notification = {
+    setUploadNotifications(prev => [{
       id: `upload-${Date.now()}`,
       type: 'success',
       title: '🤖 AI Lịch Upload Thành Công',
@@ -358,386 +174,278 @@ export default function DashboardPage() {
       timestamp: new Date(),
       isRead: false,
       priority: 'high',
-      details: result.notifications || []
-    };
-    setUploadNotifications(prev => [notification, ...prev.slice(0, 4)]);
-    toast({
-      title: '🎉 Upload lịch thành công!',
-      description: `Đã thêm ${result.summary?.totalShifts || 0} ca làm việc tháng ${result.summary?.month}/${result.summary?.year}`,
-    });
+      details: result.notifications || [],
+    }, ...prev.slice(0, 4)]);
+    toast({ title: '🎉 Upload lịch thành công!', description: `Đã thêm ${result.summary?.totalShifts || 0} ca tháng ${result.summary?.month}/${result.summary?.year}` });
   }
 
+  if (!currentUser) {
+    return <div className="text-center p-8"><AlertTriangle className="mx-auto h-12 w-12 text-destructive" /><p className="mt-4">Vui lòng đăng nhập.</p></div>;
+  }
+
+  if (showMobileUI) {
+    return (
+      <div className="relative">
+        <MobilePullToRefresh onRefresh={handleRefreshDashboard} isRefreshing={isRefreshing} />
+        <MobileDashboard summary={summary} onRefresh={handleRefreshDashboard} isRefreshing={isRefreshing} currentUser={currentUser} />
+        <MobileQuickActions
+          onAddTransaction={() => window.location.href = '/transactions'}
+          onAddFromBill={() => window.location.href = '/transactions?mode=bill'}
+          onSearch={() => window.location.href = '/transactions'}
+          onFilter={() => window.location.href = '/transactions'}
+          onCalendar={() => setIsCalendarModalOpen(true)}
+        />
+        <Dialog open={isCalendarModalOpen} onOpenChange={setIsCalendarModalOpen}>
+          <DialogContent className="max-w-[98vw] max-h-[98vh] w-full h-full overflow-y-auto p-0">
+            <DialogHeader className="px-4 py-2 border-b">
+              <DialogTitle className="flex items-center gap-2"><Calendar className="h-5 w-5" />Lịch Gia Đình</DialogTitle>
+            </DialogHeader>
+            <div className="p-2"><TransactionCalendar onUploadSuccess={addUploadNotification} /></div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  const chartConfig = {
+    thu: { label: "Thu nhập", color: "hsl(142 71% 45%)" },
+    chi: { label: "Chi tiêu", color: "hsl(0 84% 60%)" },
+  } satisfies ChartConfig;
+
+  const savingsRate = summary.totalIncome > 0
+    ? ((summary.totalIncome - summary.totalExpense) / summary.totalIncome * 100).toFixed(1)
+    : '0';
+
   return (
-    <div className="space-y-6 section-spacing-fhd container-fhd">
-      {/* Demo Indicator for Demo Users */}
+    <div className="space-y-5">
       {currentUser === DEMO_USER && <DemoIndicator />}
-      
-      {/* Main Content - Now takes full width */}
-      <div className="space-y-6 element-spacing-fhd">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+
+      {/* ── Header ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl xl:text-4xl 2xl:text-5xl font-bold tracking-tight heading-clear text-enhanced">Chào {currentUser}!</h1>
-          <p className="text-muted-foreground text-base xl:text-lg 2xl:text-xl text-readable">{format(new Date(), 'EEEE, dd MMMM yyyy', { locale: vi })}</p>
+          <h1 className="text-2xl font-bold text-foreground">Chào, {currentUser}!</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{format(new Date(), 'EEEE, dd MMMM yyyy', { locale: vi })}</p>
         </div>
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => setShowBalances(!showBalances)}
-            className="bg-gradient-to-r from-slate-50 to-gray-50 border-slate-200 text-slate-700 hover:from-slate-100 hover:to-gray-100 btn-fhd text-base xl:text-lg shadow-fhd"
-            title={showBalances ? "Ẩn số dư" : "Hiện số dư"}
-          >
-            {showBalances ? <Eye className="h-5 w-5 xl:h-6 xl:w-6 mr-2" /> : <EyeOff className="h-5 w-5 xl:h-6 xl:w-6 mr-2" />}
-            {showBalances ? "Ẩn" : "Hiện"}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowBalances(!showBalances)} className="gap-1.5">
+            {showBalances ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showBalances ? 'Ẩn' : 'Hiện'}
           </Button>
-          {/* Calendar Button with Modal */}
           <Dialog>
             <DialogTrigger asChild>
-              <Button 
-                variant="outline"
-                size="lg"
-                className="bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200 text-emerald-700 hover:from-emerald-100 hover:to-teal-100 btn-fhd text-base xl:text-lg shadow-fhd"
-              >
-                <Calendar className="h-5 w-5 xl:h-6 xl:w-6 mr-2" />
-                Lịch gia đình
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <Calendar className="h-4 w-4" />Lịch gia đình
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-[98vw] max-h-[98vh] w-full h-full overflow-y-auto p-0">
-              <DialogHeader className="px-4 py-2 border-b bg-gradient-to-r from-emerald-50 to-teal-50">
-                <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-emerald-600" />
-                  Lịch Gia Đình Thông Minh
-                </DialogTitle>
+              <DialogHeader className="px-4 py-3 border-b">
+                <DialogTitle className="flex items-center gap-2"><Calendar className="h-5 w-5 text-primary" />Lịch Gia Đình</DialogTitle>
               </DialogHeader>
-              <div className="p-2">
-                <TransactionCalendar onUploadSuccess={addUploadNotification} />
-              </div>
+              <div className="p-3"><TransactionCalendar onUploadSuccess={addUploadNotification} /></div>
             </DialogContent>
           </Dialog>
-
-          <Button 
-            onClick={() => setIsChangelogModalOpen(true)} 
-            variant="outline"
-            size="lg"
-            className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200 text-purple-700 hover:from-purple-100 hover:to-blue-100 btn-fhd text-base xl:text-lg shadow-fhd"
-          >
-            <Sparkles className="h-5 w-5 xl:h-6 xl:w-6 mr-2" />
-            Có gì mới
+          <Button variant="outline" size="sm" onClick={() => setIsChangelogModalOpen(true)} className="gap-1.5">
+            <Sparkles className="h-4 w-4" />Có gì mới
           </Button>
-          
-          <Button 
-            onClick={handleRefreshDashboard} 
-            disabled={isLoading || isRefreshing} 
-            variant="outline"
-            size="lg"
-            className="btn-fhd text-base xl:text-lg shadow-fhd"
-          >
-            {isRefreshing ? (
-              <Loader2 className="h-5 w-5 xl:h-6 xl:w-6 animate-spin mr-2" />
-            ) : (
-              <RefreshCw className="h-5 w-5 xl:h-6 xl:w-6 mr-2" />
-            )}
+          <Button variant="outline" size="sm" onClick={handleRefreshDashboard} disabled={isLoading || isRefreshing} className="gap-1.5">
+            {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Làm mới
           </Button>
-          
-          <Button 
+          <Button variant="outline" size="sm" disabled={isLoading || isRefreshing}
             onClick={async () => {
               setIsLoading(true);
-              try {
-                await forceRefreshTransactions();
-                await loadAllDashboardData();
-                toast({
-                  title: "✅ Force Refresh hoàn thành",
-                  description: "Đã làm mới toàn bộ dữ liệu từ server",
-                });
-              } catch (error) {
-                toast({
-                  title: "❌ Lỗi Force Refresh",
-                  description: "Không thể làm mới dữ liệu",
-                  variant: "destructive",
-                });
-              }
+              try { await forceRefreshTransactions(); await loadAllDashboardData(); toast({ title: "✅ Force Refresh xong" }); }
+              catch { toast({ title: "❌ Lỗi", variant: "destructive" }); }
               setIsLoading(false);
             }}
-            disabled={isLoading || isRefreshing} 
-            variant="outline"
-            size="lg"
-            title="Làm mới hoàn toàn từ server (dùng khi số dư không đúng)"
-            className="btn-fhd text-base xl:text-lg shadow-fhd"
+            className="gap-1.5"
           >
             🔄 Fix số dư
           </Button>
-          
-          <Button 
-            onClick={() => window.location.href = '/transactions'}
-            size="lg"
-            className="btn-fhd-large text-base xl:text-lg shadow-fhd"
-          >
-            <PlusCircle className="h-5 w-5 xl:h-6 xl:w-6 mr-2" />
-            Thêm giao dịch
+          <Button size="sm" onClick={() => window.location.href = '/transactions'} className="gap-1.5">
+            <PlusCircle className="h-4 w-4" />Thêm giao dịch
           </Button>
         </div>
       </div>
 
       {isLoading && transactions.length === 0 && !isRefreshing ? (
-          <div className="flex justify-center items-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="ml-2">Đang tải dữ liệu dashboard...</p>
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
+          <span className="text-muted-foreground">Đang tải dữ liệu...</span>
+        </div>
+      ) : (
+        <>
+          {/* ── Summary cards ─────────────────────────────────────── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <SummaryCard title="Tổng thu nhập (tháng này)" value={showBalances ? formatCurrency(monthlyTotals.income) : '••••••'} variant="income" />
+            <SummaryCard title="Tổng chi tiêu (tháng này)" value={showBalances ? formatCurrency(monthlyTotals.expense) : '••••••'} variant="expense" />
+            <SummaryCard title="Ngân hàng" value={showBalances ? formatCurrency(summary.balanceBank) : '••••••'} variant="bank" />
+            <SummaryCard title="Tổng số dư" value={showBalances ? formatCurrency(summary.totalBalance) : '••••••'} variant="balance" />
           </div>
-        ) : (
-          <>
-            <div key={`summary-${transactions.length}-${JSON.stringify(monthlyTotals)}`} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 xl:gap-8 animate-slide-up dashboard-grid-fhd">
-              <SummaryCard
-                title="Tổng thu nhập (tháng này)"
-                value={isLoading && transactions.length === 0 ? "Đang tải..." : (showBalances ? formatCurrency(monthlyTotals.income) : "••••••")}
-                variant="income"
-              />
-              <SummaryCard
-                title="Tổng chi tiêu (tháng này)"
-                value={isLoading && transactions.length === 0 ? "Đang tải..." : (showBalances ? formatCurrency(monthlyTotals.expense) : "••••••")}
-                variant="expense"
-              />
-              <SummaryCard 
-                title="Ngân hàng"
-                value={isLoading && transactions.length === 0 ? "Đang tải..." : (showBalances ? formatCurrency(summary.balanceBank) : "••••••")} 
-                variant="bank"
-              />
-              <SummaryCard 
-                title="Tổng số dư"
-                value={isLoading && transactions.length === 0 ? "Đang tải..." : (showBalances ? formatCurrency(summary.totalBalance) : "••••••")} 
-                variant="balance"
-              />
-            </div>
 
-            {/* Tiền mặt card và quick actions */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8">
-              <Card className="bg-gradient-to-br from-purple-50 via-violet-50 to-purple-100 border-2 border-purple-200/50 card-fhd shadow-fhd hover:shadow-xl transition-all duration-300 hover-lift">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 card-header-fhd">
-                  <CardTitle className="text-lg xl:text-xl font-bold text-purple-800 summary-card-title-fhd">
-                    💵 Tiền mặt
-                  </CardTitle>
-                  <div className="p-3 xl:p-4 bg-gradient-to-br from-purple-500 to-violet-600 rounded-2xl shadow-lg">
-                    <Wallet className="h-6 w-6 xl:h-8 xl:w-8 text-white icon-md-fhd" />
-                  </div>
-                </CardHeader>
-                <CardContent className="card-content-fhd">
-                  <div className="text-2xl xl:text-4xl 2xl:text-5xl font-bold bg-gradient-to-r from-purple-700 to-violet-600 bg-clip-text text-transparent mb-3 summary-card-value-fhd text-currency">
-                    {isLoading && transactions.length === 0 ? "Đang tải..." : (showBalances ? formatCurrency(summary.balanceCash) : "••••••")}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gradient-to-br from-blue-50 via-cyan-50 to-blue-100 border-2 border-blue-200/50 card-fhd shadow-fhd hover:shadow-xl transition-all duration-300 hover-lift">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 card-header-fhd">
-                  <CardTitle className="text-lg xl:text-xl font-bold text-blue-800 summary-card-title-fhd">
-                    🏦 Rút tiền nhanh
-                  </CardTitle>
-                  <div className="p-3 xl:p-4 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-2xl shadow-lg">
-                    <ArrowRightLeft className="h-6 w-6 xl:h-8 xl:w-8 text-white icon-md-fhd" />
-                  </div>
-                </CardHeader>
-                <CardContent className="card-content-fhd">
-                  <Button 
-                    onClick={() => setIsWithdrawModalOpen(true)}
-                    className="w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white hover:from-blue-600 hover:to-cyan-700 border-0 btn-fhd text-base xl:text-lg shadow-fhd transition-all duration-300 hover:shadow-lg"
-                    variant="outline"
-                  >
-                    <ArrowRightLeft className="h-4 w-4 xl:h-6 xl:w-6 mr-2" />
-                    Rút tiền từ ngân hàng
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gradient-to-br from-emerald-50 via-green-50 to-emerald-100 border-2 border-emerald-200/50 card-fhd shadow-fhd hover:shadow-xl transition-all duration-300 hover-lift">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 card-header-fhd">
-                  <CardTitle className="text-lg xl:text-xl font-bold text-emerald-800 summary-card-title-fhd">
-                    ⚡ Thêm nhanh
-                  </CardTitle>
-                  <div className="p-3 xl:p-4 bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl shadow-lg">
-                    <PlusCircle className="h-6 w-6 xl:h-8 xl:w-8 text-white icon-md-fhd" />
-                  </div>
-                </CardHeader>
-                <CardContent className="card-content-fhd">
-                  <div className="flex gap-3 xl:gap-4">
-                    <Button 
-                      asChild 
-                      size="sm" 
-                      className="flex-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:from-emerald-600 hover:to-green-700 border-0 btn-fhd text-sm xl:text-base shadow-fhd transition-all duration-300 hover:shadow-lg"
-                      variant="outline"
-                    >
-                      <Link href="/transactions">
-                        Giao dịch
-                      </Link>
-                    </Button>
-                    <Button 
-                      asChild 
-                      size="sm" 
-                      variant="outline"
-                      className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 text-white hover:from-orange-600 hover:to-amber-700 border-0 btn-fhd text-sm xl:text-base shadow-fhd transition-all duration-300 hover:shadow-lg"
-                    >
-                      <Link href="/transactions?mode=bill">
-                        <Camera className="h-4 w-4 xl:h-5 xl:w-5 mr-1" />
-                        Bill
-                      </Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <WithdrawCashModal 
-              isOpen={isWithdrawModalOpen} 
-              onOpenChange={setIsWithdrawModalOpen}
-              onSuccess={handleWithdrawSuccess}
-              currentBankBalance={summary.balanceBank}
-            />
-
-            <ChangelogModal 
-              isOpen={isChangelogModalOpen} 
-              onClose={() => setIsChangelogModalOpen(false)}
-            />
-
-                        <SharedNotes />
-
-            <NotificationCenter 
-              workSchedules={workSchedules} 
-              uploadNotifications={uploadNotifications}
-            />
-
-
-
-            <Card className="shadow-2xl bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/50 border-2 border-blue-100/50 hover:shadow-3xl transition-all duration-500 hover-lift">
-              <CardHeader className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-t-xl border-b border-blue-100/50">
-                <CardTitle className="text-2xl xl:text-3xl 2xl:text-4xl font-bold bg-gradient-to-r from-blue-700 to-indigo-600 bg-clip-text text-transparent flex items-center gap-4 heading-clear">
-                  <div className="p-3 xl:p-4 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-lg">
-                    <BarChart className="h-7 w-7 xl:h-9 xl:w-9 text-white" />
-                  </div>
-                  📊 Tổng Quan Thu Chi 6 Tháng
-                </CardTitle>
-                <CardDescription className="text-base xl:text-lg text-blue-700/80 font-medium text-readable">
-                  Biểu đồ so sánh thu nhập và chi tiêu của gia đình qua các tháng (không tính giao dịch nội bộ)
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-8 xl:p-12">
-                {(isLoading || isRefreshing) && monthlyChartData.length === 0 ? (
-                   <div className="flex justify-center items-center h-[300px] xl:h-[400px]">
-                      <Loader2 className="h-10 w-10 xl:h-12 xl:w-12 animate-spin text-blue-600" />
-                      <p className="ml-3 text-lg xl:text-xl text-blue-700 font-medium">Đang tải dữ liệu biểu đồ...</p>
-                   </div>
-                ) : monthlyChartData.length > 0 ? (
-                  <ChartContainer config={chartConfig} className="h-[450px] xl:h-[500px] 2xl:h-[600px] w-full chart-container-fhd">
-                    <RechartsBarChart accessibilityLayer data={monthlyChartData}>
-                      <CartesianGrid vertical={false} stroke="#e2e8f0" strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="month"
-                        tickLine={false}
-                        tickMargin={15}
-                        axisLine={false}
-                        tick={{ fontSize: 14, fontWeight: 600, fill: '#475569' }}
-                      />
-                      <YAxis
-                        tickFormatter={(value) => new Intl.NumberFormat('vi-VN', { notation: 'compact', compactDisplay: 'short' }).format(value)}
-                        tick={{ fontSize: 12, fill: '#64748b' }}
-                      />
-                      <ChartTooltip
-                        content={<ChartTooltipContent indicator="dot" />}
-                      />
-                      <ChartLegend content={<ChartLegendContent />} />
-                      <Bar dataKey="thu" fill="var(--color-thu)" radius={6} />
-                      <Bar dataKey="chi" fill="var(--color-chi)" radius={6} />
-                    </RechartsBarChart>
-                  </ChartContainer>
-                ) : (
-                   <div className="flex flex-col items-center justify-center h-[300px] xl:h-[400px] text-blue-600/70">
-                      <div className="p-6 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full mb-6">
-                        <BarChart className="h-16 w-16 xl:h-20 xl:w-20 text-blue-600" />
-                      </div>
-                      <p className="text-lg xl:text-xl font-semibold text-blue-700 mb-2">Chưa có dữ liệu biểu đồ</p>
-                      <p className="text-base xl:text-lg text-blue-600/80">Hãy thêm giao dịch mới để bắt đầu theo dõi tài chính gia đình</p>
-                  </div>
-                )}
+          {/* ── Quick action cards ────────────────────────────────── */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Tiền mặt */}
+            <Card className="card-base card-hover">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Tiền mặt</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {showBalances ? formatCurrency(summary.balanceCash) : '••••••'}
+                  </p>
+                </div>
+                <div className="w-11 h-11 rounded-xl bg-violet-500/10 flex items-center justify-center">
+                  <Wallet className="h-5 w-5 text-violet-600" />
+                </div>
               </CardContent>
             </Card>
 
-            {/* New section for additional features */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 xl:gap-8 mt-8">
-              <Card className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border-2 border-indigo-200/50 shadow-xl hover:shadow-2xl transition-all duration-300 hover-lift">
-                <CardHeader className="pb-6">
-                  <CardTitle className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-indigo-700 to-purple-600 bg-clip-text text-transparent flex items-center gap-4 heading-clear">
-                    <div className="p-3 xl:p-4 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg">
-                      <TrendingUp className="h-6 w-6 xl:h-8 xl:w-8 text-white" />
-                    </div>
-                    📈 Phân Tích Tài Chính
-                  </CardTitle>
-                  <CardDescription className="text-base xl:text-lg text-indigo-700/80 font-medium">
-                    Thống kê chi tiêu theo danh mục và xu hướng tiết kiệm
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 xl:space-y-6">
-                  <div className="flex justify-between items-center p-4 xl:p-5 bg-gradient-to-r from-white/80 to-indigo-50/80 rounded-xl border border-indigo-100">
-                    <span className="text-base xl:text-lg font-semibold text-indigo-800">💰 Tỷ lệ tiết kiệm</span>
-                    <span className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-currency">
-                      {showBalances ? (summary.totalIncome > 0 ? 
-                        `${((summary.totalIncome - summary.totalExpense) / summary.totalIncome * 100).toFixed(1)}%` 
-                        : '0%') : '••••'
-                      }
-                    </span>
+            {/* Rút tiền */}
+            <Card className="card-base card-hover">
+              <CardContent className="p-5 flex flex-col justify-between gap-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-foreground">Rút tiền nhanh</p>
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                    <ArrowRightLeft className="h-4 w-4 text-blue-600" />
                   </div>
-                  <div className="flex justify-between items-center p-4 xl:p-5 bg-gradient-to-r from-white/80 to-indigo-50/80 rounded-xl border border-indigo-100">
-                    <span className="text-base xl:text-lg font-semibold text-indigo-800">📅 Chi tiêu/ngày</span>
-                    <span className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-currency">
-                      {showBalances ? formatCurrency(Math.round(summary.totalExpense / 30)) : "••••••"}
-                    </span>
-                  </div>
-                  <Button 
-                    asChild 
-                    className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white btn-fhd text-base xl:text-lg shadow-fhd transition-all duration-300 hover:shadow-lg"
-                  >
-                    <Link href="/reports">
-                      <BarChart className="h-5 w-5 xl:h-6 xl:w-6 mr-2" />
-                      Xem báo cáo chi tiết
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
+                </div>
+                <Button onClick={() => setIsWithdrawModalOpen(true)} size="sm" className="w-full gap-1.5">
+                  <ArrowRightLeft className="h-4 w-4" />Rút tiền từ ngân hàng
+                </Button>
+              </CardContent>
+            </Card>
 
-              <Card className="bg-gradient-to-br from-rose-50 via-orange-50 to-amber-50 border-2 border-rose-200/50 shadow-xl hover:shadow-2xl transition-all duration-300 hover-lift">
-                <CardHeader className="pb-6">
-                  <CardTitle className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-rose-700 to-orange-600 bg-clip-text text-transparent flex items-center gap-4">
-                    <div className="p-3 xl:p-4 bg-gradient-to-br from-rose-500 to-orange-600 rounded-2xl shadow-lg">
-                      <Banknote className="h-6 w-6 xl:h-8 xl:w-8 text-white" />
-                    </div>
-                    🏦 Quản Lý Khoản Vay
-                  </CardTitle>
-                  <CardDescription className="text-base xl:text-lg text-rose-700/80 font-medium">
-                    Theo dõi các khoản vay và kế hoạch trả nợ
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 xl:space-y-6">
-                  <div className="flex justify-between items-center p-4 xl:p-5 bg-gradient-to-r from-white/80 to-rose-50/80 rounded-xl border border-rose-100">
-                    <span className="text-base xl:text-lg font-semibold text-rose-800">💳 Tổng khoản vay</span>
-                    <span className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-rose-600 to-orange-600 bg-clip-text text-transparent">0₫</span>
+            {/* Thêm nhanh */}
+            <Card className="card-base card-hover">
+              <CardContent className="p-5 flex flex-col justify-between gap-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-foreground">Thêm nhanh</p>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                    <PlusCircle className="h-4 w-4 text-emerald-600" />
                   </div>
-                  <div className="flex justify-between items-center p-4 xl:p-5 bg-gradient-to-r from-white/80 to-rose-50/80 rounded-xl border border-rose-100">
-                    <span className="text-base xl:text-lg font-semibold text-rose-800">📆 Cần trả tháng này</span>
-                    <span className="text-xl xl:text-2xl font-bold bg-gradient-to-r from-rose-600 to-orange-600 bg-clip-text text-transparent">0₫</span>
-                  </div>
-                  <Button 
-                    asChild 
-                    className="w-full bg-gradient-to-r from-rose-500 to-orange-600 hover:from-rose-600 hover:to-orange-700 text-white btn-fhd text-base xl:text-lg shadow-fhd transition-all duration-300 hover:shadow-lg"
-                  >
-                    <Link href="/loans">
-                      <Banknote className="h-5 w-5 xl:h-6 xl:w-6 mr-2" />
-                      Quản lý khoản vay
-                    </Link>
+                </div>
+                <div className="flex gap-2">
+                  <Button asChild size="sm" className="flex-1 gap-1">
+                    <Link href="/transactions">Giao dịch</Link>
                   </Button>
-                </CardContent>
-              </Card>
-            </div>
+                  <Button asChild size="sm" variant="outline" className="flex-1 gap-1">
+                    <Link href="/transactions?mode=bill"><Camera className="h-3.5 w-3.5" />Bill</Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-          </>
-        )}
-      </div>
+          <WithdrawCashModal isOpen={isWithdrawModalOpen} onOpenChange={setIsWithdrawModalOpen} onSuccess={handleWithdrawSuccess} currentBankBalance={summary.balanceBank} />
+          <ChangelogModal isOpen={isChangelogModalOpen} onClose={() => setIsChangelogModalOpen(false)} />
+
+          {/* ── Notes + Notifications ─────────────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <SharedNotes />
+            <NotificationCenter workSchedules={workSchedules} uploadNotifications={uploadNotifications} />
+          </div>
+
+          {/* ── Chart ────────────────────────────────────────────── */}
+          <Card className="card-base">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <BarChart className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-semibold">Tổng Quan Thu Chi 6 Tháng</CardTitle>
+                  <CardDescription className="text-xs">So sánh thu nhập và chi tiêu qua các tháng</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {(isLoading || isRefreshing) && monthlyChartData.length === 0 ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
+                  <span className="text-muted-foreground">Đang tải biểu đồ...</span>
+                </div>
+              ) : monthlyChartData.length > 0 ? (
+                <ChartContainer config={chartConfig} className="h-72 w-full">
+                  <RechartsBarChart accessibilityLayer data={monthlyChartData}>
+                    <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" opacity={0.4} />
+                    <XAxis dataKey="month" tickLine={false} tickMargin={10} axisLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis tickFormatter={(v) => new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(v)} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <ChartTooltip content={<ChartTooltipContent indicator="dot" formatter={(v, n) => [
+                      new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', minimumFractionDigits: 0 }).format(v as number),
+                      n === 'thu' ? 'Thu nhập' : 'Chi tiêu'
+                    ]} />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    <Bar dataKey="thu" fill="var(--color-thu)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="chi" fill="var(--color-chi)" radius={[4, 4, 0, 0]} />
+                  </RechartsBarChart>
+                </ChartContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                  <BarChart className="h-12 w-12 mb-3 opacity-30" />
+                  <p className="text-sm">Chưa có dữ liệu biểu đồ</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── Financial analysis + Loans ───────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card className="card-base">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+                    <TrendingUp className="h-4 w-4 text-indigo-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-sm font-semibold">Phân Tích Tài Chính</CardTitle>
+                    <CardDescription className="text-xs">Thống kê tổng hợp</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <span className="text-sm text-muted-foreground">Tỷ lệ tiết kiệm</span>
+                  <span className="text-sm font-bold text-foreground">{showBalances ? `${savingsRate}%` : '••••'}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <span className="text-sm text-muted-foreground">Chi tiêu / ngày (TB)</span>
+                  <span className="text-sm font-bold text-foreground">{showBalances ? formatCurrency(Math.round(summary.totalExpense / 30)) : '••••••'}</span>
+                </div>
+                <Button asChild size="sm" className="w-full mt-1 gap-1.5">
+                  <Link href="/reports"><BarChart className="h-4 w-4" />Xem báo cáo chi tiết</Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="card-base">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-rose-500/10 flex items-center justify-center">
+                    <Banknote className="h-4 w-4 text-rose-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-sm font-semibold">Quản Lý Khoản Vay</CardTitle>
+                    <CardDescription className="text-xs">Theo dõi khoản vay và kế hoạch trả nợ</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <span className="text-sm text-muted-foreground">Tổng khoản vay</span>
+                  <span className="text-sm font-bold text-foreground">0₫</span>
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <span className="text-sm text-muted-foreground">Cần trả tháng này</span>
+                  <span className="text-sm font-bold text-foreground">0₫</span>
+                </div>
+                <Button asChild size="sm" variant="outline" className="w-full mt-1 gap-1.5">
+                  <Link href="/loans"><Banknote className="h-4 w-4" />Quản lý khoản vay</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
     </div>
   );
 }
